@@ -75,7 +75,7 @@ On MacOS, the following [Homebrew](https://brew.sh) "formulae" suffice:
 Once the depenencies are installed, clone the source repository and change
 directory to the SonoCleaner project folder.
 
-> git clone [insert-repo-link-here] SonoCleaner  
+> git clone https://github.com/awjchen/SonoCleaner.git SonoCleaner  
 > cd SonoCleaner/SonoCleaner
 
 Use Stack to fetch a Haskell compiler and other build tools.
