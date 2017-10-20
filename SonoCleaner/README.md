@@ -20,9 +20,10 @@ the **paper** for a protocol for the correction of artifacts.
 
 Currently only MacOS and 64-bit Linux (x86\_64) are supported.
 
-This tool is distributed as a binary executable [download-link]. To run the
-program, one only needs to download and run the executable for your operating
-system, given that all the program's dependencies are installed.
+This tool is distributed as a
+[binary executable](https://github.com/awjchen/SonoCleaner/releases).
+To run the program, one only needs to download and run the executable for your
+operating system, given that all the program's dependencies are installed.
 
 ### Requirements
 
