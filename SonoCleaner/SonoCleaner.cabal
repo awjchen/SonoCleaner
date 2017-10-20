@@ -1,0 +1,66 @@
+name:                SonoCleaner
+version:             0.1.0
+description:         Please see README.md
+license:             PublicDomain
+license-file:        LICENSE
+author:              Alexander Chen <awchen@ucalgary.ca>
+build-type:          Simple
+cabal-version:       >=1.10
+
+executable SonoCleaner
+  hs-source-dirs:      app
+  main-is:             Main.hs
+  other-modules:       Controller
+                     , Controller.GenericCallbacks
+                     , Controller.Glade
+                     , Controller.GUIElements
+                     , Controller.GUIState
+                     , Controller.Interpreter
+                     , Controller.Keybindings
+                     , Controller.Mouse
+                     , Controller.Sensitivity
+                     , Controller.Util
+                     , Model
+                     , Model.Gaps
+                     , Model.IndexedChain
+                     , Model.Jumps
+                     , Model.Labelling
+                     , Model.Matching
+                     , Model.Model
+                     , Model.TraceState
+                     , Model.Util
+                     , Types.Bounds
+                     , Types.LevelShifts
+                     , Types.IntMap
+                     , Types.Series
+                     , Types.Zipper
+                     , View
+                     , View.ChartLayout
+                     , View.Rendering
+                     , View.Types
+  build-depends:       base >= 4.7 && < 5
+                     , SonoSsa
+                     , bytestring
+                     , cairo
+                     , cassava
+                     , Chart
+                     , Chart-cairo
+                     , colour
+                     , containers
+                     , data-default
+                     , directory
+                     , double-conversion
+                     , filepath
+                     , gtk3
+                     , heaps
+                     , lens
+                     , megaparsec
+                     , stm
+                     , text
+                     , raw-strings-qq
+                     , statistics
+                     , transformers
+                     , vector
+                     , vector-algorithms
+  ghc-options:         -rtsopts -threaded -funfolding-use-threshold=16 -O2 -optc-O3 -optc-ffast-math
+  default-language:    Haskell2010

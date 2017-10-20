@@ -1,0 +1,70 @@
+-- Common utility functions for working with sequences of doubles
+
+module Types.Series
+  ( diff
+  , undiff
+  , extend
+  , extendDiff
+  , extendDiff2
+  , contract
+
+  , unboxedAverage
+
+  , interpolateN
+  , interpolateSeries
+  ) where
+
+import qualified Data.Vector.Unboxed as V
+
+-------------------------------------------------------------------------------
+-- Series
+-------------------------------------------------------------------------------
+
+diff :: V.Vector Double -> (Double, V.Vector Double)
+diff v = (V.head v, V.zipWith (-) (V.tail v) v)
+
+undiff :: (Double, V.Vector Double) -> V.Vector Double
+undiff (h, v) = V.scanl' (+) h v
+
+extend :: Int -> V.Vector Double -> V.Vector Double
+extend r v = V.concat [ V.replicate r (V.head v)
+                      , v
+                      , V.replicate r (V.last v) ]
+
+extendDiff :: Int -> V.Vector Double -> V.Vector Double
+extendDiff r dv = V.concat [ V.replicate r 0
+                           , dv
+                           , V.replicate r 0 ]
+
+extendDiff2 :: Int -> V.Vector Double -> V.Vector Double
+extendDiff2 r ddv = V.concat [ V.replicate (r-1) 0
+                             , V.singleton (V.head ddv)
+                             , ddv
+                             , V.singleton (negate $ V.last ddv)
+                             , V.replicate (r-1) 0 ]
+
+contract :: Int -> V.Vector Double -> V.Vector Double
+contract r v = V.slice r (V.length v - 2*r) v
+
+-------------------------------------------------------------------------------
+-- Averages
+-------------------------------------------------------------------------------
+
+unboxedAverage :: V.Vector Double -> Double
+unboxedAverage = (/) <$> V.sum <*> fromIntegral . V.length
+
+-------------------------------------------------------------------------------
+-- Interpolation
+-------------------------------------------------------------------------------
+
+-- Returns n evenly spaced points lying between x0 and x1
+interpolateN :: Int -> Double -> Double -> [Double]
+interpolateN n x0 x1 =
+  let increment = (x1 - x0) / fromIntegral (n+1)
+  in  map (\i -> x0 + increment * fromIntegral i) [1..n]
+
+-- Interpolate between two points in a series.
+-- The index of the first point must be smaller than that of the second.
+interpolateSeries :: (Int, Double) -> (Int, Double) -> [(Int, Double)]
+interpolateSeries (i0, y0) (i1, y1) =
+  zip [i0+1..i1-1] $ interpolateN (i1-i0-1) y0 y1
