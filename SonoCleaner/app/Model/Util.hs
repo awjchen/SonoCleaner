@@ -33,7 +33,7 @@ estimateSlope ds jumps radius i
 median :: V.Vector Double -> Double
 median v =
   let n = V.length v
-      n2 = n `quot` 2 + 1
+      n2 = n `quot` 2
       avg x y = (x+y)/2
   in  runST $ do
         mv <- V.thaw v
