@@ -10,7 +10,7 @@ module View.ChartLayout
 
 import           Control.Arrow            ((&&&))
 import           Control.Lens             hiding (indices)
-import           Data.Colour              (blend, opaque)
+import           Data.Colour              (AlphaColour, blend, opaque)
 import           Data.Colour.Names
 import           Data.Default
 import           Data.Tuple               (swap)
@@ -26,220 +26,251 @@ import           View.Types
 chartLayout :: ChartSpec -> (Int, Int) -> Layout Double Double
 chartLayout plotSpec (pixelsX, _) = layout where
 
-  ------------------------------------------------------------------------------
-  -- X-axis
+  (addXAxis, xAxisParameters) = xAxis pixelsX plotSpec
+  addYAxis                    = yAxis plotSpec
 
-  -- Add x-axis
-  (lowerXBound, upperXBound) = plotXRange plotSpec
-  xScaledAxis = scaledAxis def (lowerXBound, upperXBound)
-  addXAxis layout' = layout'
-    & layout_x_axis %~
-          (laxis_generate .~ xScaledAxis)
-        . (laxis_title .~ "Time (s)")
-        . (laxis_title_style . font_size .~ 12)
-        . (laxis_style . axis_label_style . font_size .~ 12)
+  tracePlotLines = traces plotSpec xAxisParameters
+  jumpsPlotLines = jumps  plotSpec xAxisParameters
 
-  -- Obtain final axes bounds
-  plotXBounds = (,) <$> head <*> last
-              $ view axis_grid
-              $ xScaledAxis [lowerXBound, upperXBound]
+  highlight = highlightInterval (plotHighlightRegion plotSpec)
 
-  timeStepsPerPixel =
-    uncurry subtract plotXBounds / (plotTimeStep plotSpec * fromIntegral pixelsX)
-  compressibleTimeSteps = floor $ timeStepsPerPixel / 2
+  annotation = jumpAnnotation (plotAnnotation plotSpec)
 
-  -- Obtain bounds in terms of indices
-  plotXBoundsIndices = plotXBounds
-    & over _1 (max 0                . toIndex) -- inclusive
-    . over _2 (min maxLength . succ . toIndex) -- inclusive
-    where toIndex = plotToIndex plotSpec
-          maxLength = V.length (plotSeries plotSpec) - 1
+  plots =
+    -- Order matters: later items will draw over earlier items
+       map toPlot tracePlotLines
+    ++ map toPlot jumpsPlotLines
+    ++ [toPlot highlight, toPlot annotation]
 
-  times = V.generate (ub-lb+1) (\i -> toTime (i+lb))
-    where (lb, ub) = plotXBoundsIndices
-          toTime = plotToTime plotSpec
+  layout = def
+    & layout_title .~ plotTitle plotSpec
+    & layout_title_style . font_color .~ plotTitleColour plotSpec
+    & layout_background . fill_color .~ plotBackgroundColour plotSpec
+    & layout_plots .~ plots
+    & addXAxis
+    & addYAxis
 
-  ------------------------------------------------------------------------------
-  -- Y-axis
 
-  (lowerYBound, upperYBound) = plotYRange plotSpec
-  addYAxis layout' = layout'
-    & layout_y_axis %~
-        (laxis_generate .~ scaledAxis def (lowerYBound, upperYBound))
+--------------------------------------------------------------------------------
+-- Component interpreters
+--------------------------------------------------------------------------------
+
+data XAxisParameters = XAxisParameters
+  { boundsIndices         :: (Int, Int)
+  , compressibleTimeSteps :: Int
+  , times                 :: V.Vector Double
+  }
+
+
+xAxis
+  :: Int
+  -> ChartSpec
+  -> ( Layout Double y -> Layout Double y
+     , XAxisParameters )
+xAxis pixelsX plotSpec =
+  ( axis . oppositeAxis
+  , XAxisParameters plotXBoundsIndices compressibleTimeSteps times)
+  where
+    (lb, ub) = plotXRange plotSpec
+    xScaledAxis = scaledAxis def (lb, ub)
+
+    axis = layout_x_axis %~
+        (laxis_generate .~ xScaledAxis)
+      . (laxis_title .~ "Time (s)")
+      . (laxis_title_style . font_size .~ 12)
+      . (laxis_style . axis_label_style . font_size .~ 12)
+
+    oppositeAxis = over layout_right_axis_visibility
+      ( set axis_show_line   True
+      . set axis_show_ticks  True
+      . set axis_show_labels False )
+
+    -- Obtain final x-axis bounds, determined by Chart
+    plotXBounds = (,) <$> head <*> last
+                $ view axis_grid
+                $ xScaledAxis [lb, ub]
+
+    plotXBoundsIndices = plotXBounds
+      & over _1 (max 0                . toIndex) -- inclusive
+      . over _2 (min maxLength . succ . toIndex) -- inclusive
+      where toIndex = plotToIndex plotSpec
+            maxLength = V.length (plotSeries plotSpec) - 1
+
+    compressibleTimeSteps = floor $ timeStepsPerPixel / 2
+      where
+        timeStepsPerPixel = timeSteps / fromIntegral pixelsX
+        timeSteps = uncurry subtract plotXBounds / plotTimeStep plotSpec
+
+    times = V.generate (i1-i0+1) (\i -> toTime (i+i0))
+      where (i0, i1) = plotXBoundsIndices
+            toTime = plotToTime plotSpec
+
+
+yAxis :: ChartSpec -> Layout x Double -> Layout x Double
+yAxis plotSpec = axis . oppositeAxis . grid
+  where
+    (lb, ub) = plotYRange plotSpec
+    yScaledAxis = scaledAxis def (lb, ub)
+
+    axis :: Layout x Double -> Layout x Double
+    axis = layout_y_axis %~
+        (laxis_generate .~ yScaledAxis)
       . (laxis_title .~ "Distance (mm)")
       . (laxis_title_style . font_size .~ 12)
       . (laxis_style . axis_label_style . font_size .~ 12)
-    & makeYGrid (lowerYBound, upperYBound)
-    where
-      makeYGrid :: (Double, Double) -> Layout a Double -> Layout a Double
-      makeYGrid (lb, ub)
-        | yRange > 200 = setYGrid 100 []
-        | yRange > 20  = setYGrid 10  [4, 4]
-        | yRange > 2   = setYGrid 1   [2, 6]
-        | otherwise    = setYGrid 0.1 [1, 7]
-        where
-          yRange = ub - lb
 
-          setYGrid :: Double -> [Double] -> Layout a Double -> Layout a Double
-          setYGrid spacing dashes =
-              set (layout_y_axis . laxis_override)
-                  (axis_grid .~ ticks spacing (lb, ub))
-            . set (layout_y_axis . laxis_style . axis_grid_style)
-                  (def & line_dashes .~ dashes
-                       & line_width  .~ 1
-                       & line_color  .~ opaque lightgrey)
+    oppositeAxis :: Layout x Double -> Layout x Double
+    oppositeAxis = over layout_top_axis_visibility
+      ( set axis_show_line   True
+      . set axis_show_ticks  True
+      . set axis_show_labels False )
 
-      ticks :: Double -> (Double, Double) -> [Double]
-      ticks spacing (lb, ub) =
-        let lbDivs = ceiling (lb/spacing) :: Int
-            ubDivs = floor   (ub/spacing) :: Int
-        in  map ((*spacing) . fromIntegral) [lbDivs..ubDivs]
+    grid :: Layout x Double -> Layout x Double
+    grid
+      | yRange > 200 = gridTicks 100 . gridDashes []
+      | yRange > 20  = gridTicks 10  . gridDashes [4, 4]
+      | yRange > 2   = gridTicks 1   . gridDashes [2, 6]
+      | otherwise    = gridTicks 0.1 . gridDashes [1, 7]
+      where
+        yRange = ub - lb
 
-  ------------------------------------------------------------------------------
-  -- Opposite axes
+        gridTicks :: Double -> Layout x Double -> Layout x Double
+        gridTicks spacing =
+          set (layout_y_axis . laxis_override) (set axis_grid ticks)
+            where
+              lbDivs = ceiling (lb/spacing) :: Int
+              ubDivs = floor   (ub/spacing) :: Int
+              ticks = map ((*spacing) . fromIntegral) [lbDivs..ubDivs]
 
-  makeVisibleRightAxis = over layout_right_axis_visibility
-    ( set axis_show_line   True
-    . set axis_show_ticks  True
-    . set axis_show_labels False )
-  makeVisibleTopAxis = over layout_top_axis_visibility
-    ( set axis_show_line   True
-    . set axis_show_ticks  True
-    . set axis_show_labels False )
+        gridDashes :: [Double] -> Layout x Double -> Layout x Double
+        gridDashes dashes =
+          set (layout_y_axis . laxis_style . axis_grid_style)
+              (def & line_dashes .~ dashes
+                   & line_width  .~ 1
+                   & line_color  .~ opaque lightgrey)
 
-  ------------------------------------------------------------------------------
-  -- Line plotters
 
-  makeLine strokeWidth color line = makeLines strokeWidth color [line]
+traces :: ChartSpec -> XAxisParameters -> [PlotLines Double Double]
+traces plotSpec xAxisParams =
+  -- Order matters: later items will draw over earlier items
+  [ twinTrace
+  , customTrace
+  , originalTrace
+  , focusedTrace ]
+  where
+    (lb, ub) = boundsIndices xAxisParams
 
-  makeLines strokeWidth color lineList =
-    def & plot_lines_values .~ lineList
-        & plot_lines_style . line_color .~ color
-        & plot_lines_style . line_width .~ strokeWidth
+    cropTrace :: V.Vector Double -> V.Vector Double
+    cropTrace = V.slice lb (ub-lb+1)
 
-  ------------------------------------------------------------------------------
-  -- Traces
+    -- assumed sorted
+    cropIndexList :: [Int] -> [Int]
+    cropIndexList = map (subtract lb) . takeWhile (<= ub) . dropWhile (< lb)
 
-  crop :: V.Vector Double -> V.Vector Double
-  crop = V.slice lb (ub-lb+1)
-    where (lb, ub) = plotXBoundsIndices
+    simplifySeries' :: V.Vector (Double, Double) -> [(Double, Double)]
+    simplifySeries' = if compressibleTimeSteps xAxisParams <= 1
+      then V.toList
+      else simplifySeries (compressibleTimeSteps xAxisParams)
 
-  simplifySeries' :: V.Vector (Double, Double) -> [(Double, Double)]
-  simplifySeries' = if compressibleTimeSteps <= 1
-    then V.toList
-    else simplifySeries compressibleTimeSteps
+    makeMainTrace :: [Int] -> V.Vector Double -> [[(Double, Double)]]
+    makeMainTrace splitIndices =
+        map simplifySeries'
+      . splitAtIndices (cropIndexList splitIndices)
+      . V.zip (times xAxisParams)
+      . cropTrace
 
-  focused  = makeLines 1 (opaque black)
-           $ map simplifySeries'
-           $ splitAtIndices indices
-           $ V.zip times $ crop
-           $ plotSeries plotSpec
-    where indices = map (subtract lb)
-                  $ takeWhile (<= ub)
-                  $ dropWhile (< lb)
-                  $ plotJumpIndices plotSpec
-          (lb, ub) = plotXBoundsIndices
+    makeOptionalTrace :: Maybe (V.Vector Double) -> [(Double, Double)]
+    makeOptionalTrace =
+      simplifySeries' . maybe V.empty (V.zip (times xAxisParams) . cropTrace)
 
-  makeTrace = simplifySeries' . maybe V.empty (V.zip times . crop)
+    focusedTrace =
+        makeLines 1 (opaque black)
+      $ makeMainTrace (plotJumpIndices plotSpec) (plotSeries plotSpec)
 
-  original = makeLine 1 (opaque (blend 0.38 grey black))
-           $ makeTrace $ plotOriginalSeries plotSpec
-  twin     = makeLine 1 (opaque (blend 0.25 grey darkblue))
-           $ makeTrace $ plotTwinSeries plotSpec
-  custom   = makeLine 1 (opaque (blend 0.25 grey greenyellow))
-           $ makeTrace $ plotCustomSeries plotSpec
+    originalTrace =
+        makeLine 1 (opaque (blend 0.38 grey black))
+      $ makeOptionalTrace $ plotOriginalSeries plotSpec
+    twinTrace =
+        makeLine 1 (opaque (blend 0.25 grey darkblue))
+      $ makeOptionalTrace $ plotTwinSeries plotSpec
+    customTrace =
+        makeLine 1 (opaque (blend 0.25 grey greenyellow))
+      $ makeOptionalTrace $ plotCustomSeries plotSpec
 
-  ------------------------------------------------------------------------------
-  -- Jumps
 
-  filterJumpIndices :: [Int] -> [Int]
-  filterJumpIndices = takeWhile (< ub') . dropWhile (< lb')
-    where (lb, ub) = plotXBoundsIndices
-          lb' = pred lb; ub' = ub
+jumps :: ChartSpec -> XAxisParameters -> [PlotLines Double Double]
+jumps plotSpec xAxisParams =
+  -- Order matters: later items will draw over earlier items
+  closedJumps ++ openJumps
+  where
+    (lb, ub) = boundsIndices xAxisParams
 
-  reifyJumpInterval :: (Int, Int) -> V.Vector (Double, Double)
-  reifyJumpInterval (j0, j1) = V.zip times' values'
-    where j1' = succ j1
-          nPoints = j1'-j0+1
-          times'  = V.map toTime (V.generate nPoints (+j0))
-          values' = V.slice j0 nPoints (plotSeries plotSpec)
-          toTime = plotToTime plotSpec
+    filterJumpIndices :: [Int] -> [Int]
+    filterJumpIndices = takeWhile (< ub') . dropWhile (< lb')
+      where lb' = pred lb; ub' = ub
 
-  reifyJump :: Int -> [(Double, Double)]
-  reifyJump i = [(toTime i, v V.! i), (toTime i1, v V.! i1)]
-    where v = plotSeries plotSpec
-          toTime = plotToTime plotSpec
-          i1 = succ i
+    reifyJumpInterval :: (Int, Int) -> V.Vector (Double, Double)
+    reifyJumpInterval (j0, j1) = V.zip times' values'
+      where j1' = succ j1
+            nPoints = j1'-j0+1
+            times'  = V.map toTime (V.generate nPoints (+j0))
+            values' = V.slice j0 nPoints (plotSeries plotSpec)
+            toTime = plotToTime plotSpec
 
-  simplifyModifiedIndices :: [Int] -> [[(Double, Double)]]
-  simplifyModifiedIndices indices =
-    if compressibleTimeSteps <= 1
-    then map reifyJump indices
-    else let simplePaths = map ( simplifySeries compressibleTimeSteps
-                               . reifyJumpInterval
-                               . (head &&& last) )
-                         $ groupRuns indices
-             unTuple (x, y) = [x, y]
-         in  map unTuple $ concatMap (\xs -> zip xs (tail xs)) simplePaths
+    reifyJump :: Int -> [(Double, Double)]
+    reifyJump i = [(toTime i, v V.! i), (toTime i1, v V.! i1)]
+      where v = plotSeries plotSpec
+            toTime = plotToTime plotSpec
+            i1 = succ i
 
-  jumps   = zipWith3 makeLine (repeat 2) jumpColours
-          $ map reifyJump
-          $ filterJumpIndices
-          $ plotJumpIndices plotSpec
+    simplifyModifiedIndices :: [Int] -> [[(Double, Double)]]
+    simplifyModifiedIndices indices =
+      if compressibleTimeSteps xAxisParams <= 1
+      then map reifyJump indices
+      else let simplePaths =
+                   map ( simplifySeries (compressibleTimeSteps xAxisParams)
+                 . reifyJumpInterval
+                 . (head &&& last) )
+                 $ groupRuns indices
+               unTuple (x, y) = [x, y]
+          in  map unTuple $ concatMap (\xs -> zip xs (tail xs)) simplePaths
 
-  closed  = zipWith3 makeLine (repeat 2) closedColours
-          $ simplifyModifiedIndices
-          $ filterJumpIndices
-          $ plotModifiedIndices plotSpec
+    openJumps =
+        zipWith3 makeLine (repeat 2) openColours
+      $ map reifyJump
+      $ filterJumpIndices
+      $ plotJumpIndices plotSpec
+      where openColours   = cycle [opaque magenta, opaque yellow]
 
-  jumpColours   = cycle [opaque magenta, opaque yellow]
-  closedColours = cycle [opaque white,   opaque cyan]
+    closedJumps =
+        zipWith3 makeLine (repeat 2) closedColours
+      $ simplifyModifiedIndices
+      $ filterJumpIndices
+      $ plotModifiedIndices plotSpec
+      where closedColours = cycle [opaque white, opaque cyan]
 
-  highlight = case plotHighlightRegion plotSpec of
-    Nothing     -> def
-    Just (l, r) ->
-      def & plot_lines_limit_values .~
-              [ [(LValue l, LMin), (LValue l, LMax)]
-              , [(LValue r, LMin), (LValue r, LMax)] ]
-          & plot_lines_style . line_color .~ opaque greenyellow
-          & plot_lines_style . line_width .~ 1
 
-  ------------------------------------------------------------------------------
-  -- Jump annotation
+highlightInterval :: Maybe (Double, Double) -> PlotLines Double y
+highlightInterval Nothing = def
+highlightInterval (Just (l, r)) =
+  def & plot_lines_limit_values .~
+          [ [(LValue l, LMin), (LValue l, LMax)]
+          , [(LValue r, LMin), (LValue r, LMax)] ]
+      & plot_lines_style . line_color .~ opaque greenyellow
+      & plot_lines_style . line_width .~ 1
 
-  annotation = case plotAnnotation plotSpec of
-    Nothing          -> def
-    Just (x, y, str) ->
-      def & plot_annotation_hanchor .~ HTA_Left
-          & plot_annotation_vanchor .~ VTA_Centre
-          & plot_annotation_style   .~
-              (def & font_size .~ 16
-                   & font_color .~ opaque greenyellow
-                   & font_weight .~ FontWeightBold)
-          & plot_annotation_values  .~ [(x, y, str)]
 
-  ------------------------------------------------------------------------------
-  -- Layout
+jumpAnnotation :: Maybe (Double, Double, String) -> PlotAnnotation Double Double
+jumpAnnotation Nothing = def
+jumpAnnotation (Just (x, y, str)) =
+  def & plot_annotation_hanchor .~ HTA_Left
+      & plot_annotation_vanchor .~ VTA_Centre
+      & plot_annotation_style   .~
+          (def & font_size .~ 16
+                & font_color .~ opaque greenyellow
+                & font_weight .~ FontWeightBold)
+      & plot_annotation_values  .~ [(x, y, str)]
 
-  plots =
-    map toPlot (
-    -- background: reference traces
-      [ twin, custom, original ]
-    -- current trace
-      ++ [ focused ]
-    -- foreground: modifications and highlights
-      ++ [ highlight ] ++ closed ++ jumps )
-    -- annotation
-      ++ [ toPlot annotation ]
-
-  layout = def
-         & layout_title .~ plotTitle plotSpec
-         & layout_title_style . font_color .~ plotTitleColour plotSpec
-         & layout_background . fill_color .~ plotBackgroundColour plotSpec
-         & layout_plots .~ plots
-         & addXAxis
-         & addYAxis
-         & makeVisibleRightAxis & makeVisibleTopAxis
 
 --------------------------------------------------------------------------------
 -- Down-sampling traces
@@ -295,8 +326,17 @@ groupRuns xs =
   in  if null run then [xs'] else run : groupRuns xs'
 
 --------------------------------------------------------------------------------
--- Misc.
+-- Utility
 --------------------------------------------------------------------------------
+
+makeLine :: Double -> AlphaColour Double -> [(x, y)] -> PlotLines x y
+makeLine strokeWidth color line = makeLines strokeWidth color [line]
+
+makeLines :: Double -> AlphaColour Double -> [[(x, y)]] -> PlotLines x y
+makeLines strokeWidth color lineList =
+  def & plot_lines_values .~ lineList
+      & plot_lines_style . line_color .~ color
+      & plot_lines_style . line_width .~ strokeWidth
 
 splitAtIndices :: V.Unbox a => [Int] -> V.Vector a -> [V.Vector a]
 splitAtIndices jumpIndices tracePoints =
