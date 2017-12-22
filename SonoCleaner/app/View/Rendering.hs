@@ -4,12 +4,15 @@
 -- take care to call all GTK actions from the main GUI thread. (for more
 -- information see http://dmwit.com/gtk2hs/)
 
+{-# LANGUAGE PatternSynonyms #-}
+
 module View.Rendering
   ( DrawCommand (..)
   , renderer
   ) where
 
 import           Control.Concurrent.STM
+import           Control.Lens
 import qualified Graphics.Rendering.Cairo               as Cairo
 import           Graphics.Rendering.Chart
 import qualified Graphics.Rendering.Chart.Backend.Cairo as B
@@ -28,41 +31,51 @@ renderer ::
   -> TVar Cairo.Surface
   -> TMVar DrawCommand
   -> TVar (PickFn (LayoutPick Double Double Double))
-  -> Maybe ChartSpec
-  -> IO ()
-renderer gtkImage surfaceTVar commandTMVar pickFnTVar lastChartSpec = do
-  (command, surface) <- atomically $
-    (,) <$> takeTMVar commandTMVar <*> readTVar surfaceTVar
-
-  case command of
-    DrawNew chartSpec -> drawChart surface chartSpec
-    Redraw -> case lastChartSpec of
-      Just chartSpec ->  drawChart surface chartSpec
-      Nothing ->
-        renderer gtkImage surfaceTVar commandTMVar pickFnTVar lastChartSpec
-
+  -> IO a
+renderer gtkImage surfaceTVar commandTMVar pickFnTVar =
+  iterateM_ renderer' Nothing
   where
-    drawChart :: Cairo.Surface -> ChartSpec -> IO ()
-    drawChart surface chartSpec = do
-      w <- Cairo.imageSurfaceGetWidth  surface
-      h <- Cairo.imageSurfaceGetHeight surface
+    renderer' :: Maybe ChartSpec -> IO (Maybe ChartSpec)
+    renderer' lastChartSpec = do
+      (command, surface) <- atomically $
+        (,) <$> takeTMVar commandTMVar <*> readTVar surfaceTVar
 
-      pickFn <- Cairo.renderWith surface $ basicRender chartSpec (w, h)
-      atomically $ writeTVar pickFnTVar pickFn
+      let newChartSpec = case command of
+            DrawNew chartSpec -> Just chartSpec
+            _                 -> lastChartSpec
 
-      postGUISync $ do
-        pixbuf <- pixbufNewFromSurface surface 0 0 w h
-        imageSetFromPixbuf gtkImage pixbuf
+      case newChartSpec of
+        Nothing -> return ()
+        Just chartSpec -> do
+          w <- Cairo.imageSurfaceGetWidth  surface
+          h <- Cairo.imageSurfaceGetHeight surface
 
-      renderer gtkImage surfaceTVar commandTMVar pickFnTVar (Just chartSpec)
+          pickFn <- Cairo.renderWith surface $ basicRender chartSpec (w, h)
+          atomically $ writeTVar pickFnTVar pickFn
+
+          postGUISync $ do
+            pixbuf <- pixbufNewFromSurface surface 0 0 w h
+            imageSetFromPixbuf gtkImage pixbuf
+
+      pure newChartSpec
 
 basicRender ::
      ChartSpec
   -> (Int, Int)
   -> Cairo.Render (PickFn (LayoutPick Double Double Double))
-basicRender chartSpec (width, height) =
-  B.runBackend (B.defaultEnv bitmapAlignmentFns) backendProgram
+basicRender chartSpec dims = B.runBackend env backendProgram
   where
-    rectSize = (fromIntegral width, fromIntegral height)
+    env = B.defaultEnv bitmapAlignmentFns
     backendProgram = render renderable rectSize
-    renderable = layoutToRenderable (chartLayout chartSpec (width, height))
+      where
+        renderable = layoutToRenderable (chartLayout chartSpec dims)
+        rectSize = over both fromIntegral dims
+
+--------------------------------------------------------------------------------
+-- Utility
+--------------------------------------------------------------------------------
+
+-- from the 'monad-loops' package
+iterateM_ :: Monad m => (a -> m a) -> a -> m b
+iterateM_ f = g
+  where g x = f x >>= g

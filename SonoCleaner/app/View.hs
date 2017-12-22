@@ -45,7 +45,7 @@ setupRenderer controllerWindow image controllerBox = do
     :: IO (TVar (PickFn (LayoutPick Double Double Double)))
 
   -- Start renderer
-  _ <- forkIO $ renderer image surfaceTVar drawCommandTMVar pickFnTVar Nothing
+  _ <- forkIO $ renderer image surfaceTVar drawCommandTMVar pickFnTVar
 
   -- Define draw request function
   let requestDraw :: ChartSpec -> STM ()
