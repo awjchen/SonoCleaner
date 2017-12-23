@@ -51,7 +51,7 @@ executable SonoCleaner
                      , directory
                      , double-conversion
                      , filepath
-                     , gtk3
+                     , gtk3 == 0.14.8
                      , heaps
                      , lens
                      , megaparsec

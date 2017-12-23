@@ -1,5 +1,6 @@
-{-# LANGUAGE RankNTypes      #-}
-{-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RankNTypes        #-}
+{-# LANGUAGE TemplateHaskell   #-}
 
 module SonoSsa.Ssa
   ( SSA
@@ -42,6 +43,7 @@ import           Data.Double.Conversion.Text (toFixed)
 import           Data.Foldable
 import           Data.List                   (intercalate, intersperse,
                                               transpose)
+import qualified Data.List.NonEmpty          as NE
 import           Data.Monoid
 import qualified Data.Set                    as S
 import qualified Data.Text.Lazy              as TL
@@ -49,8 +51,10 @@ import qualified Data.Text.Lazy.Builder      as B
 import qualified Data.Text.Lazy.IO           as TLIO
 import qualified Data.Vector.Unboxed         as V
 import qualified Data.Vector.Unboxed.Mutable as VM
+import           Data.Void
 import           Text.Megaparsec
-import           Text.Megaparsec.Lexer
+import           Text.Megaparsec.Char
+import           Text.Megaparsec.Char.Lexer
 
 --------------------------------------------------------------------------------
 -- .ssa file representation
@@ -119,61 +123,15 @@ loadSSA filePath = do
 catchIOException :: IOException -> IO String
 catchIOException e = return $ show e
 
-parseSSA :: FilePath -> TL.Text -> Either (ParseError Char Dec) SSA
+parseSSA :: FilePath -> TL.Text -> Either (ParseError Char Void) SSA
 parseSSA filePath ssaText =
   runST $ runParserT (parseSSA' filePath) filePath ssaText
-
-simplifyParseError :: ParseError Char Dec -> String
-simplifyParseError parseError =
-  let show' printer accessor =
-        intercalate ", " $ fmap printer $ toList $ accessor parseError
-      positions   = show' printPosition errorPos
-      unexpecteds = show' printErrorItem errorUnexpected
-      expecteds   = show' printErrorItem errorExpected
-      custom      = show' printCustom errorCustom
-
-      errorMsgHeader = "Could not parse .ssa file.\n\n"
-
-  in  if S.null (errorCustom parseError)
-      then concat [ errorMsgHeader
-                  , "Unexpected "
-                  , unexpecteds
-                  , "\n\n"
-                  , positions
-                  , ".\n\nExpected "
-                  , expecteds
-                  , "."
-                  ]
-      else errorMsgHeader ++ custom
-
-printPosition :: SourcePos -> String
-printPosition sourcePos =
-  concat [ "in file '"
-         , sourceName sourcePos
-         , "' at line "
-         , (show $ unPos $ sourceLine sourcePos)
-         , " and column "
-         , (show $ unPos $ sourceColumn sourcePos)
-         ]
-
-printErrorItem :: ErrorItem Char -> String
-printErrorItem (Tokens ts) = "token " ++ (show $ fmap convertTabs $ toList ts)
-printErrorItem (Label cs)  = "label " ++ (show $ toList cs)
-printErrorItem EndOfInput  = "end of input"
-
-printCustom :: Dec -> String
-printCustom (DecFail str) = str
-printCustom _             = ""
-
-convertTabs :: Char -> Char
-convertTabs '\t' = ' '
-convertTabs c    = c
 
 --------------------------------------------------------------------------------
 -- .ssa parser
 --------------------------------------------------------------------------------
 
-type ParserST s a = ParsecT Dec TL.Text (ST s) a
+type ParserST s a = ParsecT Void TL.Text (ST s) a
 
 parseSSA' :: String -> ParserST s SSA
 parseSSA' filePath = do
@@ -227,20 +185,20 @@ makeTraces allLabels allUnits dataRows =
       dataTraces = zipWith3 Trace dataLabels dataUnits traceData
   in  (timeTrace, dataTraces)
 
-headerField :: String -> ParserST s a -> ParserST s a
+headerField :: TL.Text -> ParserST s a -> ParserST s a
 headerField name p = string name *> tab *> p
 
-headerString :: String -> ParserST s String
+headerString :: TL.Text -> ParserST s String
 headerString name = headerField name (manyTill anyChar eol)
 
-headerInteger :: String -> ParserST s Integer
-headerInteger name = headerField name integer <* eol
+headerInteger :: TL.Text -> ParserST s Integer
+headerInteger name = headerField name decimal <* eol
 
-headerFloat :: String -> ParserST s Double
+headerFloat :: TL.Text -> ParserST s Double
 headerFloat name = headerField name float <* eol
 
 line :: ParserST s [String]
-line = sepEndBy (many (noneOf "\t\n\r")) tab <* eol
+line = sepEndBy (many (noneOf ['\t', '\n', '\r'])) tab <* eol
 
 dataBlock :: (Int, Int) -> ParserST s [V.Vector Double]
 dataBlock (rows, cols) = do
@@ -280,19 +238,6 @@ fractional6 = char '.' *> do
   return $ fromIntegral i * 1e-6
 
 --------------------------------------------------------------------------------
--- Custom error messages
---------------------------------------------------------------------------------
-
-versionErrorMessage :: String -> String
-versionErrorMessage version = concat
-  [ ".ssa version "
-  , version
-  , " not supported.\n\nSupported .ssa versions: "
-  , intercalate ", " supportedSsaVersions
-  , "."
-  ]
-
---------------------------------------------------------------------------------
 -- Printing .ssa files
 --------------------------------------------------------------------------------
 
@@ -328,7 +273,7 @@ printSSA ssa =
         ]
 
       traceDataHeader =
-        [ B.fromString beginDataLabel
+        [ B.fromLazyText beginDataLabel
         , sepEndWith '\t' labels
         , sepEndWith '\t' units <> delineators
         ] where delineators = if version == "3.00"
@@ -339,7 +284,7 @@ printSSA ssa =
                       (transpose columnData)
 
       -- the extra mempty adds an extra newline
-      end = [B.fromString endDataLabel, mempty]
+      end = [B.fromLazyText endDataLabel, mempty]
 
       -- .ssa files are generated on windows so use "\r\n" for eol
       fileBuilder = mconcat $ intersperse (B.fromString "\r\n") $ concat
@@ -347,9 +292,9 @@ printSSA ssa =
 
   in  B.toLazyText fileBuilder
 
-singleField' :: String -> String -> B.Builder
+singleField' :: TL.Text -> String -> B.Builder
 singleField' name content =
-  B.fromString name <> B.singleton '\t' <> B.fromString content
+  B.fromLazyText name <> B.singleton '\t' <> B.fromString content
 
 appendTab :: B.Builder -> B.Builder
 appendTab b = b <> B.singleton '\t'
@@ -360,3 +305,85 @@ printDouble = B.fromText . toFixed 6
 sepEndWith :: Char -> [String] -> B.Builder
 sepEndWith c strs =
   mconcat $ strs >>= \s -> [B.fromString s, B.singleton c]
+
+--------------------------------------------------------------------------------
+-- Simplifying parse errors
+--------------------------------------------------------------------------------
+
+simplifyParseError :: ParseError Char Void -> String
+simplifyParseError (TrivialError sourcePositions unexpected expecteds) =
+  customUnlines
+    [ headerMsg
+    , positionMsg sourcePositions
+    , unexpectedMsg unexpected
+    , expectedMsg expecteds
+    ]
+simplifyParseError (FancyError sourcePositions fancyErrors) =
+  customUnlines
+    [ headerMsg
+    , positionMsg sourcePositions
+    , fancyMsg fancyErrors
+    ]
+
+customUnlines :: [String] -> String
+customUnlines = intercalate "\n\n" . filter (not . null)
+
+headerMsg :: String
+headerMsg = "Error: Could not parse .ssa file"
+
+positionMsg :: NE.NonEmpty SourcePos -> String
+positionMsg positions =
+  errorPluralized ++ (intercalate ", and " $ map positionMsg' $ toList positions) ++ ":"
+  where
+    errorPluralized = if length positions == 1
+      then "due to an error located "
+      else "due to errors located "
+    positionMsg' :: SourcePos -> String
+    positionMsg' sourcePos =
+      concat [ "in file '"
+            , sourceName sourcePos
+            , "' at line "
+            , show $ unPos $ sourceLine sourcePos
+            , " and column "
+            , show $ unPos $ sourceColumn sourcePos
+            ]
+
+unexpectedMsg :: Maybe (ErrorItem Char) -> String
+unexpectedMsg = maybe "" $
+  \errItem -> "Unexpected " ++ printErrorItem errItem ++ "."
+
+expectedMsg :: S.Set (ErrorItem Char) -> String
+expectedMsg expecteds =
+  "Expected "
+  ++ (intercalate ", or " $ fmap printErrorItem $ toList expecteds)
+  ++ "."
+
+fancyMsg :: S.Set (ErrorFancy Void) -> String
+fancyMsg fancyErrors =
+  customUnlines $ fmap printErrorFancy $ toList fancyErrors
+
+printErrorItem :: ErrorItem Char -> String
+printErrorItem (Tokens ts) = show $ fmap convertTabs $ toList ts
+  where convertTabs :: Char -> Char
+        convertTabs '\t' = ' '
+        convertTabs c    = c
+printErrorItem (Label cs)  = show $ toList cs
+printErrorItem EndOfInput  = "end of input"
+
+printErrorFancy :: ErrorFancy Void -> String
+printErrorFancy (ErrorFail errMsg)       = errMsg
+printErrorFancy (ErrorIndentation _ _ _) = "Indentation error."
+-- printErrorFancy (ErrorCustom void) -- impossible
+
+--------------------------------------------------------------------------------
+-- Custom error messages
+--------------------------------------------------------------------------------
+
+versionErrorMessage :: String -> String
+versionErrorMessage version = concat
+  [ "Unsupported .ssa version '"
+  , version
+  , "' (supported .ssa versions: "
+  , intercalate ", " supportedSsaVersions
+  , ")."
+  ]
