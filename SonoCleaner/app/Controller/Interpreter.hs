@@ -389,7 +389,6 @@ setupInterpreter :: IO ( Model -> GUIState -> STM ()
                        , Model -> GUIState -> STM (M.IntMap Double)
                        , Model -> GUIState -> STM Model )
 setupInterpreter = do
-  modelSnapshotTVar      <- newTVarIO undefined
   idAnnotationTVar       <- newTVarIO undefined
   opAnnotationTVar       <- newTVarIO undefined
   annotatedChartSpecTVar <- newTVarIO undefined
@@ -405,7 +404,6 @@ setupInterpreter = do
             annotatedChartSpec =
               makeAnnotatedChartSpec model viewParams opAnnotation
 
-        writeTVar modelSnapshotTVar model
         writeTVar idAnnotationTVar idAnnotation
         writeTVar opAnnotationTVar opAnnotation
         writeTVar annotatedChartSpecTVar annotatedChartSpec
