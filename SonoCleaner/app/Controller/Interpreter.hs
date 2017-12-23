@@ -32,39 +32,34 @@ import           Types.LevelShifts
 import           View.Types
 
 --------------------------------------------------------------------------------
--- Annotation dependencies
+-- Data flow
+--------------------------------------------------------------------------------
 
-data IdDataDependencies = IdDataDependencies
-  { _iddDataVersion :: Integer
-  , _iddDataParams  :: DataParams
-  } deriving (Eq)
+-- A. Model (raw data)
+--      |
+--      | 1. readIdAnnotation (using DataParams)
+--      v
+-- B. AnnotatedTraceState IdDataDependencies (raw data, with precomputations)
+--      |
+--      | 2. applyOperation (using TraceOperation)
+--      v
+-- C. AnnotatedTraceState OpDataDependencies (transformed data, with precomputations)
+--      |
+--      | 3. makeAnnotatedChartSpec (using ViewParams)
+--      v
+-- D. AnnotatedChartSpec (specification of the display)
 
-data OpDataDependencies = OpDataDependencies
-  { _nddDataVersion :: Integer
-  , _nddDataParams  :: DataParams
-  , _nddOperation   :: TraceOperation
-  } deriving (Eq)
+--------------------------------------------------------------------------------
+-- The parameters which determine the transformation and display of a trace
+--------------------------------------------------------------------------------
 
-data DisplayDependencies = DisplayDependencies
-  { _ddDataVersion :: Integer
-  , _ddDataParams  :: DataParams
-  , _ddOperation   :: TraceOperation
-  , _ddViewParams  :: ViewParams
-  } deriving (Eq)
-
+-- 1
 data DataParams = DataParams
   { _dpLevelShiftThreshold :: Double
   , _dpNoiseThreshold      :: Double
   } deriving (Eq)
 
-data ViewParams = ViewParams
-  { _vpViewBounds          :: ViewBounds
-  , _vpShowReplicateTraces :: Bool
-  , _vpReferenceTraceLabel :: (Int, Maybe T.Text)
-  , _vpCurrentPage         :: NotebookPage
-  , _vpCropBounds          :: Maybe (Int, Int)
-  } deriving (Eq)
-
+-- 2
 type LevelShiftIndex = Int
 type MatchLevel = Int
 type Offset = Double
@@ -76,32 +71,28 @@ data TraceOperation =
   | ManualMultipleOp MultipleAction [LevelShiftIndex] Offset
   deriving (Eq)
 
+-- 3
+data ViewParams = ViewParams
+  { _vpViewBounds          :: ViewBounds
+  , _vpShowReplicateTraces :: Bool
+  , _vpReferenceTraceLabel :: (Int, Maybe T.Text)
+  , _vpCurrentPage         :: NotebookPage
+  , _vpCropBounds          :: Maybe (Int, Int)
+  } deriving (Eq)
 makeLenses ''ViewParams
-makeLenses ''OpDataDependencies
 
 --------------------------------------------------------------------------------
--- Reading GUIState
+-- Reading the parameters from the GUIState
+--------------------------------------------------------------------------------
 
+-- 1
 readDataParams :: GUIState -> DataParams
 readDataParams GUIState{..} = DataParams
   { _dpLevelShiftThreshold = _levelShiftThreshold
   , _dpNoiseThreshold      = _noiseThreshold
   }
 
-readViewParams :: GUIState -> ViewParams
-readViewParams GUIState{..} = ViewParams
-  { _vpViewBounds          = _viewBounds
-  , _vpShowReplicateTraces = _showReplicateTraces
-  , _vpReferenceTraceLabel = _referenceTraceLabel
-  , _vpCurrentPage         = _currentPage
-  , _vpCropBounds          = cropBounds }
-  where
-    cropBounds = case _currentPage of
-      CropPage -> case _levelShiftSelection of
-        [lb, ub] -> Just (lb, ub)
-        _        -> Nothing
-      _ -> Nothing
-
+-- 2
 readTraceOperation :: GUIState -> TraceOperation
 readTraceOperation GUIState{..} = case _currentPage of
   AutoPage     -> AutoOp _matchLevel
@@ -119,15 +110,61 @@ readTraceOperation GUIState{..} = case _currentPage of
     _ -> IdentityOp
   _            -> IdentityOp
 
---------------------------------------------------------------------------------
--- Annotation
+-- 3
+readViewParams :: GUIState -> ViewParams
+readViewParams GUIState{..} = ViewParams
+  { _vpViewBounds          = _viewBounds
+  , _vpShowReplicateTraces = _showReplicateTraces
+  , _vpReferenceTraceLabel = _referenceTraceLabel
+  , _vpCurrentPage         = _currentPage
+  , _vpCropBounds          = cropBounds }
+  where
+    cropBounds = case _currentPage of
+      CropPage -> case _levelShiftSelection of
+        [lb, ub] -> Just (lb, ub)
+        _        -> Nothing
+      _ -> Nothing
 
+--------------------------------------------------------------------------------
+-- Parameter dependencies for validating the intermediate cached computations
+--------------------------------------------------------------------------------
+
+-- B
+data IdDataDependencies = IdDataDependencies
+  { _iddDataVersion :: Integer
+  , _iddDataParams  :: DataParams
+  } deriving (Eq)
+
+-- C
+data OpDataDependencies = OpDataDependencies
+  { _nddDataVersion :: Integer
+  , _nddDataParams  :: DataParams
+  , _nddOperation   :: TraceOperation
+  } deriving (Eq)
+
+-- D
+data DisplayDependencies = DisplayDependencies
+  { _ddDataVersion :: Integer
+  , _ddDataParams  :: DataParams
+  , _ddOperation   :: TraceOperation
+  , _ddViewParams  :: ViewParams
+  } deriving (Eq)
+
+makeLenses ''OpDataDependencies
+
+--------------------------------------------------------------------------------
+-- The 'objects/vertices' of the data flow
+-- (Cached data annotated with precomputations and parameter dependencies)
+--------------------------------------------------------------------------------
+
+-- B, C
 data AnnotatedTraceState a = AnnotatedTraceState
   { _atsDependencies      :: a
   , _atsTraceState        :: TraceState
   , _atsJumps             :: M.IntMap Double
   , _atsLevelShiftMatches :: LevelShiftMatches }
 
+-- D
 data AnnotatedChartSpec = AnnotatedChartSpec
   { _acsDependencies :: DisplayDependencies
   , _acsChartSpec    :: ChartSpec  }
@@ -136,27 +173,34 @@ makeLenses ''AnnotatedTraceState
 makeLenses ''AnnotatedChartSpec
 
 --------------------------------------------------------------------------------
--- Logic
+-- The 'morphisms/edges' of the data flow
+-- (Functions between the 'objects/vertices')
+--------------------------------------------------------------------------------
 
-getTraceStateTransform
-  :: TraceOperation
+-- 1
+readIdAnnotation
+  :: DataParams
+  -> Model
   -> AnnotatedTraceState IdDataDependencies
-  -> TraceStateOperator
-getTraceStateTransform traceOp ats = case traceOp of
-  IdentityOp -> idOperator
-  AutoOp matchLevel' ->
-    matchJumpsTrace (_atsLevelShiftMatches ats) matchLevel'
-  ManualSingleOp action index offset holdPair -> case action of
-    SingleIgnore        -> idOperator
-    SingleZero          -> apply zeroJump
-    SingleSlopeFit      -> apply estimateSlopeBoth
-    where apply f = f (snd holdPair) offset index (_atsJumps ats)
-  ManualMultipleOp action indices offset -> case action of
-    MultipleIgnore -> idOperator
-    MultipleLine   -> apply interpolateBetweenJumps
-    MultipleCancel -> apply matchGroup
-    where apply f = f offset indices (_atsJumps ats)
+readIdAnnotation dataParams model =
+  let nt  = _dpNoiseThreshold      dataParams
+      lst = _dpLevelShiftThreshold dataParams
 
+      dataVersion = getTraceDataVersion model
+      idTraceState = getCurrentState model
+      idJumps = labelTraceStateJumps nt lst idTraceState
+      idMatches = matchJumps nt idJumps idTraceState
+
+  in  AnnotatedTraceState
+        { _atsDependencies      = IdDataDependencies
+                                    { _iddDataVersion = dataVersion
+                                    , _iddDataParams  = dataParams }
+        , _atsTraceState        = idTraceState
+        , _atsJumps             = idJumps
+        , _atsLevelShiftMatches = idMatches }
+
+
+-- 2
 applyOperation
   :: TraceOperation
   -> AnnotatedTraceState IdDataDependencies
@@ -184,6 +228,27 @@ applyOperation traceOp ats =
             , _atsJumps             = newJumps
             , _atsLevelShiftMatches = newMatches }
 
+-- helper for 2
+getTraceStateTransform
+  :: TraceOperation
+  -> AnnotatedTraceState IdDataDependencies
+  -> TraceStateOperator
+getTraceStateTransform traceOp ats = case traceOp of
+  IdentityOp -> idOperator
+  AutoOp matchLevel' ->
+    matchJumpsTrace (_atsLevelShiftMatches ats) matchLevel'
+  ManualSingleOp action index offset holdPair -> case action of
+    SingleIgnore        -> idOperator
+    SingleZero          -> apply zeroJump
+    SingleSlopeFit      -> apply estimateSlopeBoth
+    where apply f = f (snd holdPair) offset index (_atsJumps ats)
+  ManualMultipleOp action indices offset -> case action of
+    MultipleIgnore -> idOperator
+    MultipleLine   -> apply interpolateBetweenJumps
+    MultipleCancel -> apply matchGroup
+    where apply f = f offset indices (_atsJumps ats)
+
+-- 3
 makeAnnotatedChartSpec
   :: Model
   -> ViewParams
@@ -203,6 +268,7 @@ makeAnnotatedChartSpec model viewParams ats =
         { _acsDependencies = displayDependencies
         , _acsChartSpec    = chartSpec }
 
+-- helper for 3
 specifyChart
   :: Model
   -> ViewParams
@@ -314,28 +380,8 @@ specifyChart model viewParams ats =
       _ -> Nothing
 
 --------------------------------------------------------------------------------
--- Setup
-
-readIdAnnotation
-  :: Model
-  -> DataParams
-  -> AnnotatedTraceState IdDataDependencies
-readIdAnnotation model dataParams =
-  let nt  = _dpNoiseThreshold      dataParams
-      lst = _dpLevelShiftThreshold dataParams
-
-      dataVersion = getTraceDataVersion model
-      idTraceState = getCurrentState model
-      idJumps = labelTraceStateJumps nt lst idTraceState
-      idMatches = matchJumps nt idJumps idTraceState
-
-  in  AnnotatedTraceState
-        { _atsDependencies      = IdDataDependencies
-                                    { _iddDataVersion = dataVersion
-                                    , _iddDataParams  = dataParams }
-        , _atsTraceState        = idTraceState
-        , _atsJumps             = idJumps
-        , _atsLevelShiftMatches = idMatches }
+-- Initialization of the interpreter
+--------------------------------------------------------------------------------
 
 setupInterpreter :: IO ( Model -> GUIState -> STM ()
                        , Model -> GUIState -> STM ChartSpec
@@ -343,7 +389,6 @@ setupInterpreter :: IO ( Model -> GUIState -> STM ()
                        , Model -> GUIState -> STM (M.IntMap Double)
                        , Model -> GUIState -> STM Model )
 setupInterpreter = do
-  -- create variables
   modelSnapshotTVar      <- newTVarIO undefined
   idAnnotationTVar       <- newTVarIO undefined
   opAnnotationTVar       <- newTVarIO undefined
@@ -355,12 +400,11 @@ setupInterpreter = do
             traceOp    = readTraceOperation guiState
             viewParams = readViewParams guiState
 
-            idAnnotation = readIdAnnotation model dataParams
+            idAnnotation = readIdAnnotation dataParams model
             opAnnotation = applyOperation traceOp idAnnotation
             annotatedChartSpec =
               makeAnnotatedChartSpec model viewParams opAnnotation
 
-        -- create variables
         writeTVar modelSnapshotTVar model
         writeTVar idAnnotationTVar idAnnotation
         writeTVar opAnnotationTVar opAnnotation
@@ -380,7 +424,7 @@ setupInterpreter = do
           if  newDeps == oldDeps
             then return idAnnotationOld
             else writeReturnTVar idAnnotationTVar
-                   $ readIdAnnotation model dataParams
+                   $ readIdAnnotation dataParams model
 
         opAnnotationOld <- readTVar opAnnotationTVar
         opAnnotationNew <- do
@@ -426,7 +470,8 @@ setupInterpreter = do
   return (initializeInterpreter, getChart, getMatches, getJumps, getNewModel)
 
 --------------------------------------------------------------------------------
--- TVar stuff
+-- Utility
+--------------------------------------------------------------------------------
 
 writeReturnTVar :: TVar a -> a -> STM a
 writeReturnTVar tvar a = writeTVar tvar a >> return a
