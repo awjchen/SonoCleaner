@@ -55,6 +55,7 @@ executable SonoCleaner
                      , heaps
                      , lens
                      , megaparsec
+                     , primitive
                      , stm
                      , text
                      , raw-strings-qq

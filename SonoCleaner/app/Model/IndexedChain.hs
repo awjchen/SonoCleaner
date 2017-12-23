@@ -13,22 +13,22 @@ module Model.IndexedChain
 
 import           Control.Lens
 import           Control.Monad
-import           Control.Monad.ST
+import           Control.Monad.Primitive
 import qualified Data.Vector.Unboxed         as V
 import qualified Data.Vector.Unboxed.Mutable as VM
 
--------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
+
+newtype IndexedChain s a = IndexedChain (VM.MVector s (Bool, ElemIndex, a))
 
 type ElemIndex = Int
 
 nullIndex :: ElemIndex
 nullIndex = 0
 
--------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 
-newtype IndexedChain s a = IndexedChain (VM.MVector s (Bool, ElemIndex, a))
-
-fromList :: VM.Unbox a => [a] -> ST s (IndexedChain s a)
+fromList :: (VM.Unbox a, PrimMonad m) => [a] -> m (IndexedChain (PrimState m) a)
 fromList xs =
   let values = V.fromList xs
       n = V.length values
@@ -40,22 +40,23 @@ fromList xs =
       $ VM.unsafeModify chain (set _2 nullIndex) (n-1)
     return $ IndexedChain chain
 
+-- Finds the least index greater than the provided index.
 next
-  :: VM.Unbox a
-  => IndexedChain s a
+  :: (VM.Unbox a, PrimMonad m)
+  => IndexedChain (PrimState m) a
   -> ElemIndex
-  -> ST s (Maybe (ElemIndex, a))
+  -> m (Maybe (ElemIndex, a))
 next chain@(IndexedChain v) i = do
   (_, nextIndex, _) <- VM.unsafeRead v i
   next' chain [] i nextIndex
 
 next'
-  :: VM.Unbox a
-  => IndexedChain s a
+  :: (VM.Unbox a, PrimMonad m)
+  => IndexedChain (PrimState m) a
   -> [ElemIndex]
   -> ElemIndex
   -> ElemIndex
-  -> ST s (Maybe (ElemIndex, a))
+  -> m (Maybe (ElemIndex, a))
 next' chain@(IndexedChain v) badQueries i nextIndex =
   let update = forM_ badQueries $ \j -> VM.unsafeModify v (set _2 nextIndex) j
   in  if nextIndex == nullIndex
@@ -66,10 +67,12 @@ next' chain@(IndexedChain v) badQueries i nextIndex =
         then update >> return (Just (nextIndex, nextVal))
         else next' chain (i:badQueries) nextIndex nextNextIndex
 
-remove :: VM.Unbox a => IndexedChain s a -> ElemIndex -> ST s ()
+remove :: (VM.Unbox a, PrimMonad m)
+       => IndexedChain (PrimState m) a -> ElemIndex -> m ()
 remove (IndexedChain v) = VM.unsafeModify v (set _1 False)
 
-query :: VM.Unbox a => IndexedChain s a -> ElemIndex -> ST s (Maybe a)
+query :: (VM.Unbox a, PrimMonad m)
+      => IndexedChain (PrimState m) a -> ElemIndex -> m (Maybe a)
 query (IndexedChain v) i = do
   (exists, _, val) <- VM.unsafeRead v i
   return $ if exists then Just val else Nothing
