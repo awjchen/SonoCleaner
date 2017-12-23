@@ -27,6 +27,9 @@ import           Model.Util
 -- Manual operatons on single jumps
 -------------------------------------------------------------------------------
 
+type SingleShift =
+  V.Vector Double -> M.IntMap Double -> Int -> Double -> Maybe Double
+
 liftToTrace ::
      SingleShift
   -> Hold

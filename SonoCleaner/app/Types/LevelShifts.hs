@@ -12,8 +12,6 @@ import qualified Data.Vector.Unboxed as V
 data Hold = HoldLeft | HoldRight
   deriving (Eq, Enum, Bounded)
 
-type SingleShift = V.Vector Double -> M.IntMap Double -> Int -> Double -> Maybe Double
-
 data SingleAction
   = SingleIgnore
   | SingleZero
