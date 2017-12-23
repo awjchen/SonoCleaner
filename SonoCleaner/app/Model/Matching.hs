@@ -2,7 +2,8 @@
 
 -- For an explanation, see 'Procedural details' section of the user's guide.
 
-{-# LANGUAGE MultiWayIf #-}
+{-# LANGUAGE BangPatterns #-}
+{-# LANGUAGE MultiWayIf   #-}
 
 module Model.Matching
   ( LevelShiftMatches, matchLevels
@@ -11,6 +12,8 @@ module Model.Matching
   ) where
 
 import           Control.Lens
+import           Control.Monad.Loops        (whileJust)
+import           Control.Monad.Primitive
 import           Control.Monad.ST
 import           Control.Monad.Trans.Class
 import           Control.Monad.Trans.Reader
@@ -29,6 +32,51 @@ import qualified Data.Vector.Unboxed        as V
 import qualified Model.IndexedChain         as IC
 import           Model.TraceState
 import           Model.Util
+
+-- Note: In this module, level-shifts are referred to as "jumps".
+
+-------------------------------------------------------------------------------
+-- Interface types
+-------------------------------------------------------------------------------
+
+data LevelShiftMatches = LevelShiftMatches
+  { matchLevels          :: Int
+  , getLevelShiftMatches :: [[(Int, Double)]] }
+
+instance Default LevelShiftMatches where
+  def = LevelShiftMatches 0 []
+
+-------------------------------------------------------------------------------
+-- Internal types
+-------------------------------------------------------------------------------
+
+type GroupSize    = Int
+type GroupSpan    = Int
+type GroupError   = Double
+type JumpPosition = Int
+type JumpError    = Double
+
+type MatchSeedCandidate = (GroupSpan, IC.ElemIndex)
+
+-- Holds state as well, since we are in the ST monad
+data MatchingEnv s = MatchingEnv
+  { envNoiseThreshold :: Double
+  , envChain          :: IC.IndexedChain s (JumpPosition, JumpError)
+  , envHeap           :: STRef s (H.Heap MatchSeedCandidate)
+  }
+
+type Run s a = ReaderT (MatchingEnv s) (ST s) a
+
+data Match = Match
+  { matchSpan          :: GroupSpan
+  , matchErrorSum      :: GroupError
+  , matchedJumpIndices :: [JumpPosition]
+  }
+
+data ZeroSumSearchResult
+  = ZeroSum JumpError [JumpPosition]
+  | NextSpan GroupSpan
+  | NoSolution
 
 -------------------------------------------------------------------------------
 -- Constants
@@ -54,33 +102,8 @@ searchGroupSizeLimit = 2*groupSizeLimit
 -- interpolationLimit = 4
 
 -------------------------------------------------------------------------------
--- Env
+-- Exported functions
 -------------------------------------------------------------------------------
-
-type ShiftSize    = Int
-type JumpID       = Int
-type JumpPosition = Int
-
-type ErrorSize = Double
-
-data MatchEnv s = MatchEnv
-  { envNoiseThreshold :: Double
-  , envChain          :: IC.IndexedChain s (JumpPosition, ErrorSize)
-  , envHeap           :: STRef s (H.Heap (ShiftSize, JumpID))
-  }
-
--------------------------------------------------------------------------------
--- Go
--------------------------------------------------------------------------------
-
-type Run s a = ReaderT (MatchEnv s) (ST s) a
-
-data LevelShiftMatches = LevelShiftMatches
-  { matchLevels          :: Int
-  , getLevelShiftMatches :: [[(Int, Double)]] }
-
-instance Default LevelShiftMatches where
-  def = LevelShiftMatches 0 []
 
 matchJumpsTrace :: LevelShiftMatches -> Int -> TraceStateOperator
 matchJumpsTrace matches progression =
@@ -95,143 +118,172 @@ matchJumps
   -> M.IntMap Double
   -> TraceState
   -> LevelShiftMatches
-matchJumps noiseTh jumpsMap ts = LevelShiftMatches n changes where
-  (_, ds) = ts ^. diffSeries
-  jumpSlopesMap = M.mapWithKey estimateSlope' jumpsMap where
-    estimateSlope' k _ = fromMaybe 0 $ estimateSlope ds jumpsMap radius k
-      where radius = 4
-  jumpErrorsMap = M.unionWith (-) jumpsMap jumpSlopesMap
-  newErrors = runST $
-    case NE.nonEmpty (M.toList jumpErrorsMap) of
-      Nothing -> return []
-      Just jumpList -> do
-        matchEnv <- initEnv noiseTh jumpList
-        runReaderT matchJumps' matchEnv
+matchJumps noiseTh jumpsMap ts =
+  LevelShiftMatches (length corrections) corrections
+  where
+    (_, ds) = ts ^. diffSeries
+    jumpSlopesMap = M.mapWithKey estimateSlope' jumpsMap where
+      estimateSlope' k _ = fromMaybe 0 $ estimateSlope ds jumpsMap radius k
+        where radius = 4
+    jumpErrorsMap = M.unionWith (-) jumpsMap jumpSlopesMap
 
-  applyError :: (Int, Double) -> (Int, Double)
-  applyError (k, newErr) =
-    let oldErr = fromJust $ M.lookup k jumpErrorsMap
-        change = newErr - oldErr
-        height = fromJust $ M.lookup k jumpsMap
-    in  (k, height + change)
+    matches = runST $
+      case NE.nonEmpty (M.toList jumpErrorsMap) of
+        Nothing -> return []
+        Just neJumpList -> do
+          matchEnv <- initMatchingEnv noiseTh neJumpList
+          runReaderT matchJumps' matchEnv
 
-  changes = (map.map) applyError newErrors
-  n = length changes
+    corrections = (map.concatMap) (redistribute jumpSlopesMap) matches
 
--- Initialize the matching procedure.
-initEnv
+-------------------------------------------------------------------------------
+-- Corrections on matches
+-------------------------------------------------------------------------------
+
+redistribute :: M.IntMap Double -> Match -> [(Int, Double)]
+redistribute jumpSlopesMap (Match span err indices) =
+  let indices' = toList indices
+      slopeEstimates = map (fromJust . flip M.lookup jumpSlopesMap) indices'
+  in  zip indices' $ over _head (+err) slopeEstimates
+
+-------------------------------------------------------------------------------
+-- The matching procedure
+-------------------------------------------------------------------------------
+
+initMatchingEnv
   :: Double
-  -> NE.NonEmpty (Int, ErrorSize)
-  -> ST s (MatchEnv s)
-initEnv noiseTh neJumpsList = do
+  -> NE.NonEmpty (JumpPosition, JumpError)
+  -> ST s (MatchingEnv s)
+initMatchingEnv noiseTh neJumpsList = do
   let jumpsList = NE.toList neJumpsList
   chain <- IC.fromList jumpsList
   heap <- let positions = map fst jumpsList
               distances = zipWith (-) (tail positions) positions
-              heapElems = zip distances [0..] :: [(ShiftSize, JumpID)]
+              heapElems = zip distances [0..]
           in  newSTRef $ H.fromList heapElems
-  return MatchEnv
+  pure MatchingEnv
     { envNoiseThreshold      = noiseTh
     , envChain               = chain
     , envHeap                = heap
     }
 
--- Aggregate matches of the same size.
-matchJumps' :: Run s [[(Int, Double)]]
-matchJumps' = fmap (map (concatMap snd) . groupBy ((==) `on` fst)) matchJumps''
+-- Returns matches grouped by (increasing) span.
+matchJumps' :: Run s [[Match]]
+matchJumps' =
+      groupBy ((==) `on` matchSpan) . catMaybes
+  <$> whileJust popCandidate tryCandidate
 
--- Loop until done.
-matchJumps'' :: Run s [(Int, [(Int, Double)])]
-matchJumps'' = do
-  isDone <- done
-  if isDone
-    then return []
-    else do
-      mMatch <- step
-      case mMatch of
-        Nothing    -> matchJumps''
-        Just match -> (match:) <$> matchJumps''
-
--- We are done when the heap of candidates is empty.
-done :: Run s Bool
-done = fmap null $ asks envHeap >>= lift . readSTRef
-
--- Try the next candidate.
-step :: Run s (Maybe (ShiftSize, [(Int, Double)]))
-step = do
+popCandidate :: Run s (Maybe MatchSeedCandidate)
+popCandidate = do
   heapRef <- asks envHeap
-  heap <- lift $ readSTRef heapRef
-  let (size, jumpID) = H.minimum heap
-      heap' = H.deleteMin heap
+  mbViewMin <- lift $ fmap H.viewMin $ readSTRef heapRef
+  case mbViewMin of
+    Nothing -> pure Nothing
+    Just (c, heap) -> lift (writeSTRef heapRef heap) >> pure (Just c)
 
-  mSum <- searchZeroSum size jumpID
-  case mSum of
-    NoSolution -> do
-      lift $ writeSTRef heapRef heap'
-      return Nothing
-    NextSize nextSize -> do
-      let heap'' = heap' & H.insert (nextSize, jumpID)
-      lift $ writeSTRef heapRef heap''
-      return Nothing
-    ZeroSum err jumpIDs -> do
+-- Try the next candidate
+tryCandidate :: MatchSeedCandidate -> Run s (Maybe Match)
+tryCandidate (size, jumpID) = do
+  searchResult <- searchZeroSum size jumpID
+  case searchResult of
+    (NoSolution, _) -> pure Nothing
+    (NextSpan nextSize, _) -> do
+      heapRef <- asks envHeap
+      lift $ modifySTRef' heapRef (H.insert (nextSize, jumpID))
+      pure Nothing
+    (ZeroSum err revJumpPositions, jumpIDs) -> do
       chain <- asks envChain
-      (j0:js) <- lift $ do
-        writeSTRef heapRef heap'
-        positions <- fmap (reverse . map fst . catMaybes)
-          $ mapM (IC.query chain) $ toList jumpIDs
+      lift $ do
         mapM_ (IC.remove chain) jumpIDs
-        return positions
-      return $ Just (size, (j0, err):zip js (repeat 0))
+        pure $ Just $ Match size err (reverse revJumpPositions)
 
--- Search for a contiguous interval of jumps starting at 'startID', spanning
+-------------------------------------------------------------------------------
+-- Searching for zero-sum groups of jumps
+-------------------------------------------------------------------------------
+
+-- Search for a contiguous interval of jumps starting at 'startIdx', spanning
 -- exactly 'sizeLimit' time units, containing at most 'groupSizeLimit' jumps,
 -- and whose displacements sum to zero (within some tolerance).
-data SearchResult = ZeroSum Double (NE.NonEmpty JumpID)
-                  | NextSize ShiftSize
-                  | NoSolution
-
-searchZeroSum :: ShiftSize -> JumpID -> Run s SearchResult
-searchZeroSum sizeLimit startID = do
-  chain <- asks envChain
-  mVal <- lift $ IC.query chain startID
-  case mVal of
-    Nothing -> return NoSolution
+searchZeroSum
+  :: GroupSpan -> IC.ElemIndex -> Run s (ZeroSumSearchResult, [IC.ElemIndex])
+searchZeroSum sizeLimit startIdx = do
+  chain  <- asks envChain
+  errLim <- asks envNoiseThreshold
+  mbVal  <- lift $ IC.query chain startIdx
+  case mbVal of
+    Nothing -> pure (NoSolution, [])
     Just (startPos, startErr) ->
-      tryNext 1 startErr (startID NE.:| []) where
-        posTarget = startPos + sizeLimit
+      foldChainFrom (searchZeroSumHelper errLim startPos (startPos+sizeLimit))
+                    (const NoSolution)
+                    (0, 0, [])
+                    startIdx
+                    chain
 
-        tryNext
-          :: Int
-          -> Double
-          -> NE.NonEmpty JumpID
-          -> Run s SearchResult
-        tryNext accCount accErr accIDs@(jumpID NE.:| _) = do
-            chain' <- asks envChain
-            mNext <- lift $ IC.next chain' jumpID
-            case mNext of
-              Nothing -> return NoSolution
-              Just (nextID, (pos, err)) ->
-                if  | pos < posTarget ->
-                        tryNext (succ accCount) (err+accErr)
-                                (nextID `NE.cons` accIDs)
-                    | pos == posTarget -> do
-                        errLim <- asks envNoiseThreshold
-                        if  | accCount >= searchGroupSizeLimit ->
-                              return NoSolution
-                            | accCount >= groupSizeLimit ->
-                              targetFollowingJump startPos nextID
-                            | abs (err+accErr) <= errLim ->
-                              return $
-                                ZeroSum (err+accErr) (nextID `NE.cons` accIDs)
-                            | otherwise ->
-                              targetFollowingJump startPos nextID
-                    | otherwise -> return $ NextSize (pos - startPos)
+searchZeroSumHelper
+  :: Double
+  -> JumpPosition
+  -> JumpPosition
+  -> (JumpPosition, JumpError)
+  -> (GroupSize, GroupError, [JumpPosition])
+  -> Run s (Either ZeroSumSearchResult (GroupSize, GroupError, [JumpPosition]))
+searchZeroSumHelper
+  errLim startPos targetPos (pos, err) (accCount, accErr, accPos) =
+  let accCount' = succ accCount
+      accErr' = err + accErr
+      accPos' = pos : accPos
+      acc' = (accCount', accErr', accPos')
+      next = pure (Right acc') in
+  if  | pos < targetPos ->
+          next
+      | pos == targetPos -> do
+          errLim <- asks envNoiseThreshold
+          if  | accCount' > searchGroupSizeLimit ->
+                  pure $ Left NoSolution
+              | accCount' > groupSizeLimit ->
+                  next
+              | abs (err+accErr) <= errLim ->
+                  pure $ Left $ ZeroSum accErr' accPos'
+              | otherwise ->
+                  next
+      | otherwise ->
+          pure $ Left $ NextSpan (pos - startPos)
 
-targetFollowingJump :: JumpPosition -> JumpID -> Run s SearchResult
-targetFollowingJump startPos jumpID = do
-  chain <- asks envChain
-  mNext <- lift $ IC.next chain jumpID
-  case mNext of
-    Nothing -> return NoSolution
-    Just (_, (nextPos, _)) ->
-      return $ NextSize (nextPos - startPos)
+foldChainFrom :: (V.Unbox a, PrimMonad m)
+  -- Combining function, returning Left to terminate and Right to continue
+  => (a -> b -> m (Either c b))
+  -- Termination function, in case there are no more elements
+  -> (b -> c)
+  -- Initial accumulator
+  -> b
+  -- Initial index
+  -> IC.ElemIndex
+  -- The chain
+  -> IC.IndexedChain (PrimState m) a
+  -- Also returns a list of visited indices
+  -> m (c, [IC.ElemIndex])
+foldChainFrom f g z idx chain = do
+  mbVal <- IC.query chain idx
+  case mbVal of Nothing -> pure (g z, [])
+                Just a  -> do
+                  mbAcc <- f a z
+                  case mbAcc of
+                    Left c  -> pure (c, [idx])
+                    Right b -> foldChainFrom' f g b idx [idx] chain
+  where
+    -- Because 'next' obtains the both next index and its value simultaneously,
+    -- to avoid redundant queries we use the following invariant:
+    -- there exists an element at index 'idx' in the chain,
+    -- and its value is already incorporated into the accumulator 'z'.
+    foldChainFrom' :: (V.Unbox a, PrimMonad m)
+      => (a -> b -> m (Either c b)) -> (b -> c) -> b -> IC.ElemIndex
+      -> [IC.ElemIndex] -> IC.IndexedChain (PrimState m) a
+      -> m (c, [IC.ElemIndex])
+    foldChainFrom' f g !z idx idxAcc chain = do
+      mbNext <- IC.next chain idx
+      case mbNext of  Nothing -> pure (g z, idxAcc)
+                      Just (nextIdx, a) -> do
+                        let idxAcc' = nextIdx : idxAcc
+                        mbAcc <- f a z
+                        case mbAcc of
+                          Left c  -> pure (c, idxAcc')
+                          Right b -> foldChainFrom' f g b nextIdx idxAcc' chain

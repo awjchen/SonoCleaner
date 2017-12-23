@@ -55,6 +55,7 @@ executable SonoCleaner
                      , heaps
                      , lens
                      , megaparsec
+                     , monad-loops
                      , primitive
                      , stm
                      , text
