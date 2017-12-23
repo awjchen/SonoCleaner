@@ -13,6 +13,7 @@ module View.Rendering
 
 import           Control.Concurrent.STM
 import           Control.Lens
+import           Control.Monad.Loops                    (iterateM_)
 import qualified Graphics.Rendering.Cairo               as Cairo
 import           Graphics.Rendering.Chart
 import qualified Graphics.Rendering.Chart.Backend.Cairo as B
@@ -70,12 +71,3 @@ basicRender chartSpec dims = B.runBackend env backendProgram
       where
         renderable = layoutToRenderable (chartLayout chartSpec dims)
         rectSize = over both fromIntegral dims
-
---------------------------------------------------------------------------------
--- Utility
---------------------------------------------------------------------------------
-
--- from the 'monad-loops' package
-iterateM_ :: Monad m => (a -> m a) -> a -> m b
-iterateM_ f = g
-  where g x = f x >>= g
