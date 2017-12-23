@@ -9,6 +9,7 @@ module Types.Series
   , contract
 
   , unboxedAverage
+  , unboxedMinAndMax
 
   , interpolateN
   , interpolateSeries
@@ -47,11 +48,22 @@ contract :: Int -> V.Vector Double -> V.Vector Double
 contract r v = V.slice r (V.length v - 2*r) v
 
 -------------------------------------------------------------------------------
--- Averages
+-- Folds
 -------------------------------------------------------------------------------
 
 unboxedAverage :: V.Vector Double -> Double
 unboxedAverage = (/) <$> V.sum <*> fromIntegral . V.length
+
+unboxedMinAndMax :: V.Vector Double -> (Double, Double)
+unboxedMinAndMax xs = V.foldl' minMaxAcc (x1, x1) (V.tail xs)
+  where
+    x1 = V.head xs
+
+    minMaxAcc :: (Double, Double) -> Double -> (Double, Double)
+    minMaxAcc (minAcc, maxAcc) x =
+      let minAcc' = min x minAcc
+          maxAcc' = max x maxAcc
+      in  minAcc' `seq` maxAcc' `seq` (minAcc', maxAcc')
 
 -------------------------------------------------------------------------------
 -- Interpolation

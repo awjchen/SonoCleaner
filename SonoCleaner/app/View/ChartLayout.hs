@@ -17,6 +17,7 @@ import           Data.Tuple               (swap)
 import qualified Data.Vector.Unboxed      as V
 import           Graphics.Rendering.Chart
 
+import           Types.Series             (unboxedMinAndMax)
 import           View.Types
 
 --------------------------------------------------------------------------------
@@ -287,18 +288,13 @@ simplifySeries bucketSize path
         where mid i j = (i+j) `div` 2
       buckets = V.zip indices (V.tail indices)
 
-      minMaxAcc (minAcc, maxAcc) x =
-        let minAcc' = min x minAcc
-            maxAcc' = max x maxAcc
-        in  minAcc' `seq` maxAcc' `seq` (minAcc', maxAcc')
-
       simplifySegment (start, end) =
         let (xs, ys) = V.unzip $ V.slice start (end-start) path
-            y1 = V.head ys; y2 = V.last ys
-            minAndMax = V.foldl' minMaxAcc (y1, y1) (V.tail ys)
+            minAndMax = unboxedMinAndMax ys
             -- for cosmetics
-            (y1', y2') = if y1 < y2 then      minAndMax
-                                    else swap minAndMax
+            (y1', y2') = if V.head ys < V.last ys
+              then      minAndMax
+              else swap minAndMax
         in  V.fromList [(V.head xs, y1'), (V.last xs, y2')]
 
   in  V.toList $ V.concatMap simplifySegment buckets

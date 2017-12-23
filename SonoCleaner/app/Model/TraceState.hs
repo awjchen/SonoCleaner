@@ -114,7 +114,7 @@ setDiffSeries diffSeries' =
 
 makeBounds :: TraceState -> TraceState
 makeBounds traceState = let series' = traceState ^. series in traceState &
-  set seriesBounds ((,) <$>  V.minimum <*>  V.maximum $ series')
+  set seriesBounds (unboxedMinAndMax series')
 
 --------------------------------------------------------------------------------
 -- TraceStateOperator
