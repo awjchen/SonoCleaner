@@ -334,9 +334,9 @@ specifyChart model viewParams ats =
 
     newSeries = ats ^. atsTraceState . series
 
-    newJumpIndices = M.keys $ ats ^. atsJumps
+    newJumpIndices = ats ^. atsJumps
 
-    newModifiedIndices = S.toList $ ats ^. atsTraceState . modifiedJumps
+    newModifiedIndices = ats ^. atsTraceState . modifiedJumps
 
     originalSeries =
       if not $ showOriginal traceSet

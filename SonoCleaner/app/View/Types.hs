@@ -2,6 +2,8 @@ module View.Types where
 
 import           Data.Colour         (AlphaColour)
 import           Data.Default
+import qualified Data.IntMap.Strict  as M
+import qualified Data.IntSet         as S
 import qualified Data.Vector.Unboxed as V
 
 --------------------------------------------------------------------------------
@@ -12,8 +14,8 @@ data ChartSpec = ChartSpec
   { plotTitle            :: String
   , plotTitleColour      :: AlphaColour Double
   , plotSeries           :: V.Vector Double
-  , plotJumpIndices      :: [Int] -- assumed sorted order
-  , plotModifiedIndices  :: [Int] -- assumed sorted order
+  , plotJumpIndices      :: M.IntMap Double
+  , plotModifiedIndices  :: S.IntSet
   , plotOriginalSeries   :: Maybe (V.Vector Double)
   , plotTwinSeries       :: Maybe (V.Vector Double)
   , plotCustomSeries     :: Maybe (V.Vector Double)

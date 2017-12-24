@@ -13,10 +13,13 @@ import           Control.Lens             hiding (indices)
 import           Data.Colour              (AlphaColour, blend, opaque)
 import           Data.Colour.Names
 import           Data.Default
+import qualified Data.IntMap.Strict       as M
+import qualified Data.IntSet              as S
 import           Data.Tuple               (swap)
 import qualified Data.Vector.Unboxed      as V
 import           Graphics.Rendering.Chart
 
+import           Types.IntMap
 import           Types.Series             (unboxedMinAndMax)
 import           View.Types
 
@@ -164,16 +167,15 @@ traces plotSpec xAxisParams =
     cropTrace :: V.Vector Double -> V.Vector Double
     cropTrace = V.slice lb (ub-lb+1)
 
-    -- assumed sorted
-    cropIndexList :: [Int] -> [Int]
-    cropIndexList = map (subtract lb) . takeWhile (<= ub) . dropWhile (< lb)
+    cropIndexList :: M.IntMap Double -> [Int]
+    cropIndexList = map (subtract lb) . M.keys . boundIntMap (lb, pred ub)
 
     simplifySeries' :: V.Vector (Double, Double) -> [(Double, Double)]
     simplifySeries' = if compressibleTimeSteps xAxisParams <= 1
       then V.toList
       else simplifySeries (compressibleTimeSteps xAxisParams)
 
-    makeMainTrace :: [Int] -> V.Vector Double -> [[(Double, Double)]]
+    makeMainTrace :: M.IntMap Double -> V.Vector Double -> [[(Double, Double)]]
     makeMainTrace splitIndices =
         map simplifySeries'
       . splitAtIndices (cropIndexList splitIndices)
@@ -206,10 +208,6 @@ jumps plotSpec xAxisParams =
   where
     (lb, ub) = boundsIndices xAxisParams
 
-    filterJumpIndices :: [Int] -> [Int]
-    filterJumpIndices = takeWhile (< ub') . dropWhile (< lb')
-      where lb' = pred lb; ub' = ub
-
     reifyJumpInterval :: (Int, Int) -> V.Vector (Double, Double)
     reifyJumpInterval (j0, j1) = V.zip times' values'
       where j1' = succ j1
@@ -239,14 +237,14 @@ jumps plotSpec xAxisParams =
     openJumps =
         zipWith3 makeLine (repeat 2) openColours
       $ map reifyJump
-      $ filterJumpIndices
+      $ M.keys . boundIntMap (lb, pred ub)
       $ plotJumpIndices plotSpec
       where openColours   = cycle [opaque magenta, opaque yellow]
 
     closedJumps =
         zipWith3 makeLine (repeat 2) closedColours
       $ simplifyModifiedIndices
-      $ filterJumpIndices
+      $ S.toList . boundIntSet (lb, pred ub)
       $ plotModifiedIndices plotSpec
       where closedColours = cycle [opaque white, opaque cyan]
 
@@ -305,7 +303,6 @@ simplifySeries bucketSize path
 -- For the special case when there are many modified indices in a row, as
 -- results from using the interpolation brush or the 'Line' correction.
 
--- assumed non-empty, sorted, with unique elements
 span2 :: (a -> a -> Bool) -> [a] -> ([a], [a])
 span2 _ [] = ([], [])
 span2 f (x:xs) = let (as, bs) = go x xs in (x:as, bs) where
@@ -314,7 +311,7 @@ span2 f (x:xs) = let (as, bs) = go x xs in (x:as, bs) where
     | otherwise = ([], zzs)
   go _ [] = ([], [])
 
--- assumed non-empty, sorted, with unique elements
+-- assumed sorted, with unique elements
 groupRuns :: [Int] -> [[Int]]
 groupRuns [] = []
 groupRuns xs =

@@ -5,6 +5,7 @@ module Types.IntMap where
 import           Control.Applicative
 import           Control.Monad
 import qualified Data.IntMap.Strict  as M
+import qualified Data.IntSet         as S
 
 --------------------------------------------------------------------------------
 
@@ -23,8 +24,12 @@ findIntermediateIndices (low, high) intMap = do
   lowIndex  <- fst <$> M.lookupGE low  intMap
   highIndex <- fst <$> M.lookupLE high intMap
   guard (lowIndex <= highIndex)
-  -- M.split excludes the split point so we use pred and succ here
-  let removeLower =  snd . M.split (pred lowIndex)
-      removeUpper =  fst . M.split (succ highIndex)
-      intermediateIndices = M.keys $ removeUpper $ removeLower intMap
-  pure intermediateIndices
+  pure $ M.keys $ boundIntMap (lowIndex, highIndex) intMap
+
+boundIntMap :: (Int, Int) -> M.IntMap a -> M.IntMap a
+boundIntMap (low, high) =
+  fst . M.split (succ high) . snd . M.split (pred low)
+
+boundIntSet :: (Int, Int) -> S.IntSet -> S.IntSet
+boundIntSet (low, high) =
+  fst . S.split (succ high) . snd . S.split (pred low)
