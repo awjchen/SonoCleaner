@@ -123,7 +123,7 @@ matchJumps noiseTh jumpsMap ts =
   where
     (_, ds) = ts ^. diffSeries
     jumpSlopesMap = M.mapWithKey estimateSlope' jumpsMap where
-      estimateSlope' k _ = fromMaybe 0 $ estimateSlope ds jumpsMap radius k
+      estimateSlope' k _ = estimateSlope ds jumpsMap radius k
         where radius = 4
     jumpErrorsMap = M.unionWith (-) jumpsMap jumpSlopesMap
 

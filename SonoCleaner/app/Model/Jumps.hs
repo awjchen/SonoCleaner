@@ -126,7 +126,7 @@ matchGroup offset indices jumps
   , Just slopes <- traverse (`M.lookup` jumps) indices
   = unsafeTraceStateOperator $ \traceState ->
       let ds = snd $ traceState ^. diffSeries
-          slopeEsts = map (fromMaybe 0 . estimateSlope ds jumps radius) indices
+          slopeEsts = map (estimateSlope ds jumps radius) indices
             where radius = 4
           slopeErrors = zipWith (-) slopes slopeEsts
           err = sum slopeErrors + head slopeEsts

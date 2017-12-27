@@ -11,11 +11,11 @@ import           Statistics.Test.Types
 import           Statistics.Test.WilcoxonT    (wilcoxonMatchedPairTest)
 import           Statistics.Types
 
-estimateSlope :: V.Vector Double -> M.IntMap Double -> Int -> Int -> Maybe Double
+estimateSlope :: V.Vector Double -> M.IntMap Double -> Int -> Int -> Double
 estimateSlope ds jumps radius i
-  | V.length nonZeroSlopes < 1 = Nothing
-  | pValue' < 0.10 = Just (median slopes)
-  | otherwise      = Just 0
+  | V.length nonZeroSlopes < 5 = 0 -- p < 0.10 impossible with l.t. 5 slopes
+  | pValue' < 0.10             = median slopes
+  | otherwise                  = 0
   where
     i0 = max 0                 (i-radius)
     i1 = min (V.length ds - 1) (i+radius)
