@@ -212,7 +212,7 @@ searchZeroSum sizeLimit startIdx = do
   mbVal  <- lift $ IC.query chain startIdx
   case mbVal of
     Nothing -> pure (NoSolution, [])
-    Just (startPos, startErr) ->
+    Just (startPos, startErr) -> lift $
       foldChainFrom (searchZeroSumHelper errLim startPos (startPos+sizeLimit))
                     (const NoSolution)
                     (0, 0, [])
@@ -225,7 +225,7 @@ searchZeroSumHelper
   -> JumpPosition
   -> (JumpPosition, JumpError)
   -> (GroupSize, GroupError, [JumpPosition])
-  -> Run s (Either ZeroSumSearchResult (GroupSize, GroupError, [JumpPosition]))
+  -> ST s (Either ZeroSumSearchResult (GroupSize, GroupError, [JumpPosition]))
 searchZeroSumHelper
   errLim startPos targetPos (pos, err) (accCount, accErr, accPos) =
   let accCount' = succ accCount
@@ -235,8 +235,7 @@ searchZeroSumHelper
       next = pure (Right acc') in
   if  | pos < targetPos ->
           next
-      | pos == targetPos -> do
-          errLim <- asks envNoiseThreshold
+      | pos == targetPos ->
           if  | accCount' > searchGroupSizeLimit ->
                   pure $ Left NoSolution
               | accCount' > groupSizeLimit ->
@@ -248,9 +247,9 @@ searchZeroSumHelper
       | otherwise ->
           pure $ Left $ NextSpan (pos - startPos)
 
-foldChainFrom :: (V.Unbox a, PrimMonad m)
+foldChainFrom :: (V.Unbox a)
   -- Combining function, returning Left to terminate and Right to continue
-  => (a -> b -> m (Either c b))
+  => (a -> b -> ST s (Either c b))
   -- Termination function, in case there are no more elements
   -> (b -> c)
   -- Initial accumulator
@@ -258,9 +257,9 @@ foldChainFrom :: (V.Unbox a, PrimMonad m)
   -- Initial index
   -> IC.ElemIndex
   -- The chain
-  -> IC.IndexedChain (PrimState m) a
+  -> IC.IndexedChain s a
   -- Also returns a list of visited indices
-  -> m (c, [IC.ElemIndex])
+  -> ST s (c, [IC.ElemIndex])
 foldChainFrom f g z idx chain = do
   mbVal <- IC.query chain idx
   case mbVal of Nothing -> pure (g z, [])
@@ -274,10 +273,9 @@ foldChainFrom f g z idx chain = do
     -- to avoid redundant queries we use the following invariant:
     -- there exists an element at index 'idx' in the chain,
     -- and its value is already incorporated into the accumulator 'z'.
-    foldChainFrom' :: (V.Unbox a, PrimMonad m)
-      => (a -> b -> m (Either c b)) -> (b -> c) -> b -> IC.ElemIndex
-      -> [IC.ElemIndex] -> IC.IndexedChain (PrimState m) a
-      -> m (c, [IC.ElemIndex])
+    foldChainFrom' :: (V.Unbox a)
+      => (a -> b -> ST s (Either c b)) -> (b -> c) -> b -> IC.ElemIndex
+      -> [IC.ElemIndex] -> IC.IndexedChain s a -> ST s (c, [IC.ElemIndex])
     foldChainFrom' f g !z idx idxAcc chain = do
       mbNext <- IC.next chain idx
       case mbNext of  Nothing -> pure (g z, idxAcc)
