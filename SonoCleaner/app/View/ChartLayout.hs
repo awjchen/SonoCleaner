@@ -238,15 +238,21 @@ jumps plotSpec xAxisParams =
         zipWith3 makeLine (repeat 2) openColours
       $ map reifyJump
       $ M.keys . boundIntMap (lb, pred ub)
-      $ plotJumpIndices plotSpec
-      where openColours   = cycle [opaque magenta, opaque yellow]
+      $ openJumps'
+      where
+        openJumps' = plotJumpIndices plotSpec
+        openColours = drop parity $ cycle [opaque magenta, opaque yellow]
+        parity = (`mod` 2) $ M.size $ fst $ M.split lb openJumps'
 
     closedJumps =
         zipWith3 makeLine (repeat 2) closedColours
       $ simplifyModifiedIndices
       $ S.toList . boundIntSet (lb, pred ub)
-      $ plotModifiedIndices plotSpec
-      where closedColours = cycle [opaque white, opaque cyan]
+      $ closedJumps'
+      where
+        closedJumps' = plotModifiedIndices plotSpec
+        closedColours = drop parity $ cycle [opaque white, opaque cyan]
+        parity = (`mod` 2) $ S.size $ fst $ S.split lb closedJumps'
 
 
 highlightInterval :: Maybe (Double, Double) -> PlotLines Double y
