@@ -89,15 +89,3 @@ matchSlopes matchLimit slopeLimit dv = go
     countNonJumps :: (Int, Int) -> Int
     countNonJumps (j0, j1) = -- slope indices (indexing into dv)
       V.length $ V.filter ((< slopeLimit) . abs) $ V.slice j0 (j1 - j0 + 1) dv
-
--------------------------------------------------------------------------------
--- Utility
--------------------------------------------------------------------------------
-
--- Mapping from intervals of indices in a diff series to those in the original
--- series
-innerInterval :: (Int, Int) -> (Int, Int)
-innerInterval (i0, i1) = (i0+1, i1)
-
-outerInterval :: (Int, Int) -> (Int, Int)
-outerInterval (i0, i1) = (i0, i1+1)

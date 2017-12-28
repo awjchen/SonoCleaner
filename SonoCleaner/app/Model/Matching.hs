@@ -11,6 +11,7 @@ module Model.Matching
   , matchJumps
   ) where
 
+import           Control.Arrow              ((&&&))
 import           Control.Lens
 import           Control.Monad.Loops        (whileJust)
 import           Control.Monad.Primitive
@@ -33,6 +34,8 @@ import qualified Model.IndexedChain         as IC
 import           Model.TraceState
 import           Model.Util
 
+import           Types.Series
+
 -- Note: In this module, level-shifts are referred to as "jumps".
 
 -------------------------------------------------------------------------------
@@ -51,7 +54,7 @@ instance Default LevelShiftMatches where
 -------------------------------------------------------------------------------
 
 type GroupSize    = Int
-type GroupSpan    = Int
+type GroupSpan    = Int -- index of last jump minus index of first
 type GroupError   = Double
 type JumpPosition = Int
 type JumpError    = Double
@@ -93,13 +96,14 @@ groupSizeLimit = 8
 searchGroupSizeLimit :: Int
 searchGroupSizeLimit = 2*groupSizeLimit
 
--- [ Currently not implemented ]
 -- interpolationLimit:
---   Defines the maximum time span between jumps, in terms of the ticks between
---   the start of the first jump to the end of the last, that will be collapsed
---   by linear interpolation rather than the usual method of "redistribution".
--- interpolationLimit :: Int
--- interpolationLimit = 4
+--   The time span of the jump group, in terms of the number of data points
+--   within the span of the jumps (alternatively, the number of "displaced"
+--   data points), at or below which the correction method applied will be
+--   linear interpolation rather than the usual method of "redistribution".
+--   For example, a single-point-outlier displaces one point.
+interpolationLimit :: Int
+interpolationLimit = 3
 
 -------------------------------------------------------------------------------
 -- Exported functions
@@ -134,17 +138,34 @@ matchJumps noiseTh jumpsMap ts =
           matchEnv <- initMatchingEnv noiseTh neJumpList
           runReaderT matchJumps' matchEnv
 
-    corrections = (map.concatMap) (redistribute jumpSlopesMap) matches
+    corrections =
+      (map.concatMap) (applyCorrection (ts ^. series) jumpSlopesMap) matches
 
 -------------------------------------------------------------------------------
 -- Corrections on matches
 -------------------------------------------------------------------------------
 
+applyCorrection
+  :: V.Vector Double -> M.IntMap Double -> Match -> [(Int, Double)]
+applyCorrection v jumps match
+  -- matchSpan gives the number of jumps
+  | matchSpan match <= interpolationLimit = interpolate v match
+  | otherwise = redistribute jumps match
+
 redistribute :: M.IntMap Double -> Match -> [(Int, Double)]
-redistribute jumpSlopesMap (Match span err indices) =
+redistribute jumps (Match span err indices) =
   let indices' = toList indices
-      slopeEstimates = map (fromJust . flip M.lookup jumpSlopesMap) indices'
+      slopeEstimates = map (fromJust . flip M.lookup jumps) indices'
   in  zip indices' $ over _head (+err) slopeEstimates
+
+interpolate :: V.Vector Double -> Match -> [(Int, Double)]
+interpolate v (Match span err indices) =
+  let slopeInterval = (head &&& last) indices
+      pointInterval = outerInterval slopeInterval
+      xSpan = uncurry subtract pointInterval :: Int
+      ySpan = uncurry subtract $ over both (v V.!) pointInterval :: Double
+      avgSlope = ySpan / fromIntegral xSpan
+  in  zip (uncurry enumFromTo slopeInterval) (repeat avgSlope)
 
 -------------------------------------------------------------------------------
 -- The matching procedure
@@ -178,7 +199,7 @@ popCandidate = do
   heapRef <- asks envHeap
   mbViewMin <- lift $ fmap H.viewMin $ readSTRef heapRef
   case mbViewMin of
-    Nothing -> pure Nothing
+    Nothing        -> pure Nothing
     Just (c, heap) -> lift (writeSTRef heapRef heap) >> pure (Just c)
 
 -- Try the next candidate
