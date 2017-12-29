@@ -13,8 +13,10 @@ import           Control.Lens             hiding (indices)
 import           Data.Colour              (AlphaColour, blend, opaque)
 import           Data.Colour.Names
 import           Data.Default
+import           Data.Function            (on)
 import qualified Data.IntMap.Strict       as M
 import qualified Data.IntSet              as S
+import           Data.List                (groupBy)
 import           Data.Tuple               (swap)
 import qualified Data.Vector.Unboxed      as V
 import           Graphics.Rendering.Chart
@@ -171,7 +173,7 @@ traces plotSpec xAxisParams =
     cropIndexList = map (subtract lb) . M.keys . boundIntMap (lb, pred ub)
 
     simplifySeries' :: V.Vector (Double, Double) -> [(Double, Double)]
-    simplifySeries' = if compressibleTimeSteps xAxisParams <= 1
+    simplifySeries' = if compressibleTimeSteps xAxisParams < 2
       then V.toList
       else simplifySeries (compressibleTimeSteps xAxisParams)
 
@@ -208,51 +210,36 @@ jumps plotSpec xAxisParams =
   where
     (lb, ub) = boundsIndices xAxisParams
 
-    reifyJumpInterval :: (Int, Int) -> V.Vector (Double, Double)
-    reifyJumpInterval (j0, j1) = V.zip times' values'
-      where j1' = succ j1
-            nPoints = j1'-j0+1
-            times'  = V.map toTime (V.generate nPoints (+j0))
-            values' = V.slice j0 nPoints (plotSeries plotSpec)
-            toTime = plotToTime plotSpec
-
-    reifyJump :: Int -> [(Double, Double)]
-    reifyJump i = [(toTime i, v V.! i), (toTime i1, v V.! i1)]
+    plotJump :: Int -> [(Double, Double)]
+    plotJump i = [(toTime i, v V.! i), (toTime i1, v V.! i1)]
       where v = plotSeries plotSpec
             toTime = plotToTime plotSpec
             i1 = succ i
 
-    simplifyModifiedIndices :: [Int] -> [[(Double, Double)]]
-    simplifyModifiedIndices indices =
-      if compressibleTimeSteps xAxisParams <= 1
-      then map reifyJump indices
-      else let simplePaths =
-                   map ( simplifySeries (compressibleTimeSteps xAxisParams)
-                 . reifyJumpInterval
-                 . (head &&& last) )
-                 $ groupRuns indices
-               unTuple (x, y) = [x, y]
-          in  map unTuple $ concatMap (\xs -> zip xs (tail xs)) simplePaths
+    simplifyJumps' :: [Int] -> [[(Double, Double)]]
+    simplifyJumps' indices =
+      if   compressibleTimeSteps xAxisParams < 4
+      then map plotJump indices
+      else simplifyJumps (plotSeries plotSpec)
+                         (plotToTime plotSpec)
+                         (compressibleTimeSteps xAxisParams)
+                         indices
 
-    openJumps =
-        zipWith3 makeLine (repeat 2) openColours
-      $ map reifyJump
-      $ M.keys . boundIntMap (lb, pred ub)
-      $ openJumps'
-      where
-        openJumps' = plotJumpIndices plotSpec
-        openColours = drop parity $ cycle [opaque magenta, opaque yellow]
-        parity = (`mod` 2) $ M.size $ fst $ M.split lb openJumps'
+    openJumps = zipWith3 makeLine (repeat 2) openColours
+              $ simplifyJumps'
+              $ M.keys . boundIntMap (lb, pred ub)
+              $ openJumps'
+      where openJumps' = plotJumpIndices plotSpec
+            openColours = drop parity $ cycle [opaque magenta, opaque yellow]
+            parity = (`mod` 2) $ M.size $ fst $ M.split lb openJumps'
 
-    closedJumps =
-        zipWith3 makeLine (repeat 2) closedColours
-      $ simplifyModifiedIndices
-      $ S.toList . boundIntSet (lb, pred ub)
-      $ closedJumps'
-      where
-        closedJumps' = plotModifiedIndices plotSpec
-        closedColours = drop parity $ cycle [opaque white, opaque cyan]
-        parity = (`mod` 2) $ S.size $ fst $ S.split lb closedJumps'
+    closedJumps = zipWith3 makeLine (repeat 2) closedColours
+                $ simplifyJumps'
+                $ S.toList . boundIntSet (lb, pred ub)
+                $ closedJumps'
+      where closedJumps' = plotModifiedIndices plotSpec
+            closedColours = drop parity $ cycle [opaque white, opaque cyan]
+            parity = (`mod` 2) $ S.size $ fst $ S.split lb closedJumps'
 
 
 highlightInterval :: Maybe (Double, Double) -> PlotLines Double y
@@ -278,7 +265,7 @@ jumpAnnotation (Just (x, y, str)) =
 
 
 --------------------------------------------------------------------------------
--- Down-sampling traces
+-- Downsampling
 --------------------------------------------------------------------------------
 
 simplifySeries :: V.Unbox a => Int -> V.Vector (a, Double) -> [(a, Double)]
@@ -303,30 +290,46 @@ simplifySeries bucketSize path
 
   in  V.toList $ V.concatMap simplifySegment buckets
 
---------------------------------------------------------------------------------
--- Merging modified jump indices
---------------------------------------------------------------------------------
--- For the special case when there are many modified indices in a row, as
--- results from using the interpolation brush or the 'Line' correction.
+simplifyJumps
+  :: V.Vector Double
+  -> (Int -> Double)
+  -> Int
+  -> [Int]
+  -> [[(Double, Double)]]
+simplifyJumps v toTime bucketSize =
+    concatMap (map plot' . evenReduce . map bounds')
+  . groupBy (\a b -> b - a < bucketSize)
+  where
+    bounds' :: Int -> SP Int Bounds
+    bounds' i = SP i (makeBounds (v V.! i) (v V.! succ i))
 
-span2 :: (a -> a -> Bool) -> [a] -> ([a], [a])
-span2 _ [] = ([], [])
-span2 f (x:xs) = let (as, bs) = go x xs in (x:as, bs) where
-  go y zzs@(z:zs)
-    | f y z     = let (as, bs) = go z zs in (z:as, bs)
-    | otherwise = ([], zzs)
-  go _ [] = ([], [])
+    union' :: SP Int Bounds -> SP Int Bounds -> SP Int Bounds
+    union' (SP i0 b0) (SP _ b1) = SP i0 (boundsUnion b0 b1)
 
--- assumed sorted, with unique elements
-groupRuns :: [Int] -> [[Int]]
-groupRuns [] = []
-groupRuns xs =
-  let (run, xs') = span2 (\i j -> succ i == j) xs
-  in  if null run then [xs'] else run : groupRuns xs'
+    evenReduce :: [SP Int Bounds] -> [SP Int Bounds]
+    evenReduce (a:b:c:xs) = evenReduce $ (a `union'` b `union'` c):xs
+    evenReduce xs = xs
+
+    plot' :: SP Int Bounds -> [(Double, Double)]
+    plot' (SP i (Bounds l u)) = [(toTime i, l), (toTime (succ i), u)]
+
+--------------------------------------------------------------------------------
+-- Bounds
+--------------------------------------------------------------------------------
+
+data Bounds = Bounds !Double !Double
+
+makeBounds :: Double -> Double -> Bounds
+makeBounds a b = if a < b then Bounds a b else Bounds b a
+
+boundsUnion :: Bounds -> Bounds -> Bounds
+boundsUnion (Bounds l u) (Bounds l' u') = Bounds (min l l') (max u u')
 
 --------------------------------------------------------------------------------
 -- Utility
 --------------------------------------------------------------------------------
+
+data SP a b = SP !a !b
 
 makeLine :: Double -> AlphaColour Double -> [(x, y)] -> PlotLines x y
 makeLine strokeWidth color line = makeLines strokeWidth color [line]
