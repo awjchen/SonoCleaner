@@ -14,7 +14,6 @@ module Model.Matching
 import           Control.Arrow              ((&&&))
 import           Control.Lens
 import           Control.Monad.Loops        (whileJust)
-import           Control.Monad.Primitive
 import           Control.Monad.ST
 import           Control.Monad.Trans.Class
 import           Control.Monad.Trans.Reader
