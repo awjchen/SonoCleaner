@@ -58,19 +58,6 @@ toViewPort = iso f g
            in  ViewBounds (x0, x1) (y0, y1)
 
 --------------------------------------------------------------------------------
--- An ordering with lower and upper limits
---------------------------------------------------------------------------------
-
-data Limit a = LowerLimit
-             | Finite a
-             | UpperLimit
-  deriving (Eq, Ord)
-
-limitToMaybe :: Limit a -> Maybe a
-limitToMaybe (Finite a) = Just a
-limitToMaybe _          = Nothing
-
---------------------------------------------------------------------------------
 -- Misc.
 --------------------------------------------------------------------------------
 

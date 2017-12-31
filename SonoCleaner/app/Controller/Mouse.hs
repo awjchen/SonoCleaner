@@ -19,7 +19,6 @@ import           Graphics.Rendering.Chart hiding (Limit)
 import           Graphics.UI.Gtk          hiding (Point, set)
 
 import           Controller.Util
-import           Types.Bounds
 
 --------------------------------------------------------------------------------
 -- Recording mouse events
@@ -149,3 +148,16 @@ fromLayoutPick (LayoutPick_XBottomAxis x)  = Just (Finite x, LowerLimit)
 fromLayoutPick (LayoutPick_YLeftAxis y)    = Just (LowerLimit, Finite y)
 fromLayoutPick (LayoutPick_YRightAxis y)   = Just (UpperLimit, Finite y)
 fromLayoutPick _                           = Nothing
+
+--------------------------------------------------------------------------------
+-- An ordering with lower and upper limits
+--------------------------------------------------------------------------------
+
+data Limit a = LowerLimit
+             | Finite a
+             | UpperLimit
+  deriving (Eq, Ord)
+
+limitToMaybe :: Limit a -> Maybe a
+limitToMaybe (Finite a) = Just a
+limitToMaybe _          = Nothing
