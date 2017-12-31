@@ -45,6 +45,9 @@ data GUIState = GUIState
   -- View options
   , _showReplicateTraces :: Bool
   , _referenceTraceLabel :: (Int, Maybe T.Text)
+
+  -- View options
+  , _cropSelection       :: Maybe (Int, Int)
   }
 
 data NotebookPage = MainPage
@@ -85,6 +88,9 @@ instance Default GUIState where
     -- View Options
     , _showReplicateTraces = False
     , _referenceTraceLabel = (0, Nothing)
+
+  -- View options
+  , _cropSelection         = Nothing
     }
 
 resetGUIPreservingOptions :: GUIState -> GUIState

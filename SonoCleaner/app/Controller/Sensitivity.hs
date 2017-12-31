@@ -6,6 +6,7 @@ module Controller.Sensitivity
   ) where
 
 import           Control.Lens
+import           Data.Maybe             (isJust)
 import           Graphics.UI.Gtk        hiding (set)
 
 import           Controller.GUIElements
@@ -72,7 +73,7 @@ setGUISensitivity guiElems model guiState = do
 
   -- Crop page
   widgetSetSensitive (guiElems ^. applyCropButton)
-    $ length (guiState ^. levelShiftSelection) == 2
+    $ isJust (guiState ^. cropSelection)
   widgetSetSensitive (guiElems ^. applyUncropButton)
     $ case getCurrentState model ^. context of
         RootContext      -> False

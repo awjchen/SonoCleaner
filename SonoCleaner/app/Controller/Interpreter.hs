@@ -120,9 +120,7 @@ readViewParams GUIState{..} = ViewParams
   , _vpCropBounds          = cropBounds }
   where
     cropBounds = case _currentPage of
-      CropPage -> case _levelShiftSelection of
-        [lb, ub] -> Just (lb, ub)
-        _        -> Nothing
+      CropPage -> _cropSelection
       _ -> Nothing
 
 --------------------------------------------------------------------------------
@@ -363,7 +361,8 @@ specifyChart model viewParams ats =
               in  Just $ V.map (\y -> (y-c1)*r2/r1 + c2) $ ts ^. series
 
     highlightRegion = case ats ^. atsDependencies . nddOperation of
-      IdentityOp -> fmap (over both toTime) (viewParams ^. vpCropBounds)
+      IdentityOp -> fmap (over both toTime)
+                      (viewParams ^. vpCropBounds)
       AutoOp _ -> Nothing
       ManualSingleOp _ i _ _ ->
         Just $ over both toTime (i, succ i)

@@ -37,6 +37,7 @@ import           Controller.Sensitivity
 import           Controller.Util
 import           Model
 import           Types.Bounds
+import           Types.IndexInterval
 import           Types.IntMap
 import           View
 
@@ -250,8 +251,8 @@ controllerMain = do
   _ <- (guiElems ^. applyCropButton) `on` buttonActivated
     $ withUpdate $ atomically $ do
       guiState <- readTVar guiStateTVar
-      case guiState ^. levelShiftSelection of
-        [start, end] -> do
+      case guiState ^. cropSelection of
+        Just (start, end) -> do
           model <- readTVar modelTVar
           let newModel = crop (start, end) model
           writeTVar modelTVar newModel
@@ -367,7 +368,7 @@ controllerMain = do
                     upperIndex = min lastIndex $ toIndex xRight
                     t = 0.5 * (toTime lowerIndex + toTime upperIndex)
                 in  atomically $ modifyTVar' guiStateTVar $
-                        set levelShiftSelection [lowerIndex, upperIndex]
+                        set cropSelection (Just (lowerIndex, upperIndex))
                       . set (viewBounds . toViewPort . viewPortCenter . _1) t
               _ -> return ()
 
