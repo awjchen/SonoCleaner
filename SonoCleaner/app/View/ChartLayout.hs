@@ -273,22 +273,24 @@ simplifySeries bucketSize path
   | V.length path <= 2 = V.toList path
   | otherwise =
   let nDivisions = (pred (V.length path)) `div` bucketSize
-      indices = (V.++) (V.generate nDivisions (*bucketSize))
-                       (V.fromList [ mid (nDivisions*bucketSize) (V.length path)
-                                   , V.length path])
+      indices = fmap (*bucketSize) [0..nDivisions-1]
+              ++ [ mid (nDivisions*bucketSize) (V.length path)
+                 , V.length path ]
         where mid i j = (i+j) `div` 2
-      buckets = V.zip indices (V.tail indices)
+      buckets = zip indices (tail indices)
+      slices = fmap (\(a, b) -> (a, b-a)) buckets
 
-      simplifySegment (start, end) =
-        let (xs, ys) = V.unzip $ V.slice start (end-start) path
+      simplifySegment :: V.Unbox a => V.Vector (a, Double) -> [(a, Double)]
+      simplifySegment segment =
+        let (xs, ys) = V.unzip segment
             minAndMax = unboxedMinAndMax ys
             -- for cosmetics
             (y1', y2') = if V.head ys < V.last ys
               then      minAndMax
               else swap minAndMax
-        in  V.fromList [(V.head xs, y1'), (V.last xs, y2')]
+        in  [(V.head xs, y1'), (V.last xs, y2')]
 
-  in  V.toList $ V.concatMap simplifySegment buckets
+  in  concatMap (simplifySegment . (flip (uncurry V.slice) path)) slices
 
 simplifyJumps
   :: V.Vector Double
