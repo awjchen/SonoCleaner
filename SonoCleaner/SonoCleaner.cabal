@@ -30,8 +30,9 @@ executable SonoCleaner
                      , Model.TraceState
                      , Model.Util
                      , Types.Bounds
-                     , Types.LevelShifts
+                     , Types.IndexInterval
                      , Types.IntMap
+                     , Types.LevelShifts
                      , Types.Series
                      , Types.Zipper
                      , View
