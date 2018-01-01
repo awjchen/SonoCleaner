@@ -7,6 +7,7 @@ module Types.IndexInterval
 
   , fromEndpoints
 
+  , translate
   , elem
 
   , slice
@@ -34,6 +35,9 @@ leftEndpoint = fst . getEndpoints
 fromEndpoints :: (Int, Int) -> IndexInterval
 fromEndpoints pair@(a, b) =
   if a < b then IndexInterval pair else IndexInterval (swap pair)
+
+translate :: Int -> IndexInterval -> IndexInterval
+translate shift (IndexInterval (a, b)) = IndexInterval (a + shift, b + shift)
                                         --
 -- Whether an index (of the time series) lies within the interval.
 elem :: Int -> IndexInterval -> Bool

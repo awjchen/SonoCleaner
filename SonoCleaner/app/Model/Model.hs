@@ -31,7 +31,6 @@ module Model.Model
   , getTraceDataVersion
 
   , getFilePath
-  , getCropOffset
 
   , getCurrentState
   , getInputState
@@ -99,7 +98,7 @@ data Model = Model
   , _ssaFile          :: SSA
   , _traces           :: Z.Zipper TraceInfo
   , _timeStep         :: Double
-  , _cropBounds       :: NE.NonEmpty I.IndexInterval
+  , _cropHistory      :: NE.NonEmpty I.IndexInterval
   , _traceDataVersion :: Integer }
 
 initUndefinedModel :: Model
@@ -108,7 +107,7 @@ initUndefinedModel = Model
   , _ssaFile          = undefined
   , _traces           = undefined
   , _timeStep         = undefined
-  , _cropBounds       = undefined
+  , _cropHistory      = undefined
   , _traceDataVersion = 0
   }
 
@@ -170,17 +169,17 @@ allTraceStates = traces . traverse . history . traverse
 crop :: I.IndexInterval -> Model -> Model
 crop indexInterval = incrementVersion
   . over allTraceStates (cropTraceState indexInterval)
-  . over cropBounds (indexInterval NE.<|)
+  . over cropHistory (indexInterval NE.<|)
 
 uncrop :: Model -> Model
 uncrop model =
-  let (indexInterval NE.:| bounds) = model ^. cropBounds
+  let (indexInterval NE.:| bounds) = model ^. cropHistory
   in  case NE.nonEmpty bounds of
         Nothing -> model
         Just bounds' -> model
           & incrementVersion
           & allTraceStates %~ uncropTraceState indexInterval
-          & cropBounds .~ bounds'
+          & cropHistory .~ bounds'
 
 -- Quality
 
@@ -241,8 +240,11 @@ getTraceDataVersion = view traceDataVersion
 getFilePath :: Model -> String
 getFilePath = view filePath
 
-getCropOffset :: Model -> Int
-getCropOffset model = sum $ fmap (fst . I.getEndpoints) $ model ^. cropBounds
+getCropBounds :: Model -> I.IndexInterval
+getCropBounds model =
+  let (mostRecentCrop NE.:| previousCrops) = model ^. cropHistory
+      previousOffset = sum $ fmap (fst . I.getEndpoints) previousCrops
+  in  I.translate previousOffset mostRecentCrop
 
 -- Current trace information
 
@@ -267,14 +269,14 @@ getTraceBounds model =
       s = traceState ^. series
       toTime i = dt * fromIntegral (i+offset)
         where dt = getTimeStep model
-              offset = getCropOffset model
+              offset = I.leftEndpoint $ getCropBounds model
       boundsX = (toTime 0, toTime (VU.length s - 1))
       boundsY = traceState ^. seriesBounds
   in  ViewBounds boundsX boundsY
 
 getIndexTimeConversions :: Model -> (Int -> Double, Double -> Int)
 getIndexTimeConversions model =
-  let offset = getCropOffset model
+  let offset = I.leftEndpoint $ getCropBounds model
       dt = getTimeStep model
   in  ( \i -> dt * fromIntegral (i+offset)
       , \x -> subtract offset $ floor (x/dt) )
@@ -360,7 +362,7 @@ loadSSAFile filePath' model = do
                , _ssaFile  = ssa
                , _traces   = traces'
                , _timeStep = dt
-               , _cropBounds = bounds NE.:| []
+               , _cropHistory = bounds NE.:| []
                , _traceDataVersion = succ (_traceDataVersion model) }
 
 initTraceInfo :: Trace -> TraceInfo
@@ -391,7 +393,7 @@ toSSA model =
       oldTraces = model ^.  ssaFile . ssaDataTraces
       newTraces = zipWith (set traceSeries) newSeries oldTraces
       traceLength = VU.length $ head newSeries
-      offset = getCropOffset model
+      offset = I.leftEndpoint $ getCropBounds model
   in  model ^. ssaFile & ssaDataTraces .~ newTraces
                        & ssaIndexTrace . traceSeries %~
                            VU.slice offset traceLength
