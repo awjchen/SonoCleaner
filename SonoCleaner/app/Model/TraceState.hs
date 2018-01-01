@@ -56,22 +56,21 @@ makePrisms ''TraceContext
 -- Cropping
 --------------------------------------------------------------------------------
 
--- Inclusive bounds
 cropTraceState :: I.IndexInterval -> TraceState -> TraceState
-cropTraceState indexInterval ts =
-  let croppedSeries = I.slice indexInterval (ts ^. series)
+cropTraceState cropInterval ts =
+  let croppedSeries = I.slice cropInterval (ts ^. series)
       context' = CroppedContext ts
   in  initTraceState croppedSeries
         & context .~ context'
         & modifiedJumps .~
-          S.map (subtract (I.leftEndpoint indexInterval))
-                (S.filter (`I.elem` I.diff indexInterval) (ts ^. modifiedJumps))
+          S.map (subtract (I.leftEndpoint cropInterval))
+                (S.filter (`I.elem` I.diff cropInterval) (ts ^. modifiedJumps))
 
 uncropTraceState :: I.IndexInterval -> TraceState -> TraceState
-uncropTraceState indexInterval ts = case ts ^. context of
+uncropTraceState cropInterval ts = case ts ^. context of
   RootContext -> ts
   CroppedContext cts ->
-    let start = I.leftEndpoint indexInterval
+    let start = I.leftEndpoint cropInterval
         ds = snd $ ts ^. diffSeries
         updates = V.zip (V.imap (\i _ -> i+start) ds) ds
         newDiffSeries = fmap (`V.update` updates) (cts ^. diffSeries)

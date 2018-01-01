@@ -21,11 +21,10 @@ import           Prelude             hiding (elem)
 import           Data.Tuple          (swap)
 import qualified Data.Vector.Unboxed as VU
 
--- IndexedIntervals represent contiguous intervals of integers that represent
--- indices into time series. An IndexedInterval a b can be thought of as
--- [a..b]. The purpose of this type is to avoid off-by-one errors caused by an
--- unclear convention as to whether the right endpoint is open or closed (we
--- have chosen it to be closed).
+-- An IndexedInterval represents contiguous interval of indices.
+-- (IndexedInterval (a, b)) means [a..b]. The purpose of this type is to avoid
+-- off-by-one errors caused by an unclear convention as to whether the right
+-- endpoint is open or closed (we have made it closed).
 newtype IndexInterval = IndexInterval { getEndpoints :: (Int, Int) }
   deriving (Eq)
 
@@ -39,7 +38,6 @@ fromEndpoints pair@(a, b) =
 translate :: Int -> IndexInterval -> IndexInterval
 translate shift (IndexInterval (a, b)) = IndexInterval (a + shift, b + shift)
                                         --
--- Whether an index (of the time series) lies within the interval.
 elem :: Int -> IndexInterval -> Bool
 elem i (IndexInterval (i0, i1)) = i0 <= i && i <= i1
 
@@ -47,10 +45,10 @@ slice :: IndexInterval -> VU.Vector Double -> VU.Vector Double
 slice (IndexInterval (i, j)) = VU.slice i (j-i+1)
 
 --------------------------------------------------------------------------------
--- Conversions from indices into a series to its 'diff' series
+-- Conversions between indices into a series and its "derivative"
 --------------------------------------------------------------------------------
 
--- The interval of segments the indices of the original interval.
+-- The interval of segments lying between the indices of the original interval.
 diff :: IndexInterval -> IndexInterval
 diff (IndexInterval (a, b)) = IndexInterval (a, pred b)
 

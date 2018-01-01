@@ -158,7 +158,7 @@ incrementVersion = over traceDataVersion succ
 
 -- Lifting a TraceStateOperator via 'applyToModel' is the only way to manipulate
 -- the data contained in a 'Model' from outside the module (other than by
--- cropping, which doesn't really affect the data).
+-- cropping, which only masks the data).
 applyToModel :: TraceStateOperator -> Model -> Model
 applyToModel tsOp = incrementVersion
   . over (currentTrace . history)
@@ -169,20 +169,19 @@ applyToModel tsOp = incrementVersion
 allTraceStates :: Traversal' Model TraceState
 allTraceStates = traces . traverse . history . traverse
 
--- Relative, inclusive bounds
 crop :: I.IndexInterval -> Model -> Model
-crop indexInterval = incrementVersion
-  . over allTraceStates (cropTraceState indexInterval)
-  . over cropHistory (indexInterval NE.<|)
+crop cropInterval = incrementVersion
+  . over allTraceStates (cropTraceState cropInterval)
+  . over cropHistory (cropInterval NE.<|)
 
 uncrop :: Model -> Model
 uncrop model =
-  let (indexInterval NE.:| bounds) = model ^. cropHistory
+  let (cropInterval NE.:| bounds) = model ^. cropHistory
   in  case NE.nonEmpty bounds of
         Nothing -> model
         Just bounds' -> model
           & incrementVersion
-          & allTraceStates %~ uncropTraceState indexInterval
+          & allTraceStates %~ uncropTraceState cropInterval
           & cropHistory .~ bounds'
 
 -- Quality
