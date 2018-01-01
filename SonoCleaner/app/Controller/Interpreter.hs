@@ -288,6 +288,7 @@ specifyChart model viewParams ats =
     , plotYRange           = viewParams ^. vpViewBounds . viewBoundsY
     , plotBackgroundColour = bgColour
     , plotAnnotation       = annotation
+    , plotTimes            = getTimes model
     , plotTimeStep         = getTimeStep model
     , plotToTime           = toTime
     , plotToIndex          = toIndex

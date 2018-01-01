@@ -4,6 +4,8 @@
 -- This is the final point before which we pass control of rendering to Chart.
 -- We apply here optimizations to reduce the cost of our rendering requests.
 
+{-# LANGUAGE RecordWildCards #-}
+
 module View.ChartLayout
   ( chartLayout
   ) where
@@ -21,6 +23,7 @@ import           Data.Tuple               (swap)
 import qualified Data.Vector.Unboxed      as V
 import           Graphics.Rendering.Chart
 
+import qualified Types.IndexInterval      as I
 import           Types.IntMap
 import           Types.Series             (unboxedMinAndMax)
 import           View.Types
@@ -62,9 +65,8 @@ chartLayout plotSpec (pixelsX, _) = layout where
 --------------------------------------------------------------------------------
 
 data XAxisParameters = XAxisParameters
-  { boundsIndices         :: (Int, Int)
+  { plotInterval         :: I.IndexInterval
   , compressibleTimeSteps :: Int
-  , times                 :: V.Vector Double
   }
 
 
@@ -75,7 +77,7 @@ xAxis
      , XAxisParameters )
 xAxis pixelsX plotSpec =
   ( axis . oppositeAxis
-  , XAxisParameters plotXBoundsIndices compressibleTimeSteps times)
+  , XAxisParameters plotXBoundsIndices compressibleTimeSteps)
   where
     (lb, ub) = plotXRange plotSpec
     xScaledAxis = scaledAxis def (lb, ub)
@@ -96,20 +98,16 @@ xAxis pixelsX plotSpec =
                 $ view axis_grid
                 $ xScaledAxis [lb, ub]
 
-    plotXBoundsIndices = plotXBounds
-      & over _1 (max 0                . toIndex) -- inclusive
-      . over _2 (min maxLength . succ . toIndex) -- inclusive
+    plotXBoundsIndices = I.fromEndpoints $ plotXBounds
+      & over _1 (max 0               . toIndex) -- inclusive
+      . over _2 (min maxIndex . succ . toIndex) -- inclusive
       where toIndex = plotToIndex plotSpec
-            maxLength = V.length (plotSeries plotSpec) - 1
+            maxIndex = V.length (plotSeries plotSpec) - 1
 
     compressibleTimeSteps = floor $ timeStepsPerPixel / 2
       where
         timeStepsPerPixel = timeSteps / fromIntegral pixelsX
         timeSteps = uncurry subtract plotXBounds / plotTimeStep plotSpec
-
-    times = V.generate (i1-i0+1) (\i -> toTime (i+i0))
-      where (i0, i1) = plotXBoundsIndices
-            toTime = plotToTime plotSpec
 
 
 yAxis :: ChartSpec -> Layout x Double -> Layout x Double
@@ -157,36 +155,35 @@ yAxis plotSpec = axis . oppositeAxis . grid
 
 
 traces :: ChartSpec -> XAxisParameters -> [PlotLines Double Double]
-traces plotSpec xAxisParams =
+traces plotSpec XAxisParameters{..} =
   -- Order matters: later items will draw over earlier items
   [ twinTrace
   , customTrace
   , originalTrace
   , focusedTrace ]
   where
-    (lb, ub) = boundsIndices xAxisParams
-
-    cropTrace :: V.Vector Double -> V.Vector Double
-    cropTrace = V.slice lb (ub-lb+1)
+    (lb, ub) = I.getEndpoints plotInterval
+    croppedTimes = I.slice plotInterval $ plotTimes plotSpec
 
     cropIndexList :: M.IntMap Double -> [Int]
     cropIndexList = map (subtract lb) . M.keys . boundIntMap (lb, pred ub)
 
     simplifySeries' :: V.Vector (Double, Double) -> [(Double, Double)]
-    simplifySeries' = if compressibleTimeSteps xAxisParams < 2
+    simplifySeries' = if compressibleTimeSteps < 2
       then V.toList
-      else simplifySeries (compressibleTimeSteps xAxisParams)
+      else simplifySeries compressibleTimeSteps
 
     makeMainTrace :: M.IntMap Double -> V.Vector Double -> [[(Double, Double)]]
     makeMainTrace splitIndices =
         map simplifySeries'
       . splitAtIndices (cropIndexList splitIndices)
-      . V.zip (times xAxisParams)
-      . cropTrace
+      . V.zip croppedTimes
+      . I.slice plotInterval
 
     makeOptionalTrace :: Maybe (V.Vector Double) -> [(Double, Double)]
     makeOptionalTrace =
-      simplifySeries' . maybe V.empty (V.zip (times xAxisParams) . cropTrace)
+        simplifySeries'
+      . maybe V.empty (V.zip croppedTimes . I.slice plotInterval)
 
     focusedTrace =
         makeLines 1 (opaque black)
@@ -204,11 +201,11 @@ traces plotSpec xAxisParams =
 
 
 jumps :: ChartSpec -> XAxisParameters -> [PlotLines Double Double]
-jumps plotSpec xAxisParams =
+jumps plotSpec XAxisParameters{..} =
   -- Order matters: later items will draw over earlier items
   closedJumps ++ openJumps
   where
-    (lb, ub) = boundsIndices xAxisParams
+    (lb, ub) = I.getEndpoints plotInterval
 
     plotJump :: Int -> [(Double, Double)]
     plotJump i = [(toTime i, v V.! i), (toTime i1, v V.! i1)]
@@ -218,11 +215,11 @@ jumps plotSpec xAxisParams =
 
     simplifyJumps' :: [Int] -> [[(Double, Double)]]
     simplifyJumps' indices =
-      if   compressibleTimeSteps xAxisParams < 4
+      if   compressibleTimeSteps < 4
       then map plotJump indices
       else simplifyJumps (plotSeries plotSpec)
                          (plotToTime plotSpec)
-                         (compressibleTimeSteps xAxisParams)
+                         compressibleTimeSteps
                          indices
 
     openJumps = zipWith3 makeLine (repeat 2) openColours
@@ -310,7 +307,7 @@ simplifyJumps v toTime bucketSize =
 
     evenReduce :: [SP Int Bounds] -> [SP Int Bounds]
     evenReduce (a:b:c:xs) = evenReduce $ (a `union'` b `union'` c):xs
-    evenReduce xs = xs
+    evenReduce xs         = xs
 
     plot' :: SP Int Bounds -> [(Double, Double)]
     plot' (SP i (Bounds l u)) = [(toTime i, l), (toTime (succ i), u)]

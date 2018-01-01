@@ -39,6 +39,7 @@ module Model.Model
   , getLabels
   , getTraceBounds
 
+  , getTimes
   , getIndexTimeConversions
   , getIndexToTime
   , getTimeToIndex
@@ -96,6 +97,8 @@ import           Model.TraceState
 data Model = Model
   { _filePath         :: FilePath
   , _ssaFile          :: SSA
+  -- We store the (fake) timestamps here merely to avoid their recomputation
+  , _fakeTimes        :: VU.Vector Double
   , _traces           :: Z.Zipper TraceInfo
   , _timeStep         :: Double
   , _cropHistory      :: NE.NonEmpty I.IndexInterval
@@ -105,6 +108,7 @@ initUndefinedModel :: Model
 initUndefinedModel = Model
   { _filePath         = undefined
   , _ssaFile          = undefined
+  , _fakeTimes        = undefined
   , _traces           = undefined
   , _timeStep         = undefined
   , _cropHistory      = undefined
@@ -267,12 +271,13 @@ getTraceBounds :: Model -> ViewBounds
 getTraceBounds model =
   let traceState = getCurrentState model
       s = traceState ^. series
-      toTime i = dt * fromIntegral (i+offset)
-        where dt = getTimeStep model
-              offset = I.leftEndpoint $ getCropBounds model
+      toTime = getIndexToTime model
       boundsX = (toTime 0, toTime (VU.length s - 1))
       boundsY = traceState ^. seriesBounds
   in  ViewBounds boundsX boundsY
+
+getTimes :: Model -> VU.Vector Double
+getTimes model = I.slice (getCropBounds model) $ model ^. fakeTimes
 
 getIndexTimeConversions :: Model -> (Int -> Double, Double -> Int)
 getIndexTimeConversions model =
@@ -353,15 +358,20 @@ loadSSAFile filePath' model = do
   let dt = ssa ^. ssaSampleTimeInterval
       readQuality ti = ti & set quality
         (fromMaybe Good $ Prelude.lookup (ti ^. label) traceQualities)
+      dataLength = VU.length (ssa ^. ssaIndexTrace . traceSeries)
+      bounds = I.fromEndpoints (0, dataLength - 1)
+      -- We assume that the data is a time series, allowing us to pretend that
+      -- the measurements are evenly spaced in time. Using these fake timestamps
+      -- makes conversions between times and indices much simpler.
+      fakeTimes' = VU.generate dataLength ((*dt) . fromIntegral)
       traces' = Z.unsafeFromList
               $ map (readQuality . initTraceInfo)
               $ ssa ^. ssaDataTraces
-      bounds =
-        I.fromEndpoints (0, VU.length (ssa ^. ssaIndexTrace . traceSeries) - 1)
-  return Model { _filePath = filePath'
-               , _ssaFile  = ssa
-               , _traces   = traces'
-               , _timeStep = dt
+  return Model { _filePath  = filePath'
+               , _ssaFile   = ssa
+               , _fakeTimes = fakeTimes'
+               , _traces    = traces'
+               , _timeStep  = dt
                , _cropHistory = bounds NE.:| []
                , _traceDataVersion = succ (_traceDataVersion model) }
 

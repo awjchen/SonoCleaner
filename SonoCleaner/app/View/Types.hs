@@ -24,6 +24,7 @@ data ChartSpec = ChartSpec
   , plotYRange           :: (Double, Double)
   , plotBackgroundColour :: AlphaColour Double
   , plotAnnotation       :: Maybe (Double, Double, String)
+  , plotTimes            :: V.Vector Double
   , plotTimeStep         :: Double
   , plotToTime           :: Int -> Double
   , plotToIndex          :: Double -> Int
