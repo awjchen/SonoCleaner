@@ -27,6 +27,7 @@ import           Control.Lens
 import qualified Data.IntSet         as S
 import qualified Data.Vector.Unboxed as V
 
+import qualified Types.IndexInterval as I
 import           Types.Series
 
 --------------------------------------------------------------------------------
@@ -56,23 +57,22 @@ makePrisms ''TraceContext
 --------------------------------------------------------------------------------
 
 -- Inclusive bounds
-cropTraceState :: (Int, Int) -> TraceState -> TraceState
-cropTraceState (start, end) ts
-  | start < end =
-    let croppedSeries = V.slice start (end-start+1) (ts ^. series)
-        context' = CroppedContext ts
-    in  initTraceState croppedSeries
-          & context .~ context'
-          & modifiedJumps .~
-            S.map (subtract start)
-                  (S.filter (\i -> start <= i && i < end) (ts ^. modifiedJumps))
-  | otherwise = ts
+cropTraceState :: I.IndexInterval -> TraceState -> TraceState
+cropTraceState indexInterval ts =
+  let croppedSeries = I.slice indexInterval (ts ^. series)
+      context' = CroppedContext ts
+  in  initTraceState croppedSeries
+        & context .~ context'
+        & modifiedJumps .~
+          S.map (subtract (I.leftEndpoint indexInterval))
+                (S.filter (`I.elem` I.diff indexInterval) (ts ^. modifiedJumps))
 
-uncropTraceState :: (Int, Int) -> TraceState -> TraceState
-uncropTraceState (start, _) ts = case ts ^. context of
+uncropTraceState :: I.IndexInterval -> TraceState -> TraceState
+uncropTraceState indexInterval ts = case ts ^. context of
   RootContext -> ts
   CroppedContext cts ->
-    let ds = snd $ ts ^. diffSeries
+    let start = I.leftEndpoint indexInterval
+        ds = snd $ ts ^. diffSeries
         updates = V.zip (V.imap (\i _ -> i+start) ds) ds
         newDiffSeries = fmap (`V.update` updates) (cts ^. diffSeries)
     in  setDiffSeries newDiffSeries cts
@@ -138,5 +138,5 @@ unsafeTraceStateOperator :: (TraceState -> TraceState) -> TraceStateOperator
 unsafeTraceStateOperator = RealTraceStateOperator
 
 getOperator :: TraceStateOperator -> (TraceState -> TraceState)
-getOperator RealIdOperator = id
+getOperator RealIdOperator             = id
 getOperator (RealTraceStateOperator f) = f

@@ -28,6 +28,7 @@ import           Text.Printf
 import           Controller.GUIState
 import           Model
 import           Types.Bounds
+import qualified Types.IndexInterval    as I
 import           Types.LevelShifts
 import           View.Types
 
@@ -77,7 +78,7 @@ data ViewParams = ViewParams
   , _vpShowReplicateTraces :: Bool
   , _vpReferenceTraceLabel :: (Int, Maybe T.Text)
   , _vpCurrentPage         :: NotebookPage
-  , _vpCropBounds          :: Maybe (Int, Int)
+  , _vpCropBounds          :: Maybe I.IndexInterval
   } deriving (Eq)
 makeLenses ''ViewParams
 
@@ -121,7 +122,7 @@ readViewParams GUIState{..} = ViewParams
   where
     cropBounds = case _currentPage of
       CropPage -> _cropSelection
-      _ -> Nothing
+      _        -> Nothing
 
 --------------------------------------------------------------------------------
 -- Parameter dependencies for validating the intermediate cached computations
@@ -236,9 +237,9 @@ getTraceStateTransform traceOp ats = case traceOp of
   AutoOp matchLevel' ->
     matchJumpsTrace (_atsLevelShiftMatches ats) matchLevel'
   ManualSingleOp action index offset holdPair -> case action of
-    SingleIgnore        -> idOperator
-    SingleZero          -> apply zeroJump
-    SingleSlopeFit      -> apply estimateSlopeBoth
+    SingleIgnore   -> idOperator
+    SingleZero     -> apply zeroJump
+    SingleSlopeFit -> apply estimateSlopeBoth
     where apply f = f (snd holdPair) offset index (_atsJumps ats)
   ManualMultipleOp action indices offset -> case action of
     MultipleIgnore -> idOperator
@@ -361,8 +362,8 @@ specifyChart model viewParams ats =
               in  Just $ V.map (\y -> (y-c1)*r2/r1 + c2) $ ts ^. series
 
     highlightRegion = case ats ^. atsDependencies . nddOperation of
-      IdentityOp -> fmap (over both toTime)
-                      (viewParams ^. vpCropBounds)
+      IdentityOp ->
+        fmap (over both toTime . I.getEndpoints) (viewParams ^. vpCropBounds)
       AutoOp _ -> Nothing
       ManualSingleOp _ i _ _ ->
         Just $ over both toTime (i, succ i)

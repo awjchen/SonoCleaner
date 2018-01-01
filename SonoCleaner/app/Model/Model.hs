@@ -61,29 +61,30 @@ module Model.Model
   , saveSSAFile
   ) where
 
-import           Control.Applicative          ((<|>))
+import           Control.Applicative        ((<|>))
 import           Control.Exception
 import           Control.Lens
-import           Control.Monad                (mzero)
-import           Control.Monad.Trans.Except   (ExceptT (..))
-import qualified Data.ByteString.Lazy         as BL
+import           Control.Monad              (mzero)
+import           Control.Monad.Trans.Except (ExceptT (..))
+import qualified Data.ByteString.Lazy       as BL
 import           Data.Csv
-import           Data.Foldable                (find, foldl')
-import           Data.List                    (findIndex, stripPrefix)
-import qualified Data.List.NonEmpty           as NE
-import qualified Data.Map.Strict              as M
-import           Data.Maybe                   (fromMaybe, mapMaybe)
-import           Data.Tuple                   (swap)
-import qualified Data.Vector                  as V
-import qualified Data.Vector.Unboxed          as VU
+import           Data.Foldable              (find, foldl')
+import           Data.List                  (findIndex, stripPrefix)
+import qualified Data.List.NonEmpty         as NE
+import qualified Data.Map.Strict            as M
+import           Data.Maybe                 (fromMaybe, mapMaybe)
+import           Data.Tuple                 (swap)
+import qualified Data.Vector                as V
+import qualified Data.Vector.Unboxed        as VU
 import           GHC.Generics
-import           System.Directory             (createDirectoryIfMissing)
-import           System.FilePath              (splitFileName, (</>))
-import           Text.Printf                  (printf)
+import           System.Directory           (createDirectoryIfMissing)
+import           System.FilePath            (splitFileName, (</>))
+import           Text.Printf                (printf)
 
 import           SonoSsa.Ssa
 import           Types.Bounds
-import qualified Types.Zipper                 as Z
+import qualified Types.IndexInterval        as I
+import qualified Types.Zipper               as Z
 
 import           Model.TraceState
 
@@ -98,7 +99,7 @@ data Model = Model
   , _ssaFile          :: SSA
   , _traces           :: Z.Zipper TraceInfo
   , _timeStep         :: Double
-  , _cropBounds       :: NE.NonEmpty (Int, Int)
+  , _cropBounds       :: NE.NonEmpty I.IndexInterval
   , _traceDataVersion :: Integer }
 
 initUndefinedModel :: Model
@@ -166,19 +167,19 @@ allTraceStates :: Traversal' Model TraceState
 allTraceStates = traces . traverse . history . traverse
 
 -- Relative, inclusive bounds
-crop :: (Int, Int) -> Model -> Model
-crop (start, end) = incrementVersion
-  . over allTraceStates (cropTraceState (start, end))
-  . over cropBounds ((start, end) NE.<|)
+crop :: I.IndexInterval -> Model -> Model
+crop indexInterval = incrementVersion
+  . over allTraceStates (cropTraceState indexInterval)
+  . over cropBounds (indexInterval NE.<|)
 
 uncrop :: Model -> Model
 uncrop model =
-  let ((start, end) NE.:| bounds) = model ^. cropBounds
+  let (indexInterval NE.:| bounds) = model ^. cropBounds
   in  case NE.nonEmpty bounds of
         Nothing -> model
         Just bounds' -> model
           & incrementVersion
-          & allTraceStates %~ uncropTraceState (start, end)
+          & allTraceStates %~ uncropTraceState indexInterval
           & cropBounds .~ bounds'
 
 -- Quality
@@ -241,7 +242,7 @@ getFilePath :: Model -> String
 getFilePath = view filePath
 
 getCropOffset :: Model -> Int
-getCropOffset model = sum $ fmap fst $ model ^. cropBounds
+getCropOffset model = sum $ fmap (fst . I.getEndpoints) $ model ^. cropBounds
 
 -- Current trace information
 
@@ -353,7 +354,8 @@ loadSSAFile filePath' model = do
       traces' = Z.unsafeFromList
               $ map (readQuality . initTraceInfo)
               $ ssa ^. ssaDataTraces
-      bounds = (0, VU.length (ssa ^. ssaIndexTrace . traceSeries) - 1)
+      bounds =
+        I.fromEndpoints (0, VU.length (ssa ^. ssaIndexTrace . traceSeries) - 1)
   return Model { _filePath = filePath'
                , _ssaFile  = ssa
                , _traces   = traces'

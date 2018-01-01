@@ -14,6 +14,7 @@ import qualified Data.Text         as T
 
 import           Model
 import           Types.Bounds
+import qualified Types.IndexInterval as I
 import           Types.LevelShifts
 
 --------------------------------------------------------------------------------
@@ -47,7 +48,7 @@ data GUIState = GUIState
   , _referenceTraceLabel :: (Int, Maybe T.Text)
 
   -- View options
-  , _cropSelection       :: Maybe (Int, Int)
+  , _cropSelection       :: Maybe I.IndexInterval
   }
 
 data NotebookPage = MainPage
