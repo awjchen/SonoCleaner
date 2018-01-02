@@ -55,8 +55,8 @@ import           View.Types
 
 -- 1
 data DataParams = DataParams
-  { _dpLevelShiftThreshold :: Double
-  , _dpNoiseThreshold      :: Double
+  { dpLevelShiftThreshold :: Double
+  , dpNoiseThreshold      :: Double
   } deriving (Eq)
 
 -- 2
@@ -74,12 +74,11 @@ data TraceOperation =
 
 -- 3
 data ViewParams = ViewParams
-  { _vpViewBounds          :: ViewBounds
-  , _vpShowReplicateTraces :: Bool
-  , _vpReferenceTraceLabel :: (Int, Maybe T.Text)
-  , _vpCurrentPage         :: NotebookPage
+  { vpViewBounds          :: ViewBounds
+  , vpShowReplicateTraces :: Bool
+  , vpReferenceTraceLabel :: (Int, Maybe T.Text)
+  , vpCurrentPage         :: NotebookPage
   } deriving (Eq)
-makeLenses ''ViewParams
 
 --------------------------------------------------------------------------------
 -- Reading the parameters from the GUIState
@@ -88,8 +87,8 @@ makeLenses ''ViewParams
 -- 1
 readDataParams :: GUIState -> DataParams
 readDataParams gst = DataParams
-  { _dpLevelShiftThreshold = gst ^. levelShiftThreshold
-  , _dpNoiseThreshold      = gst ^. noiseThreshold
+  { dpLevelShiftThreshold = gst ^. levelShiftThreshold
+  , dpNoiseThreshold      = gst ^. noiseThreshold
   }
 
 -- 2
@@ -114,10 +113,10 @@ readTraceOperation gst = case gst ^. currentPage of
 -- 3
 readViewParams :: GUIState -> ViewParams
 readViewParams gst = ViewParams
-  { _vpViewBounds          = gst ^. viewBounds
-  , _vpShowReplicateTraces = gst ^. showReplicateTraces
-  , _vpReferenceTraceLabel = gst ^. referenceTraceLabel
-  , _vpCurrentPage         = gst ^. currentPage
+  { vpViewBounds          = gst ^. viewBounds
+  , vpShowReplicateTraces = gst ^. showReplicateTraces
+  , vpReferenceTraceLabel = gst ^. referenceTraceLabel
+  , vpCurrentPage         = gst ^. currentPage
   }
 
 --------------------------------------------------------------------------------
@@ -126,26 +125,24 @@ readViewParams gst = ViewParams
 
 -- B
 data IdDataDependencies = IdDataDependencies
-  { _iddDataVersion :: Integer
-  , _iddDataParams  :: DataParams
+  { iddDataVersion :: Integer
+  , iddDataParams  :: DataParams
   } deriving (Eq)
 
 -- C
 data OpDataDependencies = OpDataDependencies
-  { _nddDataVersion :: Integer
-  , _nddDataParams  :: DataParams
-  , _nddOperation   :: TraceOperation
+  { nddDataVersion :: Integer
+  , nddDataParams  :: DataParams
+  , nddOperation   :: TraceOperation
   } deriving (Eq)
 
 -- D
 data DisplayDependencies = DisplayDependencies
-  { _ddDataVersion :: Integer
-  , _ddDataParams  :: DataParams
-  , _ddOperation   :: TraceOperation
-  , _ddViewParams  :: ViewParams
+  { ddDataVersion :: Integer
+  , ddDataParams  :: DataParams
+  , ddOperation   :: TraceOperation
+  , ddViewParams  :: ViewParams
   } deriving (Eq)
-
-makeLenses ''OpDataDependencies
 
 --------------------------------------------------------------------------------
 -- The 'objects/vertices' of the data flow
@@ -154,18 +151,15 @@ makeLenses ''OpDataDependencies
 
 -- B, C
 data AnnotatedTraceState a = AnnotatedTraceState
-  { _atsDependencies      :: a
-  , _atsTraceState        :: TraceState
-  , _atsJumps             :: M.IntMap Double
-  , _atsLevelShiftMatches :: LevelShiftMatches }
+  { atsDependencies      :: a
+  , atsTraceState        :: TraceState
+  , atsJumps             :: M.IntMap Double
+  , atsLevelShiftMatches :: LevelShiftMatches }
 
 -- D
 data AnnotatedChartSpec = AnnotatedChartSpec
-  { _acsDependencies :: DisplayDependencies
-  , _acsChartSpec    :: ChartSpec  }
-
-makeLenses ''AnnotatedTraceState
-makeLenses ''AnnotatedChartSpec
+  { acsDependencies :: DisplayDependencies
+  , acsChartSpec    :: ChartSpec  }
 
 --------------------------------------------------------------------------------
 -- The 'morphisms/edges' of the data flow
@@ -178,8 +172,8 @@ readIdAnnotation
   -> Model
   -> AnnotatedTraceState IdDataDependencies
 readIdAnnotation dataParams model =
-  let nt  = _dpNoiseThreshold      dataParams
-      lst = _dpLevelShiftThreshold dataParams
+  let nt  = dpNoiseThreshold      dataParams
+      lst = dpLevelShiftThreshold dataParams
 
       dataVersion = getTraceDataVersion model
       idTraceState = getCurrentState model
@@ -187,12 +181,12 @@ readIdAnnotation dataParams model =
       idMatches = matchJumps nt idJumps idTraceState
 
   in  AnnotatedTraceState
-        { _atsDependencies      = IdDataDependencies
-                                    { _iddDataVersion = dataVersion
-                                    , _iddDataParams  = dataParams }
-        , _atsTraceState        = idTraceState
-        , _atsJumps             = idJumps
-        , _atsLevelShiftMatches = idMatches }
+        { atsDependencies      = IdDataDependencies
+                                   { iddDataVersion = dataVersion
+                                   , iddDataParams  = dataParams }
+        , atsTraceState        = idTraceState
+        , atsJumps             = idJumps
+        , atsLevelShiftMatches = idMatches }
 
 
 -- 2
@@ -201,26 +195,26 @@ applyOperation
   -> AnnotatedTraceState IdDataDependencies
   -> AnnotatedTraceState OpDataDependencies
 applyOperation traceOp ats =
-  let dataParams = _iddDataParams (_atsDependencies ats)
+  let dataParams = iddDataParams (atsDependencies ats)
       transform = getTraceStateTransform traceOp ats
       newDependencies = OpDataDependencies
-        { _nddDataVersion = _iddDataVersion (_atsDependencies ats)
-        , _nddDataParams  = dataParams
-        , _nddOperation   = traceOp }
+        { nddDataVersion = iddDataVersion (atsDependencies ats)
+        , nddDataParams  = dataParams
+        , nddOperation   = traceOp }
   in  if isIdentityOp transform
-      then ats & set atsDependencies newDependencies
-      else  let newTraceState = getOp transform (_atsTraceState ats)
+      then ats{ atsDependencies = newDependencies }
+      else  let newTraceState = getOp transform (atsTraceState ats)
                 newJumps = labelTraceStateJumps
-                            (_dpNoiseThreshold dataParams)
-                            (_dpLevelShiftThreshold dataParams)
+                            (dpNoiseThreshold dataParams)
+                            (dpLevelShiftThreshold dataParams)
                             newTraceState
                 newMatches = matchJumps
-                          (_dpNoiseThreshold dataParams) newJumps newTraceState
+                          (dpNoiseThreshold dataParams) newJumps newTraceState
             in  AnnotatedTraceState
-                  { _atsDependencies      = newDependencies
-                  , _atsTraceState        = newTraceState
-                  , _atsJumps             = newJumps
-                  , _atsLevelShiftMatches = newMatches }
+                  { atsDependencies      = newDependencies
+                  , atsTraceState        = newTraceState
+                  , atsJumps             = newJumps
+                  , atsLevelShiftMatches = newMatches }
 
 -- helper for 2
 getTraceStateTransform
@@ -230,17 +224,17 @@ getTraceStateTransform
 getTraceStateTransform traceOp ats = case traceOp of
   IdentityOp -> IdOperator
   AutoOp matchLevel' ->
-    applyMatchesOp (_atsLevelShiftMatches ats) matchLevel'
+    applyMatchesOp (atsLevelShiftMatches ats) matchLevel'
   ManualSingleOp action index offset holdPair -> case action of
     SingleIgnore   -> IdOperator
     SingleZero     -> apply zeroJumpOp
     SingleSlopeFit -> apply estimateSlopeBothOp
-    where apply f = f (snd holdPair) offset index (_atsJumps ats)
+    where apply f = f (snd holdPair) offset index (atsJumps ats)
   ManualMultipleOp action indices offset -> case action of
     MultipleIgnore -> IdOperator
     MultipleLine   -> apply interpolateBetweenJumpsOp
     MultipleCancel -> apply matchGroupOp
-    where apply f = f offset indices (_atsJumps ats)
+    where apply f = f offset indices (atsJumps ats)
   CropOp _ -> IdOperator
 
 -- 3
@@ -250,18 +244,18 @@ makeAnnotatedChartSpec
   -> AnnotatedTraceState OpDataDependencies
   -> AnnotatedChartSpec
 makeAnnotatedChartSpec model viewParams ats =
-  let atsDeps = _atsDependencies ats
+  let atsDeps = atsDependencies ats
       displayDependencies = DisplayDependencies
-        { _ddDataVersion = _nddDataVersion (_atsDependencies ats)
-        , _ddDataParams  = _nddDataParams atsDeps
-        , _ddOperation   = _nddOperation  atsDeps
-        , _ddViewParams  = viewParams }
+        { ddDataVersion = nddDataVersion (atsDependencies ats)
+        , ddDataParams  = nddDataParams atsDeps
+        , ddOperation   = nddOperation  atsDeps
+        , ddViewParams  = viewParams }
 
       chartSpec = specifyChart model viewParams ats
 
   in  AnnotatedChartSpec
-        { _acsDependencies = displayDependencies
-        , _acsChartSpec    = chartSpec }
+        { acsDependencies = displayDependencies
+        , acsChartSpec    = chartSpec }
 
 -- helper for 3
 specifyChart
@@ -280,8 +274,8 @@ specifyChart model viewParams ats =
     , plotTwinSeries       = twinSeries
     , plotCustomSeries     = customSeries
     , plotHighlightRegion  = highlightRegion
-    , plotXRange           = viewParams ^. vpViewBounds . viewBoundsX
-    , plotYRange           = viewParams ^. vpViewBounds . viewBoundsY
+    , plotXRange           = viewParams ^. to vpViewBounds . viewBoundsX
+    , plotYRange           = viewParams ^. to vpViewBounds . viewBoundsY
     , plotBackgroundColour = bgColour
     , plotAnnotation       = annotation
     , plotTimes            = getTimes model
@@ -292,7 +286,7 @@ specifyChart model viewParams ats =
   where
     (toTime, toIndex)  = getIndexTimeConversions model
 
-    traceSet = if viewParams ^. vpShowReplicateTraces
+    traceSet = if vpShowReplicateTraces viewParams
       then TraceSet { showOriginal = True
                     , showTwin     = True }
       else def
@@ -303,7 +297,7 @@ specifyChart model viewParams ats =
     title = prefix ++ fileName ++ " (" ++ label ++ ")" where
       label = getLabel model
       fileName = snd $ splitFileName $ getFilePath model
-      prefix = case viewParams ^. vpCurrentPage of
+      prefix = case vpCurrentPage viewParams of
         MainPage       -> "Main view -- "
         AutoPage       -> "Previewing automatic correction -- "
         SinglePage   _ -> "Previewing manual correction (single) -- "
@@ -313,7 +307,7 @@ specifyChart model viewParams ats =
         CropPage     _ -> "Cropping -- "
         QualityPage    -> "Setting trace quality -- "
 
-    titleColour = case viewParams ^. vpCurrentPage of
+    titleColour = case vpCurrentPage viewParams of
       MainPage       -> opaque black
       AutoPage       -> opaque greenyellow
       SinglePage   _ -> opaque yellow
@@ -328,11 +322,11 @@ specifyChart model viewParams ats =
       Moderate -> opaque (blend 0.85 grey blue)
       Bad      -> opaque (blend 0.85 grey red)
 
-    newSeries = ats ^. atsTraceState . series
+    newSeries = ats ^. to atsTraceState . series
 
-    newJumpIndices = ats ^. atsJumps
+    newJumpIndices = atsJumps ats
 
-    newModifiedIndices = ats ^. atsTraceState . modifiedJumps
+    newModifiedIndices = ats ^. to atsTraceState . modifiedJumps
 
     originalSeries =
       if not $ showOriginal traceSet
@@ -345,12 +339,13 @@ specifyChart model viewParams ats =
       else fmap (view series) (getTwinTrace model)
 
     customSeries =
-      let mTraceState = viewParams ^? vpReferenceTraceLabel . _2 . _Just . unpacked
-                    >>= findTraceByLabel model
+      let mTraceState =
+            viewParams ^? to vpReferenceTraceLabel . _2 . _Just . unpacked
+            >>= findTraceByLabel model
       in  case mTraceState of
             Nothing -> Nothing
             Just ts ->
-              let vp = viewParams ^. vpViewBounds . toViewPort
+              let vp = viewParams ^. to vpViewBounds . toViewPort
                   c2 = vp ^. viewPortCenter . _2
                   r2 = vp ^. viewPortRadii  . _2
                   (y0, y1) = ts ^. seriesBounds
@@ -358,7 +353,7 @@ specifyChart model viewParams ats =
                   r1 = (y1-y0)/2
               in  Just $ V.map (\y -> (y-c1)*r2/r1 + c2) $ ts ^. series
 
-    highlightRegion = case ats ^. atsDependencies . nddOperation of
+    highlightRegion = case nddOperation (atsDependencies ats) of
       IdentityOp -> Nothing
       AutoOp _ -> Nothing
       ManualSingleOp _ i _ _ ->
@@ -368,7 +363,7 @@ specifyChart model viewParams ats =
       CropOp cropBounds ->
         fmap (over both toTime . I.getEndpoints) cropBounds
 
-    annotation = case ats ^. atsDependencies . nddOperation of
+    annotation = case nddOperation (atsDependencies ats) of
       ManualSingleOp _ i _ _ ->
         let idSeries = getCurrentState model ^. series
             x2 = toTime (succ i)
@@ -416,7 +411,7 @@ setupInterpreter = do
         idAnnotationOld <- readTVar idAnnotationTVar
         idAnnotationNew <- do
           let newDeps = IdDataDependencies dataVersion dataParams
-              oldDeps = idAnnotationOld ^. atsDependencies
+              oldDeps = atsDependencies idAnnotationOld
           if  newDeps == oldDeps
             then return idAnnotationOld
             else writeReturnTVar idAnnotationTVar
@@ -425,7 +420,7 @@ setupInterpreter = do
         opAnnotationOld <- readTVar opAnnotationTVar
         opAnnotationNew <- do
           let newDeps = OpDataDependencies dataVersion dataParams traceOp
-              oldDeps = opAnnotationOld ^. atsDependencies
+              oldDeps = atsDependencies opAnnotationOld
           if  newDeps == oldDeps
             then return opAnnotationOld
             else writeReturnTVar opAnnotationTVar
@@ -434,7 +429,7 @@ setupInterpreter = do
         annotatedChartSpecOld <- readTVar annotatedChartSpecTVar
         let newDeps =
               DisplayDependencies dataVersion dataParams traceOp viewParams
-            oldDeps = annotatedChartSpecOld ^. acsDependencies
+            oldDeps = acsDependencies annotatedChartSpecOld
         when (newDeps /= oldDeps) $
           writeTVar annotatedChartSpecTVar
             $ makeAnnotatedChartSpec model viewParams opAnnotationNew
@@ -442,17 +437,17 @@ setupInterpreter = do
   let getChart :: Model -> GUIState -> STM ChartSpec
       getChart model guiState = do
         updateData model guiState
-        view acsChartSpec <$> readTVar annotatedChartSpecTVar
+        acsChartSpec <$> readTVar annotatedChartSpecTVar
 
   let getMatches :: Model -> GUIState -> STM LevelShiftMatches
       getMatches model guiState = do
         updateData model guiState
-        view atsLevelShiftMatches <$> readTVar idAnnotationTVar
+        atsLevelShiftMatches <$> readTVar idAnnotationTVar
 
   let getJumps :: Model -> GUIState -> STM (M.IntMap Double)
       getJumps model guiState = do
         updateData model guiState
-        view atsJumps <$> readTVar idAnnotationTVar
+        atsJumps <$> readTVar idAnnotationTVar
 
   let getNewModel :: Model -> GUIState -> STM Model
       getNewModel model guiState = do
