@@ -34,6 +34,8 @@ import           Types.Series
 -- Types
 --------------------------------------------------------------------------------
 
+data TraceContext = RootContext | CroppedContext TraceState
+
 data TraceState = TraceState
   { _context       :: TraceContext
   , _series        :: V.Vector Double
@@ -42,15 +44,7 @@ data TraceState = TraceState
   , _seriesBounds  :: (Double, Double)
   , _modifiedJumps :: S.IntSet
   }
-
-data TraceContext = RootContext | CroppedContext TraceState
-
---------------------------------------------------------------------------------
--- Lenses
---------------------------------------------------------------------------------
-
 makeLenses ''TraceState
-makePrisms ''TraceContext
 
 --------------------------------------------------------------------------------
 -- Cropping
@@ -84,20 +78,20 @@ uncropTraceState cropInterval ts = case ts ^. context of
 --------------------------------------------------------------------------------
 
 initTraceState :: V.Vector Double -> TraceState
-initTraceState series' = makeBounds
+initTraceState series' =
   TraceState
     { _context       = RootContext
     , _series        = series'
     , _diffSeries    = diffSeries'
     , _diff2Series   = diff2Series'
-    , _seriesBounds  = undefined
+    , _seriesBounds  = unboxedMinAndMax series'
     , _modifiedJumps = S.empty }
   where diffSeries'  = diff series'
         diff2Series' = fmap diff diffSeries'
 
 setSeries :: V.Vector Double -> TraceState -> TraceState
 setSeries series' =
-    makeBounds
+    set seriesBounds (unboxedMinAndMax series')
   . set series      series'
   . set diffSeries  diffSeries'
   . set diff2Series diff2Series'
@@ -106,7 +100,7 @@ setSeries series' =
 
 setDiffSeries :: (Double, V.Vector Double) -> TraceState -> TraceState
 setDiffSeries diffSeries' =
-    makeBounds
+    set seriesBounds (unboxedMinAndMax series')
   . set series      series'
   . set diffSeries  diffSeries'
   . set diff2Series diff2Series'
@@ -119,17 +113,8 @@ updateDiffSeries offset updates traceState =
         bimap (+offset) (V.// updates) (traceState ^. diffSeries)
       series'      = undiff diffSeries'
       diff2Series' = fmap diff diffSeries'
-  in  traceState
-        & makeBounds
-        . set series      series'
-        . set diffSeries  diffSeries'
-        . set diff2Series diff2Series'
-        . over modifiedJumps
-            (S.union (S.fromList $ fst $ unzip updates))
-
-makeBounds :: TraceState -> TraceState
-makeBounds traceState = let series' = traceState ^. series in traceState &
-  set seriesBounds (unboxedMinAndMax series')
+  in  setDiffSeries diffSeries' traceState
+        & over modifiedJumps (S.union (S.fromList $ fst $ unzip updates))
 
 --------------------------------------------------------------------------------
 -- TraceStateOperator
