@@ -46,14 +46,17 @@ data LevelShiftMatches = LevelShiftMatches
   { matchLevels          :: Int
   , getLevelShiftMatches :: [[(Int, Double)]] }
 
+levelShiftMatches :: [[(Int, Double)]] -> LevelShiftMatches
+levelShiftMatches matches = LevelShiftMatches (length matches) matches
+
 instance Default LevelShiftMatches where
-  def = LevelShiftMatches 0 []
+  def = levelShiftMatches []
 
 -------------------------------------------------------------------------------
 -- Internal types
 -------------------------------------------------------------------------------
 
-type GroupSize    = Int
+type GroupCount   = Int
 type GroupSpan    = Int -- index of last jump minus index of first
 type GroupError   = Double
 type JumpPosition = Int
@@ -85,16 +88,16 @@ data ZeroSumSearchResult
 -- Constants
 -------------------------------------------------------------------------------
 
--- groupSizeLimit:
+-- groupCountLimit:
 --   The maximum number of jumps in a jump group.
-groupSizeLimit :: Int
-groupSizeLimit = 8
+groupCountLimit :: Int
+groupCountLimit = 8
 
--- searchGroupSizeLimit:
+-- searchGroupCountLimit:
 --   The maximum number of jumps to consider when searching for a jump group.
 --   (This is a vague description, sorry. Examine its use in the code.)
-searchGroupSizeLimit :: Int
-searchGroupSizeLimit = 2*groupSizeLimit
+searchGroupCountLimit :: Int
+searchGroupCountLimit = 2*groupCountLimit
 
 -- interpolationLimit:
 --   The time span of the jump group, in terms of the number of data points
@@ -110,19 +113,15 @@ interpolationLimit = 3
 -------------------------------------------------------------------------------
 
 applyMatches :: LevelShiftMatches -> Int -> TraceState -> TraceState
-applyMatches matches progression =
-  if null changes
-    then id
-    else updateDiffSeries 0 changes
-  where changes = concat $ take progression $ getLevelShiftMatches matches
+applyMatches matches progression = updateDiffSeries 0 updates
+  where updates = concat $ take progression $ getLevelShiftMatches matches
 
 matchJumps
   :: Double
   -> M.IntMap Double
   -> TraceState
   -> LevelShiftMatches
-matchJumps noiseTh jumpsMap ts =
-  LevelShiftMatches (length corrections) corrections
+matchJumps noiseTh jumpsMap ts = levelShiftMatches corrections
   where
     (_, ds) = ts ^. diffSeries
     jumpSlopesMap = M.mapWithKey estimateSlope' jumpsMap where
@@ -201,37 +200,37 @@ popCandidate = do
 
 -- Try the next candidate
 tryCandidate :: MatchSeedCandidate -> Run s (Maybe Match)
-tryCandidate (size, jumpID) = do
-  searchResult <- searchZeroSum size jumpID
+tryCandidate (span, jumpID) = do
+  searchResult <- searchZeroSum span jumpID
   case searchResult of
     (NoSolution, _) -> pure Nothing
-    (NextSpan nextSize, _) -> do
+    (NextSpan nextSpan, _) -> do
       heapRef <- asks envHeap
-      lift $ modifySTRef' heapRef (H.insert (nextSize, jumpID))
+      lift $ modifySTRef' heapRef (H.insert (nextSpan, jumpID))
       pure Nothing
-    (ZeroSum err revJumpPositions, jumpIDs) -> do
+    (ZeroSum err jumpPositions, jumpIDs) -> do
       chain <- asks envChain
       lift $ do
         mapM_ (IC.remove chain) jumpIDs
-        pure $ Just $ Match size err (reverse revJumpPositions)
+        pure $ Just $ Match span err jumpPositions
 
 -------------------------------------------------------------------------------
 -- Searching for zero-sum groups of jumps
 -------------------------------------------------------------------------------
 
 -- Search for a contiguous interval of jumps starting at 'startIdx', spanning
--- exactly 'sizeLimit' time units, containing at most 'groupSizeLimit' jumps,
+-- exactly 'spanLimit' time units, containing at most 'groupCountLimit' jumps,
 -- and whose displacements sum to zero (within some tolerance).
 searchZeroSum
   :: GroupSpan -> IC.ElemIndex -> Run s (ZeroSumSearchResult, [IC.ElemIndex])
-searchZeroSum sizeLimit startIdx = do
+searchZeroSum spanLimit startIdx = do
   chain  <- asks envChain
   errLim <- asks envNoiseThreshold
   mbVal  <- lift $ IC.query chain startIdx
   case mbVal of
     Nothing -> pure (NoSolution, [])
     Just (startPos, startErr) -> lift $
-      foldChainFrom (searchZeroSumHelper errLim startPos (startPos+sizeLimit))
+      foldChainFrom (searchZeroSumHelper errLim startPos (startPos+spanLimit))
                     (const NoSolution)
                     (0, 0, [])
                     startIdx
@@ -242,8 +241,8 @@ searchZeroSumHelper
   -> JumpPosition
   -> JumpPosition
   -> (JumpPosition, JumpError)
-  -> (GroupSize, GroupError, [JumpPosition])
-  -> ST s (Either ZeroSumSearchResult (GroupSize, GroupError, [JumpPosition]))
+  -> (GroupCount, GroupError, [JumpPosition])
+  -> ST s (Either ZeroSumSearchResult (GroupCount, GroupError, [JumpPosition]))
 searchZeroSumHelper
   errLim startPos targetPos (pos, err) (accCount, accErr, accPos) =
   let accCount' = succ accCount
@@ -254,12 +253,12 @@ searchZeroSumHelper
   if  | pos < targetPos ->
           next
       | pos == targetPos ->
-          if  | accCount' > searchGroupSizeLimit ->
+          if  | accCount' > searchGroupCountLimit ->
                   pure $ Left NoSolution
-              | accCount' > groupSizeLimit ->
+              | accCount' > groupCountLimit ->
                   next
               | abs (err+accErr) <= errLim ->
-                  pure $ Left $ ZeroSum accErr' accPos'
+                  pure $ Left $ ZeroSum accErr' (reverse accPos')
               | otherwise ->
                   next
       | otherwise ->
