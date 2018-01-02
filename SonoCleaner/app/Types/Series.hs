@@ -8,9 +8,6 @@ module Types.Series
   , extendDiff2
   , contract
 
-  , innerInterval
-  , outerInterval
-
   , unboxedAverage
   , unboxedMinAndMax
   ) where
@@ -46,18 +43,6 @@ extendDiff2 r ddv = V.concat [ V.replicate (r-1) 0
 
 contract :: Int -> V.Vector Double -> V.Vector Double
 contract r v = V.slice r (V.length v - 2*r) v
-
--------------------------------------------------------------------------------
--- Indices
--------------------------------------------------------------------------------
-
--- Mapping from intervals of indices in a diff series to those in the original
--- series
-innerInterval :: (Int, Int) -> (Int, Int)
-innerInterval (i0, i1) = (i0+1, i1)
-
-outerInterval :: (Int, Int) -> (Int, Int)
-outerInterval (i0, i1) = (i0, i1+1)
 
 -------------------------------------------------------------------------------
 -- Folds
