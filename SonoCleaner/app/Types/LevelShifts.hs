@@ -1,6 +1,10 @@
 -- Types for manual corrections to level-shifts
 
-module Types.LevelShifts where
+module Types.LevelShifts
+  ( Hold (..)
+  , SingleAction (..)
+  , MultipleAction (..)
+  ) where
 
 import qualified Data.IntMap         as M
 import qualified Data.Vector.Unboxed as V

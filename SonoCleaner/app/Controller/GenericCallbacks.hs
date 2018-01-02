@@ -40,7 +40,7 @@ buttons =
 
   , ButtonCB labellingButton id (setNotebookPage LabelPage)
   , ButtonCB viewButton      id (setNotebookPage ViewPage)
-  , ButtonCB cropButton      id (setNotebookPage CropPage)
+  , ButtonCB cropButton      id (setNotebookPage (CropPage Nothing))
   , ButtonCB qualityButton   id (setNotebookPage QualityPage)
 
   , ButtonCB mainFullViewButton  id (const setDefaultViewBounds)
@@ -171,7 +171,7 @@ registerCallbacks guiElems modelTVar guiStateTVar
 setGUIParameters :: GUIElements -> GUIState -> IO ()
 setGUIParameters guiElems guiState = do
   Gtk.set (guiElems ^. notebook)
-    [ notebookPage := fromEnum (guiState ^. currentPage) ]
+    [ notebookPage := pageNumber (guiState ^. currentPage) ]
 
   forM_ spinButtons               $ setSpinButton       guiElems guiState
   forM_ intSpinButtons            $ setIntSpinButton    guiElems guiState

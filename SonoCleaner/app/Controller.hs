@@ -251,8 +251,8 @@ controllerMain = do
   _ <- (guiElems ^. applyCropButton) `on` buttonActivated
     $ withUpdate $ atomically $ do
       guiState <- readTVar guiStateTVar
-      case guiState ^. cropSelection of
-        Just indexInterval -> do
+      case guiState ^. currentPage of
+        (CropPage (Just indexInterval)) -> do
           model <- readTVar modelTVar
           let newModel = crop indexInterval model
           writeTVar modelTVar newModel
@@ -342,8 +342,7 @@ controllerMain = do
                   Just i -> let t = toTime i + 0.5*dt
                                 h = 0.5 * (s V.! i + s V.! (i+1))
                     in  atomically $ modifyTVar' guiStateTVar $
-                            set levelShiftSelection [i]
-                          . set currentPage SinglePage
+                            set currentPage (SinglePage i)
                           . set (viewBounds.toViewPort.viewPortCenter) (t, h)
               _ -> return ()
 
@@ -358,18 +357,17 @@ controllerMain = do
                     Just (is@(_:_:_)) ->
                       let t = 0.5 * (toTime (head is) + toTime (last is))
                       in  atomically $ modifyTVar' guiStateTVar $
-                              set levelShiftSelection is
-                            . set currentPage MultiplePage
+                              set currentPage (MultiplePage is)
                             . set (viewBounds.toViewPort.viewPortCenter._1) t
                     _ -> return ()
               -- Selecting crop boundaries
-              CropPage ->
+              CropPage _ ->
                 let lowerIndex = max 0         $ toIndex xLeft
                     upperIndex = min lastIndex $ toIndex xRight
                     t = 0.5 * (toTime lowerIndex + toTime upperIndex)
                 in  atomically $ modifyTVar' guiStateTVar $
-                        set cropSelection
-                            (Just $ I.fromEndpoints (lowerIndex, upperIndex))
+                        set currentPage (CropPage $ Just $
+                              I.fromEndpoints (lowerIndex, upperIndex))
                       . set (viewBounds . toViewPort . viewPortCenter . _1) t
               _ -> return ()
 

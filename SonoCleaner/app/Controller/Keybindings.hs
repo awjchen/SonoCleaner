@@ -155,14 +155,14 @@ registerKeyboardShortcuts guiElems guiStateMVar = do
         keyCombination <- (,) <$> fmap unpack eventKeyName <*> eventModifier
 
         let bindings = case guiState ^. currentPage of
-              MainPage     -> generalKeybindings ++ mainPageKeybindings
-              AutoPage     -> generalKeybindings ++ autoPageKeybindings
-              SinglePage   -> generalKeybindings ++ singlePageKeybindings
-              MultiplePage -> generalKeybindings ++ multiplePageKeybindings
-              LabelPage    -> generalKeybindings ++ labelPageKeybindings
-              ViewPage     -> generalKeybindings ++ viewPageKeybindings
-              CropPage     -> generalKeybindings ++ cropPageKeybindings
-              QualityPage  -> generalKeybindings ++ qualityPageKeybindings
+              MainPage       -> generalKeybindings ++ mainPageKeybindings
+              AutoPage       -> generalKeybindings ++ autoPageKeybindings
+              SinglePage   _ -> generalKeybindings ++ singlePageKeybindings
+              MultiplePage _ -> generalKeybindings ++ multiplePageKeybindings
+              LabelPage      -> generalKeybindings ++ labelPageKeybindings
+              ViewPage       -> generalKeybindings ++ viewPageKeybindings
+              CropPage     _ -> generalKeybindings ++ cropPageKeybindings
+              QualityPage    -> generalKeybindings ++ qualityPageKeybindings
 
         case lookup keyCombination bindings of
           Just (GUIAction ref action) ->

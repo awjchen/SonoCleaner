@@ -23,61 +23,64 @@ setGUISensitivity ::
   -> Model
   -> GUIState
   -> IO ()
-setGUISensitivity guiElems model guiState = do
-  -- Main page
-  widgetSetSensitive (guiElems ^. openButton) True
-  widgetSetSensitive (guiElems ^. saveButton) True
+setGUISensitivity guiElems model guiState = case guiState ^. currentPage of
+  MainPage -> do
+    widgetSetSensitive (guiElems ^. openButton) True
+    widgetSetSensitive (guiElems ^. saveButton) True
 
-  widgetSetSensitive (guiElems ^. prevTraceButton) (existsPrevTrace model)
-  widgetSetSensitive (guiElems ^. nextTraceButton) (existsNextTrace model)
-  widgetSetSensitive (guiElems ^. twinTraceButton)
-    $ case getTwinTrace model of
-        Nothing -> False
-        Just _  -> True
+    widgetSetSensitive (guiElems ^. prevTraceButton) (existsPrevTrace model)
+    widgetSetSensitive (guiElems ^. nextTraceButton) (existsNextTrace model)
+    widgetSetSensitive (guiElems ^. twinTraceButton)
+      $ case getTwinTrace model of
+          Nothing -> False
+          Just _  -> True
 
-  widgetSetSensitive (guiElems ^. undoButton) (existsPrevHistory model)
-  widgetSetSensitive (guiElems ^. redoButton) (existsNextHistory model)
+    widgetSetSensitive (guiElems ^. undoButton) (existsPrevHistory model)
+    widgetSetSensitive (guiElems ^. redoButton) (existsNextHistory model)
 
-  widgetSetSensitive (guiElems ^. autoButton)      True
-  widgetSetSensitive (guiElems ^. labellingButton) True
+    widgetSetSensitive (guiElems ^. autoButton)      True
+    widgetSetSensitive (guiElems ^. labellingButton) True
 
-  widgetSetSensitive (guiElems ^. viewButton)    True
-  widgetSetSensitive (guiElems ^. cropButton)    True
-  widgetSetSensitive (guiElems ^. qualityButton) True
+    widgetSetSensitive (guiElems ^. viewButton)    True
+    widgetSetSensitive (guiElems ^. cropButton)    True
+    widgetSetSensitive (guiElems ^. qualityButton) True
 
-  widgetSetSensitive (guiElems ^. mainFullViewButton)  True
-  widgetSetSensitive (guiElems ^. mainFullViewXButton) True
-  widgetSetSensitive (guiElems ^. mainFullViewYButton) True
+    widgetSetSensitive (guiElems ^. mainFullViewButton)  True
+    widgetSetSensitive (guiElems ^. mainFullViewXButton) True
+    widgetSetSensitive (guiElems ^. mainFullViewYButton) True
 
-  widgetSetSensitive (guiElems ^. showReplicateTracesCheckButton) True
+    widgetSetSensitive (guiElems ^. showReplicateTracesCheckButton) True
 
-  -- Auto page
-  widgetSetSensitive (guiElems ^. autoApplyButton) (guiState ^. matchLevel /= 0)
+  AutoPage -> do
+    widgetSetSensitive (guiElems ^. autoApplyButton)
+                       (guiState ^. matchLevel /= 0)
 
-  -- Single page
-  let singleSensitivty = case guiState ^. singleAction of
-        SingleIgnore -> False
-        _            -> True
-  widgetSetSensitive (guiElems ^. singleApplyButton)      singleSensitivty
-  widgetSetSensitive (guiElems ^. singleOffsetSpinButton) singleSensitivty
-  widgetSetSensitive (guiElems ^. singleHoldComboBox)     singleSensitivty
+  SinglePage _ -> do
+    let singleSensitivty = case guiState ^. singleAction of
+          SingleIgnore -> False
+          _            -> True
+    widgetSetSensitive (guiElems ^. singleApplyButton)      singleSensitivty
+    widgetSetSensitive (guiElems ^. singleOffsetSpinButton) singleSensitivty
+    widgetSetSensitive (guiElems ^. singleHoldComboBox)     singleSensitivty
 
-  -- Multiple page
-  widgetSetSensitive (guiElems ^. multipleOffsetSpinButton)
-    $ (guiState ^. multipleAction) == MultipleCancel
+  MultiplePage _ -> do
+    widgetSetSensitive (guiElems ^. multipleOffsetSpinButton)
+      $ (guiState ^. multipleAction) == MultipleCancel
 
-  widgetSetSensitive (guiElems ^. multipleApplyButton) $
-    case guiState ^. multipleAction of
-          MultipleIgnore -> False
-          _              -> True
+    widgetSetSensitive (guiElems ^. multipleApplyButton) $
+      case guiState ^. multipleAction of
+            MultipleIgnore -> False
+            _              -> True
 
-  -- Crop page
-  widgetSetSensitive (guiElems ^. applyCropButton)
-    $ isJust (guiState ^. cropSelection)
-  widgetSetSensitive (guiElems ^. applyUncropButton)
-    $ case getCurrentState model ^. context of
-        RootContext      -> False
-        CroppedContext _ -> True
+  CropPage mCropInterval -> do
+    widgetSetSensitive (guiElems ^. applyCropButton)
+      $ isJust mCropInterval
+    widgetSetSensitive (guiElems ^. applyUncropButton)
+      $ case getCurrentState model ^. context of
+          RootContext      -> False
+          CroppedContext _ -> True
+
+  _ -> return ()
 
 --------------------------------------------------------------------------------
 -- Disable functions before a file is opened

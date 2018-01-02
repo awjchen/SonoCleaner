@@ -4,7 +4,6 @@
 -- results of those operations. Intermediate results are cached in an attempt to
 -- avoid recomputation.
 
-{-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE TemplateHaskell #-}
 
 module Controller.Interpreter
@@ -68,8 +67,9 @@ type Offset = Double
 data TraceOperation =
     IdentityOp
   | AutoOp MatchLevel
-  | ManualSingleOp   SingleAction    LevelShiftIndex  Offset (Int, Hold)
+  | ManualSingleOp   SingleAction   LevelShiftIndex   Offset (Int, Hold)
   | ManualMultipleOp MultipleAction [LevelShiftIndex] Offset
+  | CropOp (Maybe I.IndexInterval)
   deriving (Eq)
 
 -- 3
@@ -78,7 +78,6 @@ data ViewParams = ViewParams
   , _vpShowReplicateTraces :: Bool
   , _vpReferenceTraceLabel :: (Int, Maybe T.Text)
   , _vpCurrentPage         :: NotebookPage
-  , _vpCropBounds          :: Maybe I.IndexInterval
   } deriving (Eq)
 makeLenses ''ViewParams
 
@@ -88,41 +87,38 @@ makeLenses ''ViewParams
 
 -- 1
 readDataParams :: GUIState -> DataParams
-readDataParams GUIState{..} = DataParams
-  { _dpLevelShiftThreshold = _levelShiftThreshold
-  , _dpNoiseThreshold      = _noiseThreshold
+readDataParams gst = DataParams
+  { _dpLevelShiftThreshold = gst ^. levelShiftThreshold
+  , _dpNoiseThreshold      = gst ^. noiseThreshold
   }
 
 -- 2
 readTraceOperation :: GUIState -> TraceOperation
-readTraceOperation GUIState{..} = case _currentPage of
-  AutoPage     -> AutoOp _matchLevel
-  SinglePage   -> case _levelShiftSelection of
-    [levelShiftIndex] ->
-      ManualSingleOp _singleAction
-                     levelShiftIndex
-                     _singleOffset
-                     _singleHold
-    _ -> IdentityOp
-  MultiplePage -> case _levelShiftSelection of
-    (_:_:_) -> ManualMultipleOp _multipleAction
-                                _levelShiftSelection
-                                _multipleOffset
-    _ -> IdentityOp
-  _            -> IdentityOp
+readTraceOperation gst = case gst ^. currentPage of
+  AutoPage ->
+    AutoOp $ gst ^. matchLevel
+  SinglePage levelShiftIndex ->
+    ManualSingleOp (gst ^. singleAction)
+                   levelShiftIndex
+                   (gst ^. singleOffset)
+                   (gst ^. singleHold)
+  MultiplePage levelShiftGroup ->
+    ManualMultipleOp (gst ^. multipleAction)
+                     levelShiftGroup
+                     (gst ^. multipleOffset)
+  CropPage mCropInterval ->
+    CropOp mCropInterval
+  _ ->
+    IdentityOp
 
 -- 3
 readViewParams :: GUIState -> ViewParams
-readViewParams GUIState{..} = ViewParams
-  { _vpViewBounds          = _viewBounds
-  , _vpShowReplicateTraces = _showReplicateTraces
-  , _vpReferenceTraceLabel = _referenceTraceLabel
-  , _vpCurrentPage         = _currentPage
-  , _vpCropBounds          = cropBounds }
-  where
-    cropBounds = case _currentPage of
-      CropPage -> _cropSelection
-      _        -> Nothing
+readViewParams gst = ViewParams
+  { _vpViewBounds          = gst ^. viewBounds
+  , _vpShowReplicateTraces = gst ^. showReplicateTraces
+  , _vpReferenceTraceLabel = gst ^. referenceTraceLabel
+  , _vpCurrentPage         = gst ^. currentPage
+  }
 
 --------------------------------------------------------------------------------
 -- Parameter dependencies for validating the intermediate cached computations
@@ -245,6 +241,7 @@ getTraceStateTransform traceOp ats = case traceOp of
     MultipleLine   -> apply interpolateBetweenJumpsOp
     MultipleCancel -> apply matchGroupOp
     where apply f = f offset indices (_atsJumps ats)
+  CropOp _ -> IdOperator
 
 -- 3
 makeAnnotatedChartSpec
@@ -307,24 +304,24 @@ specifyChart model viewParams ats =
       label = getLabel model
       fileName = snd $ splitFileName $ getFilePath model
       prefix = case viewParams ^. vpCurrentPage of
-        MainPage     -> "Main view -- "
-        AutoPage     -> "Previewing automatic correction -- "
-        SinglePage   -> "Previewing manual correction (single) -- "
-        MultiplePage -> "Previewing manual correction (group) -- "
-        LabelPage    -> "Adjusting labelling settings -- "
-        ViewPage     -> "Selecting comparison traces -- "
-        CropPage     -> "Cropping -- "
-        QualityPage  -> "Setting trace quality -- "
+        MainPage       -> "Main view -- "
+        AutoPage       -> "Previewing automatic correction -- "
+        SinglePage   _ -> "Previewing manual correction (single) -- "
+        MultiplePage _ -> "Previewing manual correction (group) -- "
+        LabelPage      -> "Adjusting labelling settings -- "
+        ViewPage       -> "Selecting comparison traces -- "
+        CropPage     _ -> "Cropping -- "
+        QualityPage    -> "Setting trace quality -- "
 
     titleColour = case viewParams ^. vpCurrentPage of
-      MainPage     -> opaque black
-      AutoPage     -> opaque greenyellow
-      SinglePage   -> opaque yellow
-      MultiplePage -> opaque magenta
-      LabelPage    -> opaque plum
-      ViewPage     -> opaque white
-      CropPage     -> opaque orange
-      QualityPage  -> opaque cyan
+      MainPage       -> opaque black
+      AutoPage       -> opaque greenyellow
+      SinglePage   _ -> opaque yellow
+      MultiplePage _ -> opaque magenta
+      LabelPage      -> opaque plum
+      ViewPage       -> opaque white
+      CropPage     _ -> opaque orange
+      QualityPage    -> opaque cyan
 
     bgColour = case getQuality model of
       Good     -> opaque grey
@@ -362,13 +359,14 @@ specifyChart model viewParams ats =
               in  Just $ V.map (\y -> (y-c1)*r2/r1 + c2) $ ts ^. series
 
     highlightRegion = case ats ^. atsDependencies . nddOperation of
-      IdentityOp ->
-        fmap (over both toTime . I.getEndpoints) (viewParams ^. vpCropBounds)
+      IdentityOp -> Nothing
       AutoOp _ -> Nothing
       ManualSingleOp _ i _ _ ->
         Just $ over both toTime (i, succ i)
       ManualMultipleOp _ is _ ->
         Just $ over both toTime (head is, succ (last is))
+      CropOp cropBounds ->
+        fmap (over both toTime . I.getEndpoints) cropBounds
 
     annotation = case ats ^. atsDependencies . nddOperation of
       ManualSingleOp _ i _ _ ->

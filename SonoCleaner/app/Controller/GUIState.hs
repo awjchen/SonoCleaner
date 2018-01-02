@@ -7,10 +7,10 @@
 
 module Controller.GUIState where
 
-import           Control.Arrow     ((>>>))
+import           Control.Arrow       ((>>>))
 import           Control.Lens
 import           Data.Default
-import qualified Data.Text         as T
+import qualified Data.Text           as T
 
 import           Model
 import           Types.Bounds
@@ -21,10 +21,33 @@ import           Types.LevelShifts
 -- GUI state
 --------------------------------------------------------------------------------
 
+data NotebookPage
+  = MainPage
+  | AutoPage
+  | SinglePage Int
+  | MultiplePage [Int]
+  | LabelPage
+  | ViewPage
+  | CropPage (Maybe I.IndexInterval)
+  | QualityPage
+  deriving (Eq)
+
+-- We must ensure that the page numbers defined here match those defined the
+-- Glade file.
+pageNumber :: NotebookPage -> Int
+pageNumber page = case page of
+  MainPage       -> 0
+  AutoPage       -> 1
+  SinglePage _   -> 2
+  MultiplePage _ -> 3
+  LabelPage      -> 4
+  ViewPage       -> 5
+  CropPage _     -> 6
+  QualityPage    -> 7
+
 data GUIState = GUIState
   { _currentPage         :: NotebookPage
   , _viewBounds          :: ViewBounds
-  , _levelShiftSelection :: [Int]
 
   -- Auto options
   , _matchLevel          :: Int
@@ -46,28 +69,13 @@ data GUIState = GUIState
   -- View options
   , _showReplicateTraces :: Bool
   , _referenceTraceLabel :: (Int, Maybe T.Text)
-
-  -- View options
-  , _cropSelection       :: Maybe I.IndexInterval
   }
-
-data NotebookPage = MainPage
-                  | AutoPage
-                  | SinglePage
-                  | MultiplePage
-                  | LabelPage
-                  | ViewPage
-                  | CropPage
-                  | QualityPage
-  deriving (Eq, Enum, Bounded)
-
 makeLenses ''GUIState
 
 instance Default GUIState where
   def = GUIState
     { _currentPage         = MainPage
     , _viewBounds          = ViewBounds (0, 1) (0, 1)
-    , _levelShiftSelection = []
 
     -- Auto options
     , _matchLevel          = 0
@@ -89,9 +97,6 @@ instance Default GUIState where
     -- View Options
     , _showReplicateTraces = False
     , _referenceTraceLabel = (0, Nothing)
-
-  -- View options
-  , _cropSelection         = Nothing
     }
 
 resetGUIPreservingOptions :: GUIState -> GUIState
