@@ -21,8 +21,8 @@ import qualified Types.IndexInterval as I
 import           Types.LevelShifts
 import           Types.Series
 
+import           Model.Slope
 import           Model.TraceState
-import           Model.Util
 
 -------------------------------------------------------------------------------
 -- Manual operatons on single jumps

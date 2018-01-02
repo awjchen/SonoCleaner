@@ -30,8 +30,8 @@ import           Data.STRef.Strict
 import qualified Data.Vector.Unboxed        as V
 
 import qualified Model.IndexedChain         as IC
+import           Model.Slope
 import           Model.TraceState
-import           Model.Util
 
 import qualified Types.IndexInterval as I
 import           Types.Series

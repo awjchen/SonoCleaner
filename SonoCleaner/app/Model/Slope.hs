@@ -1,5 +1,6 @@
-module Model.Util
+module Model.Slope
   ( estimateSlope
+  , median
   ) where
 
 import           Control.Monad.ST
