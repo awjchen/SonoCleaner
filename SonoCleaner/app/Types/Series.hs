@@ -13,9 +13,6 @@ module Types.Series
 
   , unboxedAverage
   , unboxedMinAndMax
-
-  , interpolateN
-  , interpolateSeries
   ) where
 
 import qualified Data.Vector.Unboxed as V
@@ -79,19 +76,3 @@ unboxedMinAndMax xs = V.foldl' minMaxAcc (x1, x1) (V.tail xs)
       let minAcc' = min x minAcc
           maxAcc' = max x maxAcc
       in  minAcc' `seq` maxAcc' `seq` (minAcc', maxAcc')
-
--------------------------------------------------------------------------------
--- Interpolation
--------------------------------------------------------------------------------
-
--- Returns n evenly spaced points lying between x0 and x1
-interpolateN :: Int -> Double -> Double -> [Double]
-interpolateN n x0 x1 =
-  let increment = (x1 - x0) / fromIntegral (n+1)
-  in  map (\i -> x0 + increment * fromIntegral i) [1..n]
-
--- Interpolate between two points in a series.
--- The index of the first point must be smaller than that of the second.
-interpolateSeries :: (Int, Double) -> (Int, Double) -> [(Int, Double)]
-interpolateSeries (i0, y0) (i1, y1) =
-  zip [i0+1..i1-1] $ interpolateN (i1-i0-1) y0 y1

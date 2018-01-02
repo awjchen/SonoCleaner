@@ -3,10 +3,12 @@ module Model.Gaps
   , interpolateGapsTrace
   ) where
 
+import           Control.Arrow       ((***))
 import           Control.Lens        hiding (indexed)
 import qualified Data.IntSet         as S
 import qualified Data.Vector.Unboxed as V
 
+import qualified Types.IndexInterval as I
 import           Types.Series
 
 import           Model.TraceState
@@ -27,7 +29,7 @@ labelGaps
   -> (Int, Int)
   -> (Double, Double)
   -> V.Vector Double
-  -> [(Int, Int)]
+  -> [I.IndexInterval]
 labelGaps stratum (i0, i1) (y0, y1) s
   | i0 >= i1 = []
   | otherwise =
@@ -41,7 +43,8 @@ labelGaps stratum (i0, i1) (y0, y1) s
                   LabelUpper -> (>)
         onBoundary :: (Int, Int) -> Bool
         onBoundary (a, b) = a == i0 || b == i1
-    in  filter (not.onBoundary)
+    in  map I.fromEndpoints
+          $ filter (not.onBoundary)
           $ intervalsFromAdjacent $ V.toList gapIndices
   where
     line :: Int -> Double
@@ -56,19 +59,6 @@ labelGaps stratum (i0, i1) (y0, y1) s
       go start end (j:js) =
         if j == end + 1 then go start j js else (start, end) : go j j js
 
-interpolateGaps
-  :: [(Int, Int)]
-  -> V.Vector Double
-  -> (V.Vector Double, [(Int, Int)])
-interpolateGaps intervals v =
-  let end = V.length v - 1
-      touchesBoundary (l, r) = l == 0 || r == end
-      targetIntervals = filter (not . touchesBoundary) intervals
-      makeMods (l, r) =
-         zip [l..r] $ interpolateN (r-l+1) (v V.! (l-1)) (v V.! (r+1))
-      v' = v V.// concatMap makeMods targetIntervals
-  in  (v', targetIntervals)
-
 interpolateGapsTrace
   :: LabelledStratum
   -> (Int, Int)
@@ -78,10 +68,11 @@ interpolateGapsTrace stratum xbounds ybounds =
   unsafeTraceStateOperator $ \ts ->
   let s = ts ^. series
       gapIntervals = labelGaps stratum xbounds ybounds s
-      (s', modifiedIntervals) = interpolateGaps gapIntervals s
-  in  ts & setSeries s'
-         & modifiedJumps %~ S.union
-           (S.fromList $ concatMap (\(a, b) -> [pred a..b]) modifiedIntervals)
-           -- We need not check the bounds for the modified jumps because
-           -- 'interpolateGaps' does not act on intervals containing the trace's
-           -- endpoints.
+      interpolationIntervals = gapIntervals
+        & filter (uncurry (&&) . ((/= 0) *** (/= lastIndex)) . I.getEndpoints)
+        & map I.grow
+        where lastIndex = V.length s - 1
+      yPairs = map (over both (s V.!) . I.getEndpoints) interpolationIntervals
+      updates = concatMap (uncurry I.interpolationUpdates)
+              $ zip interpolationIntervals yPairs
+  in  updateDiffSeries 0 updates ts

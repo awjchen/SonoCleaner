@@ -12,7 +12,6 @@ module Model.TraceState
   , uncropTraceState
 
   , initTraceState
-  , setSeries
   , updateDiffSeries
 
   , TraceStateOperator
@@ -74,7 +73,7 @@ uncropTraceState cropInterval ts = case ts ^. context of
           & modifiedJumps %~ S.union newModifiedJumps
 
 --------------------------------------------------------------------------------
--- Utility
+-- Construction
 --------------------------------------------------------------------------------
 
 initTraceState :: V.Vector Double -> TraceState
@@ -89,14 +88,9 @@ initTraceState series' =
   where diffSeries'  = diff series'
         diff2Series' = fmap diff diffSeries'
 
-setSeries :: V.Vector Double -> TraceState -> TraceState
-setSeries series' =
-    set seriesBounds (unboxedMinAndMax series')
-  . set series      series'
-  . set diffSeries  diffSeries'
-  . set diff2Series diff2Series'
-  where diffSeries'  = diff series'
-        diff2Series' = fmap diff diffSeries'
+--------------------------------------------------------------------------------
+-- Modification
+--------------------------------------------------------------------------------
 
 setDiffSeries :: (Double, V.Vector Double) -> TraceState -> TraceState
 setDiffSeries diffSeries' =

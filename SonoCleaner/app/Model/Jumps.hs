@@ -17,6 +17,7 @@ import qualified Data.IntSet         as S
 import           Data.Maybe          (fromMaybe)
 import qualified Data.Vector.Unboxed as V
 
+import qualified Types.IndexInterval as I
 import           Types.LevelShifts
 import           Types.Series
 
@@ -111,10 +112,11 @@ interpolateBetweenJumps _ indices _ =
     case indices of
       (j0:_:_) ->
         let j1 = last indices
-            seq' = interpolateGap' (j0+1, j1) $ traceState ^. series
-        in  traceState
-              & setSeries seq'
-              & modifiedJumps %~ S.union (S.fromList [j0..j1])
+            v = traceState ^. series
+            pointInterval = I.undiff $ I.fromEndpoints (j0, j1)
+            yPair = over both (v V.!) $ I.getEndpoints pointInterval
+            updates = I.interpolationUpdates pointInterval yPair
+        in  updateDiffSeries 0 updates traceState
       _  -> traceState
 
 -- 'Sum'
@@ -134,19 +136,3 @@ matchGroup offset indices jumps
           updates = zip indices newSlopes
       in  updateDiffSeries 0 updates traceState
   | otherwise = idOperator
-
--------------------------------------------------------------------------------
--- Utility
--------------------------------------------------------------------------------
-
-interpolateGap' :: (Int, Int) -> V.Vector Double -> V.Vector Double
-interpolateGap' (l, r) s =
-  let graph i = (i, s V.! i)
-      end = V.length s - 1
-      changes
-        | l > 0 && r < end   = interpolateSeries (graph (l-1)) (graph (r+1))
-        | l == 0 && r == end = []
-        | l == 0             = zip [l..r] (repeat (s V.! (r+1)))
-        | r == end           = zip [l..r] (repeat (s V.! (l-1)))
-        | otherwise          = []
-  in  s V.// changes

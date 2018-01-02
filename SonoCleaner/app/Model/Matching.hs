@@ -33,6 +33,7 @@ import qualified Model.IndexedChain         as IC
 import           Model.TraceState
 import           Model.Util
 
+import qualified Types.IndexInterval as I
 import           Types.Series
 
 -- Note: In this module, level-shifts are referred to as "jumps".
@@ -158,12 +159,10 @@ redistribute jumps (Match span err indices) =
 
 interpolate :: V.Vector Double -> Match -> [(Int, Double)]
 interpolate v (Match span err indices) =
-  let slopeInterval = (head &&& last) indices
-      pointInterval = outerInterval slopeInterval
-      xSpan = uncurry subtract pointInterval :: Int
-      ySpan = uncurry subtract $ over both (v V.!) pointInterval :: Double
-      avgSlope = ySpan / fromIntegral xSpan
-  in  zip (uncurry enumFromTo slopeInterval) (repeat avgSlope)
+  let pointInterval = I.undiff $ I.fromEndpoints (i, i+span)
+        where i = head indices
+      yPair = over both (v V.!) $ I.getEndpoints pointInterval
+  in  I.interpolationUpdates pointInterval yPair
 
 -------------------------------------------------------------------------------
 -- The matching procedure
