@@ -1,6 +1,6 @@
 module Model.Gaps
   ( LabelledStratum (..)
-  , interpolateGapsTrace
+  , interpolateGaps
   ) where
 
 import           Control.Arrow       ((***))
@@ -59,20 +59,22 @@ labelGaps stratum (i0, i1) (y0, y1) s
       go start end (j:js) =
         if j == end + 1 then go start j js else (start, end) : go j j js
 
-interpolateGapsTrace
+interpolateGaps
   :: LabelledStratum
   -> (Int, Int)
   -> (Double, Double)
-  -> TraceStateOperator
-interpolateGapsTrace stratum xbounds ybounds =
-  unsafeTraceStateOperator $ \ts ->
-  let s = ts ^. series
-      gapIntervals = labelGaps stratum xbounds ybounds s
+  -> TraceState
+  -> TraceState
+interpolateGaps stratum xbounds ybounds traceState =
+  updateDiffSeries 0 updates traceState
+    where
+      series' = traceState ^. series
+      gapIntervals = labelGaps stratum xbounds ybounds series'
       interpolationIntervals = gapIntervals
         & filter (uncurry (&&) . ((/= 0) *** (/= lastIndex)) . I.getEndpoints)
         & map I.grow
-        where lastIndex = V.length s - 1
-      yPairs = map (over both (s V.!) . I.getEndpoints) interpolationIntervals
+        where lastIndex = V.length series' - 1
+      yPairs = map (over both (series' V.!) . I.getEndpoints)
+                   interpolationIntervals
       updates = concatMap (uncurry I.interpolationUpdates)
               $ zip interpolationIntervals yPairs
-  in  updateDiffSeries 0 updates ts

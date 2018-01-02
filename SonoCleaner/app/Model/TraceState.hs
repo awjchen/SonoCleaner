@@ -13,13 +13,6 @@ module Model.TraceState
 
   , initTraceState
   , updateDiffSeries
-
-  , TraceStateOperator
-  , pattern IdOperator
-  , pattern TraceStateOperator
-  , idOperator
-  , getOperator
-  , unsafeTraceStateOperator
   ) where
 
 import           Control.Lens
@@ -109,28 +102,3 @@ updateDiffSeries offset updates traceState =
       diff2Series' = fmap diff diffSeries'
   in  setDiffSeries diffSeries' traceState
         & over modifiedJumps (S.union (S.fromList $ fst $ unzip updates))
-
---------------------------------------------------------------------------------
--- TraceStateOperator
---------------------------------------------------------------------------------
--- We included a special case for the identity operator for efficiency, but it
--- turns out it helps only a little. Oops.
-
-data TraceStateOperator = RealIdOperator
-                        | RealTraceStateOperator (TraceState -> TraceState)
-
-pattern IdOperator :: TraceStateOperator
-pattern IdOperator <- RealIdOperator
-
-pattern TraceStateOperator :: (TraceState -> TraceState) -> TraceStateOperator
-pattern TraceStateOperator a <- RealTraceStateOperator a
-
-idOperator :: TraceStateOperator
-idOperator = RealIdOperator
-
-unsafeTraceStateOperator :: (TraceState -> TraceState) -> TraceStateOperator
-unsafeTraceStateOperator = RealTraceStateOperator
-
-getOperator :: TraceStateOperator -> (TraceState -> TraceState)
-getOperator RealIdOperator             = id
-getOperator (RealTraceStateOperator f) = f

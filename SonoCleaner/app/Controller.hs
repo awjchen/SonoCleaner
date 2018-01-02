@@ -381,7 +381,7 @@ controllerMain = do
                       ModControl -> LabelLower
                       ModShift   -> LabelUpper
                       _          -> LabelLower
-                    operator = interpolateGapsTrace stratum
+                    operator = interpolateGapsOp stratum
                                 (toIndex x1, toIndex x2) (y1, y2)
                 in  withUpdate $ atomically $
                       writeTVar modelTVar (applyToModel operator model)

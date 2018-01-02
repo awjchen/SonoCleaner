@@ -37,18 +37,18 @@ liftToTrace ::
   -> Double
   -> Int -- Index of jump
   -> M.IntMap Double
-  -> TraceStateOperator
-liftToTrace f direction offset i jumps =
-  unsafeTraceStateOperator $ \traceState ->
-    fromMaybe traceState $ do
-      x <- M.lookup i jumps -- jump height
-      let ds = snd $ traceState ^. diffSeries
-      x' <- (+offset) <$> f ds jumps i x -- new jump height
-      let updates = [(i, x')]
-          shift = case direction of
-            HoldLeft  -> 0
-            HoldRight -> x - x'
-      return $ updateDiffSeries shift updates traceState
+  -> TraceState
+  -> TraceState
+liftToTrace f direction offset i jumps traceState =
+  fromMaybe traceState $ do
+    x <- M.lookup i jumps -- jump height
+    let ds = snd $ traceState ^. diffSeries
+    x' <- (+offset) <$> f ds jumps i x -- new jump height
+    let updates = [(i, x')]
+        shift = case direction of
+          HoldLeft  -> 0
+          HoldRight -> x - x'
+    return $ updateDiffSeries shift updates traceState
 
 slopeEstimationRadius :: Int
 slopeEstimationRadius = 4
@@ -58,7 +58,8 @@ zeroJump, estimateSlopeBoth
   -> Double
   -> Int -- Index of jump
   -> M.IntMap Double
-  -> TraceStateOperator
+  -> TraceState
+  -> TraceState
 zeroJump           = liftToTrace  zeroJump'
 estimateSlopeBoth  = liftToTrace (estimateSlopeBoth'  slopeEstimationRadius)
 
@@ -106,33 +107,37 @@ interpolateBetweenJumps ::
      Double
   -> [Int]
   -> M.IntMap Double
-  -> TraceStateOperator
-interpolateBetweenJumps _ indices _ =
-  unsafeTraceStateOperator $ \traceState ->
-    case indices of
-      (j0:_:_) ->
-        let j1 = last indices
-            v = traceState ^. series
-            pointInterval = I.undiff $ I.fromEndpoints (j0, j1)
-            yPair = over both (v V.!) $ I.getEndpoints pointInterval
-            updates = I.interpolationUpdates pointInterval yPair
-        in  updateDiffSeries 0 updates traceState
-      _  -> traceState
+  -> TraceState
+  -> TraceState
+interpolateBetweenJumps _ indices _ traceState =
+  case indices of
+    (j0:_:_) ->
+      let j1 = last indices
+          v = traceState ^. series
+          pointInterval = I.undiff $ I.fromEndpoints (j0, j1)
+          yPair = over both (v V.!) $ I.getEndpoints pointInterval
+          updates = I.interpolationUpdates pointInterval yPair
+      in  updateDiffSeries 0 updates traceState
+    _  -> traceState
 
 -- 'Sum'
-matchGroup :: Double -> [Int] -> M.IntMap Double -> TraceStateOperator
-matchGroup offset indices jumps
+matchGroup
+  :: Double
+  -> [Int]
+  -> M.IntMap Double
+  -> TraceState
+  -> TraceState
+matchGroup offset indices jumps traceState
   | (_:_:_) <- indices
   , Just slopes <- traverse (`M.lookup` jumps) indices
-  = unsafeTraceStateOperator $ \traceState ->
-      let ds = snd $ traceState ^. diffSeries
-          slopeEsts = map (estimateSlope ds jumps radius) indices
-            where radius = 4
-          slopeErrors = zipWith (-) slopes slopeEsts
-          err = sum slopeErrors + head slopeEsts
-          newSlopes = err : tail slopeEsts
-            & _last %~ subtract offset
-            & _head %~ (+offset)
-          updates = zip indices newSlopes
-      in  updateDiffSeries 0 updates traceState
-  | otherwise = idOperator
+  = let ds = snd $ traceState ^. diffSeries
+        slopeEsts = map (estimateSlope ds jumps radius) indices
+          where radius = 4
+        slopeErrors = zipWith (-) slopes slopeEsts
+        err = sum slopeErrors + head slopeEsts
+        newSlopes = err : tail slopeEsts
+          & _last %~ subtract offset
+          & _head %~ (+offset)
+        updates = zip indices newSlopes
+    in  updateDiffSeries 0 updates traceState
+  | otherwise = traceState

@@ -86,6 +86,7 @@ import           Types.Bounds
 import qualified Types.IndexInterval        as I
 import qualified Types.Zipper               as Z
 
+import           Model.TraceOperators
 import           Model.TraceState
 
 -- TODO : Model initialization (default model?)
@@ -156,13 +157,13 @@ currentTrace = traces . Z.extract
 incrementVersion :: Model -> Model
 incrementVersion = over traceDataVersion succ
 
--- Lifting a TraceStateOperator via 'applyToModel' is the only way to manipulate
+-- Lifting a TraceOperator via 'applyToModel' is the only way to manipulate
 -- the data contained in a 'Model' from outside the module (other than by
 -- cropping, which only masks the data).
-applyToModel :: TraceStateOperator -> Model -> Model
-applyToModel tsOp = incrementVersion
+applyToModel :: TraceOperator -> Model -> Model
+applyToModel traceOp = incrementVersion
   . over (currentTrace . history)
-      (\hist -> Z.clobberRight (getOperator tsOp (hist ^. Z.extract)) hist)
+      (\hist -> Z.clobberRight (getOp traceOp (hist ^. Z.extract)) hist)
 
 -- Cropping
 

@@ -27,6 +27,7 @@ executable SonoCleaner
                      , Model.Labelling
                      , Model.Matching
                      , Model.Model
+                     , Model.TraceOperators
                      , Model.TraceState
                      , Model.Util
                      , Types.Bounds

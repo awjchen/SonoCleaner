@@ -211,40 +211,39 @@ applyOperation traceOp ats =
         { _nddDataVersion = _iddDataVersion (_atsDependencies ats)
         , _nddDataParams  = dataParams
         , _nddOperation   = traceOp }
-  in  case transform of
-    IdOperator -> ats & set atsDependencies newDependencies
-    TraceStateOperator op ->
-      let newTraceState = op (_atsTraceState ats)
-          newJumps = labelTraceStateJumps
-                       (_dpNoiseThreshold dataParams)
-                       (_dpLevelShiftThreshold dataParams)
-                       newTraceState
-          newMatches = matchJumps
-                     (_dpNoiseThreshold dataParams) newJumps newTraceState
-      in  AnnotatedTraceState
-            { _atsDependencies      = newDependencies
-            , _atsTraceState        = newTraceState
-            , _atsJumps             = newJumps
-            , _atsLevelShiftMatches = newMatches }
+  in  if isIdentityOp transform
+      then ats & set atsDependencies newDependencies
+      else  let newTraceState = getOp transform (_atsTraceState ats)
+                newJumps = labelTraceStateJumps
+                            (_dpNoiseThreshold dataParams)
+                            (_dpLevelShiftThreshold dataParams)
+                            newTraceState
+                newMatches = matchJumps
+                          (_dpNoiseThreshold dataParams) newJumps newTraceState
+            in  AnnotatedTraceState
+                  { _atsDependencies      = newDependencies
+                  , _atsTraceState        = newTraceState
+                  , _atsJumps             = newJumps
+                  , _atsLevelShiftMatches = newMatches }
 
 -- helper for 2
 getTraceStateTransform
   :: TraceOperation
   -> AnnotatedTraceState IdDataDependencies
-  -> TraceStateOperator
+  -> TraceOperator
 getTraceStateTransform traceOp ats = case traceOp of
-  IdentityOp -> idOperator
+  IdentityOp -> IdOperator
   AutoOp matchLevel' ->
-    matchJumpsTrace (_atsLevelShiftMatches ats) matchLevel'
+    applyMatchesOp (_atsLevelShiftMatches ats) matchLevel'
   ManualSingleOp action index offset holdPair -> case action of
-    SingleIgnore   -> idOperator
-    SingleZero     -> apply zeroJump
-    SingleSlopeFit -> apply estimateSlopeBoth
+    SingleIgnore   -> IdOperator
+    SingleZero     -> apply zeroJumpOp
+    SingleSlopeFit -> apply estimateSlopeBothOp
     where apply f = f (snd holdPair) offset index (_atsJumps ats)
   ManualMultipleOp action indices offset -> case action of
-    MultipleIgnore -> idOperator
-    MultipleLine   -> apply interpolateBetweenJumps
-    MultipleCancel -> apply matchGroup
+    MultipleIgnore -> IdOperator
+    MultipleLine   -> apply interpolateBetweenJumpsOp
+    MultipleCancel -> apply matchGroupOp
     where apply f = f offset indices (_atsJumps ats)
 
 -- 3

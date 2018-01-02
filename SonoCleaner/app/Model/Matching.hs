@@ -7,7 +7,7 @@
 
 module Model.Matching
   ( LevelShiftMatches, matchLevels
-  , matchJumpsTrace
+  , applyMatches
   , matchJumps
   ) where
 
@@ -109,11 +109,11 @@ interpolationLimit = 3
 -- Exported functions
 -------------------------------------------------------------------------------
 
-matchJumpsTrace :: LevelShiftMatches -> Int -> TraceStateOperator
-matchJumpsTrace matches progression =
+applyMatches :: LevelShiftMatches -> Int -> TraceState -> TraceState
+applyMatches matches progression =
   if null changes
-    then idOperator
-    else unsafeTraceStateOperator $ updateDiffSeries 0 changes
+    then id
+    else updateDiffSeries 0 changes
   where changes = concat $ take progression $ getLevelShiftMatches matches
 
 matchJumps
