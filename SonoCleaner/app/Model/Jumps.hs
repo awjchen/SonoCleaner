@@ -13,7 +13,6 @@ module Model.Jumps
 import           Control.Applicative
 import           Control.Lens        hiding (indices)
 import qualified Data.IntMap.Strict  as M
-import qualified Data.IntSet         as S
 import           Data.Maybe          (fromMaybe)
 import qualified Data.Vector.Unboxed as V
 

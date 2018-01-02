@@ -6,9 +6,6 @@ module Types.LevelShifts
   , MultipleAction (..)
   ) where
 
-import qualified Data.IntMap         as M
-import qualified Data.Vector.Unboxed as V
-
 -------------------------------------------------------------------------------
 -- Single level-shifts
 -------------------------------------------------------------------------------

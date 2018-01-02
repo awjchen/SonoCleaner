@@ -11,13 +11,17 @@ module Model.TraceOperators
   , interpolateBetweenJumpsOp
   , matchGroupOp
 
-  , applyMatchesOp  
+  , applyMatchesOp
   ) where
+
+import qualified Data.IntMap.Strict as M
 
 import           Model.Gaps
 import           Model.Jumps
 import           Model.Matching
 import           Model.TraceState
+
+import           Types.LevelShifts
 
 --------------------------------------------------------------------------------
 
@@ -36,15 +40,27 @@ getOp IdOperator        = id
 getOp (TraceOperator f) = f
 
 -- Gaps
+interpolateGapsOp
+  :: LabelledStratum
+  -> (Int, Int)
+  -> (Double, Double)
+  -> TraceOperator
 interpolateGapsOp = (fmap.fmap.fmap) TraceOperator interpolateGaps
 
 -- Jumps: single
-zeroJumpOp          = (fmap.fmap.fmap.fmap) TraceOperator zeroJump
+zeroJumpOp :: Hold -> Double -> Int -> M.IntMap Double -> TraceOperator
+zeroJumpOp = (fmap.fmap.fmap.fmap) TraceOperator zeroJump
+
+estimateSlopeBothOp :: Hold -> Double -> Int -> M.IntMap Double -> TraceOperator
 estimateSlopeBothOp = (fmap.fmap.fmap.fmap) TraceOperator estimateSlopeBoth
 
 -- Jumps: multiple
+interpolateBetweenJumpsOp :: Double -> [Int] -> M.IntMap Double -> TraceOperator
 interpolateBetweenJumpsOp = (fmap.fmap.fmap) TraceOperator interpolateBetweenJumps
-matchGroupOp              = (fmap.fmap.fmap) TraceOperator matchGroup
+
+matchGroupOp :: Double -> [Int] -> M.IntMap Double -> TraceOperator
+matchGroupOp = (fmap.fmap.fmap) TraceOperator matchGroup
 
 -- Matching
+applyMatchesOp :: LevelShiftMatches -> Int -> TraceOperator
 applyMatchesOp = (fmap.fmap) TraceOperator applyMatches

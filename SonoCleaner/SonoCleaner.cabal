@@ -63,5 +63,5 @@ executable SonoCleaner
                      , transformers
                      , vector
                      , vector-algorithms
-  ghc-options:         -rtsopts -threaded -O2
+  ghc-options:         -rtsopts -threaded -O2 -Wall -fno-warn-unused-top-binds
   default-language:    Haskell2010

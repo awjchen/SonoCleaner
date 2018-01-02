@@ -3,11 +3,9 @@ module Model.Slope
   , median
   ) where
 
-import           Control.Monad.ST
 import qualified Data.IntMap.Strict           as M
 import           Data.Vector.Algorithms.Intro (partialSort)
 import qualified Data.Vector.Unboxed          as V
-import qualified Data.Vector.Unboxed.Mutable  as VM
 import           Statistics.Test.Types
 import           Statistics.Test.WilcoxonT    (wilcoxonMatchedPairTest)
 import           Statistics.Types

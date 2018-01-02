@@ -1,11 +1,10 @@
 -- Data type that hold references to all relevant elements of the GUI
 
-{-# LANGUAGE RankNTypes      #-}
+{-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE TemplateHaskell #-}
 
 module Controller.GUIElements where
 
-import           Control.Applicative
 import           Control.Lens
 import           Control.Monad
 import qualified Data.Text           as T
@@ -124,94 +123,95 @@ importGUIElements builder = go where
     _ <- comboBoxAppendText shcb (T.pack "Left")
     comboBoxAppendText shcb (T.pack "Right")
 
-  importGUIElements' :: Builder -> IO GUIElements
-  importGUIElements' builder = do
-    let getButton      = builderGetObject builder castToButton
-        getSpinButton  = builderGetObject builder castToSpinButton
-        getCheckButton = builderGetObject builder castToCheckButton
-        getRadioButton = builderGetObject builder castToRadioButton
+importGUIElements' :: Builder -> IO GUIElements
+importGUIElements' builder = do
+  let getButton      = builderGetObject builder castToButton
+      getSpinButton  = builderGetObject builder castToSpinButton
+      getCheckButton = builderGetObject builder castToCheckButton
+      getRadioButton = builderGetObject builder castToRadioButton
 
-    return GUIElements{}
-      -- Controller window
-      <**> (set controllerWindow    <$> builderGetObject builder castToWindow "controllerWindow")
-      <**> (set image               <$> builderGetObject builder castToImage "image")
-      <**> (set imageEventBox       <$> builderGetObject builder castToEventBox "imageEventBox")
-      <**> (set controllerWindowBox <$> builderGetObject builder castToBox "controllerWindowBox")
-      <**> (set notebook            <$> builderGetObject builder castToNotebook "notebook")
+  -- Controller window
+  _controllerWindow <- builderGetObject builder castToWindow "controllerWindow"
+  _image <- builderGetObject builder castToImage "image"
+  _imageEventBox <- builderGetObject builder castToEventBox "imageEventBox"
+  _controllerWindowBox <- builderGetObject builder castToBox "controllerWindowBox"
+  _notebook <- builderGetObject builder castToNotebook "notebook"
 
-      -- Main page
-      <**> (set openButton <$> getButton "openButton")
-      <**> (set saveButton <$> getButton "saveButton")
+  -- Main page
+  _openButton <- getButton "openButton"
+  _saveButton <- getButton "saveButton"
 
-      <**> (set prevTraceButton <$> getButton "prevTraceButton")
-      <**> (set nextTraceButton <$> getButton "nextTraceButton")
-      <**> (set twinTraceButton <$> getButton "twinTraceButton")
+  _prevTraceButton <- getButton "prevTraceButton"
+  _nextTraceButton <- getButton "nextTraceButton"
+  _twinTraceButton <- getButton "twinTraceButton"
 
-      <**> (set undoButton <$> getButton "undoButton")
-      <**> (set redoButton <$> getButton "redoButton")
+  _undoButton <- getButton "undoButton"
+  _redoButton <- getButton "redoButton"
 
-      <**> (set autoButton      <$> getButton "autoButton")
-      <**> (set labellingButton <$> getButton "labellingButton")
+  _autoButton <- getButton "autoButton"
+  _labellingButton <- getButton "labellingButton"
 
-      <**> (set viewButton      <$> getButton "viewButton")
-      <**> (set cropButton      <$> getButton "cropButton")
-      <**> (set qualityButton   <$> getButton "qualityButton")
+  _viewButton <- getButton "viewButton"
+  _cropButton <- getButton "cropButton"
+  _qualityButton <- getButton "qualityButton"
 
-      <**> (set mainFullViewButton  <$> getButton "mainFullViewButton")
-      <**> (set mainFullViewXButton <$> getButton "mainFullViewXButton")
-      <**> (set mainFullViewYButton <$> getButton "mainFullViewYButton")
+  _mainFullViewButton <- getButton "mainFullViewButton"
+  _mainFullViewXButton <- getButton "mainFullViewXButton"
+  _mainFullViewYButton <- getButton "mainFullViewYButton"
 
-      -- Auto page
-      <**> (set matchLevelSpinButton          <$> getSpinButton "matchLevelSpinButton")
+  -- Auto page
+  _matchLevelSpinButton <- getSpinButton "matchLevelSpinButton"
 
-      <**> (set autoCancelButton <$> getButton "autoCancelButton")
-      <**> (set autoApplyButton  <$> getButton "autoApplyButton")
+  _autoCancelButton <- getButton "autoCancelButton"
+  _autoApplyButton <- getButton "autoApplyButton"
 
-      -- Single page
-      <**> (set singleHoldComboBox     <$> builderGetObject builder castToComboBox "singleHoldComboBox")
-      <**> (set singleOffsetSpinButton <$> getSpinButton "singleOffsetSpinButton")
+  -- Single page
+  _singleHoldComboBox <- builderGetObject builder castToComboBox "singleHoldComboBox"
+  _singleOffsetSpinButton <- getSpinButton "singleOffsetSpinButton"
 
-      <**> (set singleIgnoreRadioButton        <$> getRadioButton "singleIgnoreRadioButton")
-      <**> (set singleZeroRadioButton          <$> getRadioButton "singleZeroRadioButton")
-      <**> (set singleSlopeFitRadioButton      <$> getRadioButton "singleSlopeFitRadioButton")
+  _singleIgnoreRadioButton <- getRadioButton "singleIgnoreRadioButton"
+  _singleZeroRadioButton <- getRadioButton "singleZeroRadioButton"
+  _singleSlopeFitRadioButton <- getRadioButton "singleSlopeFitRadioButton"
 
-      <**> (set singleCancelButton <$> getButton "singleCancelButton")
-      <**> (set singleApplyButton  <$> getButton "singleApplyButton")
+  _singleCancelButton <- getButton "singleCancelButton"
+  _singleApplyButton <- getButton "singleApplyButton"
 
-      -- Multiple page
-      <**> (set multipleOffsetSpinButton <$> getSpinButton "multipleOffsetSpinButton")
+  -- Multiple page
+  _multipleOffsetSpinButton <- getSpinButton "multipleOffsetSpinButton"
 
-      <**> (set multipleIgnoreRadioButton <$> getRadioButton "multipleIgnoreRadioButton")
-      <**> (set multipleLineRadioButton   <$> getRadioButton "multipleLineRadioButton")
-      <**> (set multipleCancelRadioButton <$> getRadioButton "multipleCancelRadioButton")
+  _multipleIgnoreRadioButton <- getRadioButton "multipleIgnoreRadioButton"
+  _multipleLineRadioButton <- getRadioButton "multipleLineRadioButton"
+  _multipleCancelRadioButton <- getRadioButton "multipleCancelRadioButton"
 
-      <**> (set multipleCancelButton <$> getButton "multipleCancelButton")
-      <**> (set multipleApplyButton  <$> getButton "multipleApplyButton")
+  _multipleCancelButton <- getButton "multipleCancelButton"
+  _multipleApplyButton <- getButton "multipleApplyButton"
 
-      -- Label page
-      <**> (set levelShiftThresholdSpinButton <$> getSpinButton "levelShiftThresholdSpinButton")
-      <**> (set noiseThresholdSpinButton      <$> getSpinButton "noiseThresholdSpinButton")
+  -- Label page
+  _levelShiftThresholdSpinButton <- getSpinButton "levelShiftThresholdSpinButton"
+  _noiseThresholdSpinButton <- getSpinButton "noiseThresholdSpinButton"
 
-      <**> (set defaultParametersButton <$> getButton "defaultParametersButton")
+  _defaultParametersButton <- getButton "defaultParametersButton"
 
-      <**> (set labelBackButton <$> getButton "labelBackButton")
+  _labelBackButton <- getButton "labelBackButton"
 
-      -- View page
-      <**> (set showReplicateTracesCheckButton <$> getCheckButton "showReplicateTracesCheckButton")
+  -- View page
+  _showReplicateTracesCheckButton <- getCheckButton "showReplicateTracesCheckButton"
 
-      <**> (set referenceTraceComboBoxText <$> builderGetObject builder castToComboBox "referenceTraceComboBoxText")
+  _referenceTraceComboBoxText <- builderGetObject builder castToComboBox "referenceTraceComboBoxText"
 
-      <**> (set viewBackButton <$> getButton "viewBackButton")
+  _viewBackButton <- getButton "viewBackButton"
 
-      -- Crop page
-      <**> (set applyCropButton   <$> getButton "applyCropButton")
-      <**> (set applyUncropButton <$> getButton "applyUncropButton")
+  -- Crop page
+  _applyCropButton <- getButton "applyCropButton"
+  _applyUncropButton <- getButton "applyUncropButton"
 
-      <**> (set cropBackButton <$> getButton "cropBackButton")
+  _cropBackButton <- getButton "cropBackButton"
 
-      -- Quality page
-      <**> (set qualityGoodButton     <$> getButton "qualityGoodButton")
-      <**> (set qualityModerateButton <$> getButton "qualityModerateButton")
-      <**> (set qualityBadButton      <$> getButton "qualityBadButton")
+  -- Quality page
+  _qualityGoodButton <- getButton "qualityGoodButton"
+  _qualityModerateButton <- getButton "qualityModerateButton"
+  _qualityBadButton <- getButton "qualityBadButton"
 
-      <**> (set qualityBackButton <$> getButton "qualityBackButton")
+  _qualityBackButton <- getButton "qualityBackButton"
+
+  pure GUIElements{..}

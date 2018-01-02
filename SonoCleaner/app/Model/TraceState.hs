@@ -98,7 +98,5 @@ updateDiffSeries :: Double -> [(Int, Double)] -> TraceState -> TraceState
 updateDiffSeries offset updates traceState =
   let diffSeries'  =
         bimap (+offset) (V.// updates) (traceState ^. diffSeries)
-      series'      = undiff diffSeries'
-      diff2Series' = fmap diff diffSeries'
   in  setDiffSeries diffSeries' traceState
         & over modifiedJumps (S.union (S.fromList $ fst $ unzip updates))

@@ -11,18 +11,15 @@ module Model.Matching
   , matchJumps
   ) where
 
-import           Control.Arrow              ((&&&))
 import           Control.Lens
 import           Control.Monad.Loops        (whileJust)
 import           Control.Monad.ST
 import           Control.Monad.Trans.Class
 import           Control.Monad.Trans.Reader
 import           Data.Default
-import           Data.Foldable
 import           Data.Function
 import qualified Data.Heap                  as H
 import qualified Data.IntMap.Strict         as M
-import qualified Data.IntSet                as S
 import           Data.List                  (groupBy)
 import qualified Data.List.NonEmpty         as NE
 import           Data.Maybe
@@ -34,7 +31,6 @@ import           Model.Slope
 import           Model.TraceState
 
 import qualified Types.IndexInterval as I
-import           Types.Series
 
 -- Note: In this module, level-shifts are referred to as "jumps".
 
@@ -151,15 +147,14 @@ applyCorrection v jumps match
   | otherwise = redistribute jumps match
 
 redistribute :: M.IntMap Double -> Match -> [(Int, Double)]
-redistribute jumps (Match span err indices) =
-  let indices' = toList indices
-      slopeEstimates = map (fromJust . flip M.lookup jumps) indices'
-  in  zip indices' $ over _head (+err) slopeEstimates
+redistribute jumps (Match _ err jumpPositions) =
+  let slopeEstimates = map (fromJust . flip M.lookup jumps) jumpPositions
+  in  zip jumpPositions $ over _head (+err) slopeEstimates
 
 interpolate :: V.Vector Double -> Match -> [(Int, Double)]
-interpolate v (Match span err indices) =
-  let pointInterval = I.undiff $ I.fromEndpoints (i, i+span)
-        where i = head indices
+interpolate v (Match groupSpan _ jumpPositions) =
+  let pointInterval = I.undiff $ I.fromEndpoints (i, i+groupSpan)
+        where i = head jumpPositions
       yPair = over both (v V.!) $ I.getEndpoints pointInterval
   in  I.interpolationUpdates pointInterval yPair
 
@@ -200,19 +195,19 @@ popCandidate = do
 
 -- Try the next candidate
 tryCandidate :: MatchSeedCandidate -> Run s (Maybe Match)
-tryCandidate (span, jumpID) = do
-  searchResult <- searchZeroSum span jumpID
+tryCandidate (targetSpan, targetJumpID) = do
+  searchResult <- searchZeroSum targetSpan targetJumpID
   case searchResult of
     (NoSolution, _) -> pure Nothing
     (NextSpan nextSpan, _) -> do
       heapRef <- asks envHeap
-      lift $ modifySTRef' heapRef (H.insert (nextSpan, jumpID))
+      lift $ modifySTRef' heapRef (H.insert (nextSpan, targetJumpID))
       pure Nothing
     (ZeroSum err jumpPositions, jumpIDs) -> do
       chain <- asks envChain
       lift $ do
         mapM_ (IC.remove chain) jumpIDs
-        pure $ Just $ Match span err jumpPositions
+        pure $ Just $ Match targetSpan err jumpPositions
 
 -------------------------------------------------------------------------------
 -- Searching for zero-sum groups of jumps
@@ -229,7 +224,7 @@ searchZeroSum spanLimit startIdx = do
   mbVal  <- lift $ IC.query chain startIdx
   case mbVal of
     Nothing -> pure (NoSolution, [])
-    Just (startPos, startErr) -> lift $
+    Just (startPos, _) -> lift $
       foldChainFrom (searchZeroSumHelper errLim startPos (startPos+spanLimit))
                     (const NoSolution)
                     (0, 0, [])
@@ -285,20 +280,20 @@ foldChainFrom f g z idx chain = do
                   case mbAcc of
                     Left c  -> pure (c, [idx])
                     Right b -> foldChainFrom' f g b idx [idx] chain
-  where
-    -- Because 'next' obtains the both next index and its value simultaneously,
-    -- to avoid redundant queries we use the following invariant:
-    -- there exists an element at index 'idx' in the chain,
-    -- and its value is already incorporated into the accumulator 'z'.
-    foldChainFrom' :: (V.Unbox a)
-      => (a -> b -> ST s (Either c b)) -> (b -> c) -> b -> IC.ElemIndex
-      -> [IC.ElemIndex] -> IC.IndexedChain s a -> ST s (c, [IC.ElemIndex])
-    foldChainFrom' f g !z idx idxAcc chain = do
-      mbNext <- IC.next chain idx
-      case mbNext of  Nothing -> pure (g z, idxAcc)
-                      Just (nextIdx, a) -> do
-                        let idxAcc' = nextIdx : idxAcc
-                        mbAcc <- f a z
-                        case mbAcc of
-                          Left c  -> pure (c, idxAcc')
-                          Right b -> foldChainFrom' f g b nextIdx idxAcc' chain
+
+-- Because 'next' obtains the both next index and its value simultaneously,
+-- to avoid redundant queries we use the following invariant:
+-- there exists an element at index 'idx' in the chain,
+-- and its value is already incorporated into the accumulator 'z'.
+foldChainFrom' :: (V.Unbox a)
+  => (a -> b -> ST s (Either c b)) -> (b -> c) -> b -> IC.ElemIndex
+  -> [IC.ElemIndex] -> IC.IndexedChain s a -> ST s (c, [IC.ElemIndex])
+foldChainFrom' f g !z idx idxAcc chain = do
+  mbNext <- IC.next chain idx
+  case mbNext of  Nothing -> pure (g z, idxAcc)
+                  Just (nextIdx, a) -> do
+                    let idxAcc' = nextIdx : idxAcc
+                    mbAcc <- f a z
+                    case mbAcc of
+                      Left c  -> pure (c, idxAcc')
+                      Right b -> foldChainFrom' f g b nextIdx idxAcc' chain

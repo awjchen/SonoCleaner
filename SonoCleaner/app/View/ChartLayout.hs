@@ -10,12 +10,10 @@ module View.ChartLayout
   ( chartLayout
   ) where
 
-import           Control.Arrow            ((&&&))
 import           Control.Lens             hiding (indices)
 import           Data.Colour              (AlphaColour, blend, opaque)
 import           Data.Colour.Names
 import           Data.Default
-import           Data.Function            (on)
 import qualified Data.IntMap.Strict       as M
 import qualified Data.IntSet              as S
 import           Data.List                (groupBy)

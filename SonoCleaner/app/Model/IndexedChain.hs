@@ -51,23 +51,23 @@ next
 next chain@(IndexedChain v) i = do
   (_, nextIndex, _) <- VM.unsafeRead v i
   next' chain [] i nextIndex
-  where
-    next'
-      :: (VM.Unbox a)
-      => IndexedChain s a
-      -> [ElemIndex]
-      -> ElemIndex
-      -> ElemIndex
-      -> ST s (Maybe (ElemIndex, a))
-    next' chain@(IndexedChain v) badQueries i nextIndex =
-      let update = forM_ badQueries $ VM.unsafeModify v (set _2 nextIndex)
-      in  if nextIndex == nullIndex
-          then update >> return Nothing
-          else do
-            (nextExists, nextNextIndex, nextVal) <- VM.unsafeRead v nextIndex
-            if nextExists
-            then update >> return (Just (nextIndex, nextVal))
-            else next' chain (i:badQueries) nextIndex nextNextIndex
+
+next'
+  :: (VM.Unbox a)
+  => IndexedChain s a
+  -> [ElemIndex]
+  -> ElemIndex
+  -> ElemIndex
+  -> ST s (Maybe (ElemIndex, a))
+next' chain@(IndexedChain v) badQueries i nextIndex =
+  let update = forM_ badQueries $ VM.unsafeModify v (set _2 nextIndex)
+  in  if nextIndex == nullIndex
+      then update >> return Nothing
+      else do
+        (nextExists, nextNextIndex, nextVal) <- VM.unsafeRead v nextIndex
+        if nextExists
+        then update >> return (Just (nextIndex, nextVal))
+        else next' chain (i:badQueries) nextIndex nextNextIndex
 
 {-# INLINEABLE remove #-}
 remove :: (VM.Unbox a) => IndexedChain s a -> ElemIndex -> ST s ()

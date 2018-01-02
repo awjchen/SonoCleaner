@@ -5,11 +5,9 @@ module Model.Gaps
 
 import           Control.Arrow       ((***))
 import           Control.Lens        hiding (indexed)
-import qualified Data.IntSet         as S
 import qualified Data.Vector.Unboxed as V
 
 import qualified Types.IndexInterval as I
-import           Types.Series
 
 import           Model.TraceState
 

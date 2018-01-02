@@ -17,7 +17,6 @@ import           Data.Colour            (blend, opaque)
 import           Data.Colour.Names
 import           Data.Default
 import qualified Data.IntMap.Strict     as M
-import qualified Data.IntSet            as S
 import qualified Data.Text              as T
 import           Data.Text.Lens
 import qualified Data.Vector.Unboxed    as V
