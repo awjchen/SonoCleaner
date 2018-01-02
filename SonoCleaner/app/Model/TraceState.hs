@@ -13,7 +13,7 @@ module Model.TraceState
 
   , initTraceState
   , setSeries
-  , setDiffSeries
+  , updateDiffSeries
 
   , TraceStateOperator
   , pattern IdOperator
@@ -60,11 +60,12 @@ cropTraceState :: I.IndexInterval -> TraceState -> TraceState
 cropTraceState cropInterval ts =
   let croppedSeries = I.slice cropInterval (ts ^. series)
       context' = CroppedContext ts
+      modifiedJumps' = S.map (subtract (I.leftEndpoint cropInterval))
+                     $ S.filter (`I.elem` I.diff cropInterval)
+                     $ ts ^. modifiedJumps
   in  initTraceState croppedSeries
         & context .~ context'
-        & modifiedJumps .~
-          S.map (subtract (I.leftEndpoint cropInterval))
-                (S.filter (`I.elem` I.diff cropInterval) (ts ^. modifiedJumps))
+        & modifiedJumps .~ modifiedJumps'
 
 uncropTraceState :: I.IndexInterval -> TraceState -> TraceState
 uncropTraceState cropInterval ts = case ts ^. context of
@@ -72,10 +73,11 @@ uncropTraceState cropInterval ts = case ts ^. context of
   CroppedContext cts ->
     let start = I.leftEndpoint cropInterval
         ds = snd $ ts ^. diffSeries
-        updates = V.zip (V.imap (\i _ -> i+start) ds) ds
-        newDiffSeries = fmap (`V.update` updates) (cts ^. diffSeries)
-    in  setDiffSeries newDiffSeries cts
-          & modifiedJumps %~ S.union (S.map (+start) (ts ^. modifiedJumps))
+        updates = V.zip (V.enumFromN start (V.length ds)) ds
+        diffSeries' = fmap (`V.update` updates) (cts ^. diffSeries)
+        newModifiedJumps = S.map (+start) (ts ^. modifiedJumps)
+    in  setDiffSeries diffSeries' cts
+          & modifiedJumps %~ S.union newModifiedJumps
 
 --------------------------------------------------------------------------------
 -- Utility
@@ -110,6 +112,20 @@ setDiffSeries diffSeries' =
   . set diff2Series diff2Series'
   where series'      = undiff diffSeries'
         diff2Series' = fmap diff diffSeries'
+
+updateDiffSeries :: Double -> [(Int, Double)] -> TraceState -> TraceState
+updateDiffSeries offset updates traceState =
+  let diffSeries'  =
+        bimap (+offset) (V.// updates) (traceState ^. diffSeries)
+      series'      = undiff diffSeries'
+      diff2Series' = fmap diff diffSeries'
+  in  traceState
+        & makeBounds
+        . set series      series'
+        . set diffSeries  diffSeries'
+        . set diff2Series diff2Series'
+        . over modifiedJumps
+            (S.union (S.fromList $ fst $ unzip updates))
 
 makeBounds :: TraceState -> TraceState
 makeBounds traceState = let series' = traceState ^. series in traceState &

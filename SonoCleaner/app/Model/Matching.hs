@@ -110,11 +110,10 @@ interpolationLimit = 3
 
 matchJumpsTrace :: LevelShiftMatches -> Int -> TraceStateOperator
 matchJumpsTrace matches progression =
-  let changes = concat $ take progression $ getLevelShiftMatches matches
-  in  if null changes then idOperator else
-        unsafeTraceStateOperator $ \traceState -> traceState
-          & setDiffSeries (fmap (V.// changes) (traceState ^. diffSeries))
-          & modifiedJumps %~ S.union (S.fromList $ map fst changes)
+  if null changes
+    then idOperator
+    else unsafeTraceStateOperator $ updateDiffSeries 0 changes
+  where changes = concat $ take progression $ getLevelShiftMatches matches
 
 matchJumps
   :: Double

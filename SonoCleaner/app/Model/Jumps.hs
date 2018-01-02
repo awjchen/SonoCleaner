@@ -39,17 +39,15 @@ liftToTrace ::
   -> TraceStateOperator
 liftToTrace f direction offset i jumps =
   unsafeTraceStateOperator $ \traceState ->
-  fromMaybe traceState $ do
-    x <- M.lookup i jumps -- jump height
-    let (h, ds) = traceState ^. diffSeries
-    x' <- (+offset) <$> f ds jumps i x -- new jump height
-    let ds' = ds V.// [(i, x')]
-        h' = case direction of
-          HoldLeft  -> h
-          HoldRight -> h + x - x'
-        diffPair' = (h', ds')
-    return $ traceState & setDiffSeries diffPair'
-                        & modifiedJumps %~ S.insert i
+    fromMaybe traceState $ do
+      x <- M.lookup i jumps -- jump height
+      let ds = snd $ traceState ^. diffSeries
+      x' <- (+offset) <$> f ds jumps i x -- new jump height
+      let updates = [(i, x')]
+          shift = case direction of
+            HoldLeft  -> 0
+            HoldRight -> x - x'
+      return $ updateDiffSeries shift updates traceState
 
 slopeEstimationRadius :: Int
 slopeEstimationRadius = 4
@@ -133,11 +131,8 @@ matchGroup offset indices jumps
           newSlopes = err : tail slopeEsts
             & _last %~ subtract offset
             & _head %~ (+offset)
-          diffPair' = fmap (V.// zip indices newSlopes)
-                           (traceState ^. diffSeries)
-      in  traceState
-            & setDiffSeries diffPair'
-            & modifiedJumps %~ S.union (S.fromList indices)
+          updates = zip indices newSlopes
+      in  updateDiffSeries 0 updates traceState
   | otherwise = idOperator
 
 -------------------------------------------------------------------------------
