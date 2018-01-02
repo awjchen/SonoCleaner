@@ -25,57 +25,57 @@ setGUISensitivity ::
   -> IO ()
 setGUISensitivity guiElems model guiState = case guiState ^. currentPage of
   MainPage -> do
-    widgetSetSensitive (guiElems ^. openButton) True
-    widgetSetSensitive (guiElems ^. saveButton) True
+    widgetSetSensitive (openButton guiElems) True
+    widgetSetSensitive (saveButton guiElems) True
 
-    widgetSetSensitive (guiElems ^. prevTraceButton) (existsPrevTrace model)
-    widgetSetSensitive (guiElems ^. nextTraceButton) (existsNextTrace model)
-    widgetSetSensitive (guiElems ^. twinTraceButton)
+    widgetSetSensitive (prevTraceButton guiElems) (existsPrevTrace model)
+    widgetSetSensitive (nextTraceButton guiElems) (existsNextTrace model)
+    widgetSetSensitive (twinTraceButton guiElems)
       $ case getTwinTrace model of
           Nothing -> False
           Just _  -> True
 
-    widgetSetSensitive (guiElems ^. undoButton) (existsPrevHistory model)
-    widgetSetSensitive (guiElems ^. redoButton) (existsNextHistory model)
+    widgetSetSensitive (undoButton guiElems) (existsPrevHistory model)
+    widgetSetSensitive (redoButton guiElems) (existsNextHistory model)
 
-    widgetSetSensitive (guiElems ^. autoButton)      True
-    widgetSetSensitive (guiElems ^. labellingButton) True
+    widgetSetSensitive (autoButton guiElems)      True
+    widgetSetSensitive (labellingButton guiElems) True
 
-    widgetSetSensitive (guiElems ^. viewButton)    True
-    widgetSetSensitive (guiElems ^. cropButton)    True
-    widgetSetSensitive (guiElems ^. qualityButton) True
+    widgetSetSensitive (viewButton guiElems)    True
+    widgetSetSensitive (cropButton guiElems)    True
+    widgetSetSensitive (qualityButton guiElems) True
 
-    widgetSetSensitive (guiElems ^. mainFullViewButton)  True
-    widgetSetSensitive (guiElems ^. mainFullViewXButton) True
-    widgetSetSensitive (guiElems ^. mainFullViewYButton) True
+    widgetSetSensitive (mainFullViewButton guiElems)  True
+    widgetSetSensitive (mainFullViewXButton guiElems) True
+    widgetSetSensitive (mainFullViewYButton guiElems) True
 
-    widgetSetSensitive (guiElems ^. showReplicateTracesCheckButton) True
+    widgetSetSensitive (showReplicateTracesCheckButton guiElems) True
 
   AutoPage -> do
-    widgetSetSensitive (guiElems ^. autoApplyButton)
+    widgetSetSensitive (autoApplyButton guiElems)
                        (guiState ^. matchLevel /= 0)
 
   SinglePage _ -> do
     let singleSensitivty = case guiState ^. singleAction of
           SingleIgnore -> False
           _            -> True
-    widgetSetSensitive (guiElems ^. singleApplyButton)      singleSensitivty
-    widgetSetSensitive (guiElems ^. singleOffsetSpinButton) singleSensitivty
-    widgetSetSensitive (guiElems ^. singleHoldComboBox)     singleSensitivty
+    widgetSetSensitive (singleApplyButton guiElems)      singleSensitivty
+    widgetSetSensitive (singleOffsetSpinButton guiElems) singleSensitivty
+    widgetSetSensitive (singleHoldComboBox guiElems)     singleSensitivty
 
   MultiplePage _ -> do
-    widgetSetSensitive (guiElems ^. multipleOffsetSpinButton)
+    widgetSetSensitive (multipleOffsetSpinButton guiElems)
       $ (guiState ^. multipleAction) == MultipleCancel
 
-    widgetSetSensitive (guiElems ^. multipleApplyButton) $
+    widgetSetSensitive (multipleApplyButton guiElems) $
       case guiState ^. multipleAction of
             MultipleIgnore -> False
             _              -> True
 
   CropPage mCropInterval -> do
-    widgetSetSensitive (guiElems ^. applyCropButton)
+    widgetSetSensitive (applyCropButton guiElems)
       $ isJust mCropInterval
-    widgetSetSensitive (guiElems ^. applyUncropButton)
+    widgetSetSensitive (applyUncropButton guiElems)
       $ case getCurrentState model ^. context of
           RootContext      -> False
           CroppedContext _ -> True
@@ -88,19 +88,19 @@ setGUISensitivity guiElems model guiState = case guiState ^. currentPage of
 
 insensitizeAll :: GUIElements -> IO ()
 insensitizeAll guiElems = do
-  widgetSetSensitive (guiElems ^. openButton)      True
-  widgetSetSensitive (guiElems ^. prevTraceButton) False
-  widgetSetSensitive (guiElems ^. nextTraceButton) False
-  widgetSetSensitive (guiElems ^. twinTraceButton) False
-  widgetSetSensitive (guiElems ^. saveButton)      False
-  widgetSetSensitive (guiElems ^. undoButton)      False
-  widgetSetSensitive (guiElems ^. redoButton)      False
-  widgetSetSensitive (guiElems ^. autoButton)      False
-  widgetSetSensitive (guiElems ^. labellingButton) False
-  widgetSetSensitive (guiElems ^. viewButton)      False
-  widgetSetSensitive (guiElems ^. cropButton)      False
-  widgetSetSensitive (guiElems ^. qualityButton)   False
-  widgetSetSensitive (guiElems ^. mainFullViewButton)  False
-  widgetSetSensitive (guiElems ^. mainFullViewXButton) False
-  widgetSetSensitive (guiElems ^. mainFullViewYButton) False
-  widgetSetSensitive (guiElems ^. showReplicateTracesCheckButton) False
+  widgetSetSensitive (openButton guiElems)      True
+  widgetSetSensitive (prevTraceButton guiElems) False
+  widgetSetSensitive (nextTraceButton guiElems) False
+  widgetSetSensitive (twinTraceButton guiElems) False
+  widgetSetSensitive (saveButton guiElems)      False
+  widgetSetSensitive (undoButton guiElems)      False
+  widgetSetSensitive (redoButton guiElems)      False
+  widgetSetSensitive (autoButton guiElems)      False
+  widgetSetSensitive (labellingButton guiElems) False
+  widgetSetSensitive (viewButton guiElems)      False
+  widgetSetSensitive (cropButton guiElems)      False
+  widgetSetSensitive (qualityButton guiElems)   False
+  widgetSetSensitive (mainFullViewButton guiElems)  False
+  widgetSetSensitive (mainFullViewXButton guiElems) False
+  widgetSetSensitive (mainFullViewYButton guiElems) False
+  widgetSetSensitive (showReplicateTracesCheckButton guiElems) False

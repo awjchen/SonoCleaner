@@ -170,7 +170,7 @@ registerCallbacks guiElems modelTVar guiStateTVar
 
 setGUIParameters :: GUIElements -> GUIState -> IO ()
 setGUIParameters guiElems guiState = do
-  Gtk.set (guiElems ^. notebook)
+  Gtk.set (notebook guiElems)
     [ notebookPage := pageNumber (guiState ^. currentPage) ]
 
   forM_ spinButtons               $ setSpinButton       guiElems guiState
@@ -185,7 +185,7 @@ setGUIParameters guiElems guiState = do
 --------------------------------------------------------------------------------
 
 data ButtonCB = ButtonCB
-  { buttonRef            :: Lens' GUIElements Button
+  { buttonRef            :: GUIElements -> Button
   , buttonModelAction    :: Model -> Model
   , buttonGUIStateAction :: GUIElements -> Model -> GUIState -> GUIState
   }
@@ -199,7 +199,7 @@ registerButtonCB ::
   -> IO ()
 registerButtonCB guiElems modelTVar
   guiStateTVar withUpdate callback =
-  let button = guiElems ^. buttonRef callback
+  let button = buttonRef callback guiElems
   in  void $ on button buttonActivated $ withUpdate $ atomically $ do
     model <- readTVar modelTVar
     let newModel = buttonModelAction callback model
@@ -211,7 +211,7 @@ registerButtonCB guiElems modelTVar
 --------------------------------------------------------------------------------
 
 data SpinButtonCB a = SpinButtonCB
-  { spinButtonRef    :: Lens' GUIElements SpinButton
+  { spinButtonRef    :: GUIElements -> SpinButton
   , spinButtonTarget :: Lens' GUIState a
   }
 
@@ -222,7 +222,7 @@ registerSpinButtonIntCB ::
   -> SpinButtonCB Int
   -> IO ()
 registerSpinButtonIntCB guiElems guiStateTVar withPartialUpdate callback =
-  let spinButton = guiElems ^. spinButtonRef callback
+  let spinButton = spinButtonRef callback guiElems
   in  void $ afterValueSpinned spinButton $ withPartialUpdate $ do
         val <- spinButtonGetValueAsInt spinButton
         atomically $ modifyTVar' guiStateTVar
@@ -235,7 +235,7 @@ registerSpinButtonCB ::
   -> SpinButtonCB Double
   -> IO ()
 registerSpinButtonCB guiElems guiStateTVar withPartialUpdate callback =
-  let spinButton = guiElems ^. spinButtonRef callback
+  let spinButton = spinButtonRef callback guiElems
   in  void $ afterValueSpinned spinButton $ withPartialUpdate $ do
         val <- spinButtonGetValue spinButton
         atomically $ modifyTVar' guiStateTVar
@@ -249,7 +249,7 @@ registerLabelParameterSpinButton ::
   -> IO ()
 registerLabelParameterSpinButton guiElems
   guiStateTVar withPartialUpdate callback =
-  let spinButton = guiElems ^. spinButtonRef callback
+  let spinButton = spinButtonRef callback guiElems
   in  void $ afterValueSpinned spinButton $ withPartialUpdate $ do
       val <- spinButtonGetValue spinButton
       atomically $ do -- edit
@@ -261,14 +261,14 @@ setSpinButton :: GUIElements -> GUIState -> SpinButtonCB Double -> IO ()
 setSpinButton guiElems guiState spinButtonSpec =
   let spinButton = spinButtonRef    spinButtonSpec
       target     = spinButtonTarget spinButtonSpec
-  in  Gtk.set (guiElems ^. spinButton)
+  in  Gtk.set (spinButton guiElems)
         [ spinButtonValue := (guiState ^. target) ]
 
 setIntSpinButton :: GUIElements -> GUIState -> SpinButtonCB Int -> IO ()
 setIntSpinButton guiElems guiState spinButtonSpec =
   let spinButton = spinButtonRef    spinButtonSpec
       target     = spinButtonTarget spinButtonSpec
-  in  Gtk.set (guiElems ^. spinButton)
+  in  Gtk.set (spinButton guiElems)
         [ spinButtonValue := fromIntegral (guiState ^. target) ]
 
 --------------------------------------------------------------------------------
@@ -276,7 +276,7 @@ setIntSpinButton guiElems guiState spinButtonSpec =
 --------------------------------------------------------------------------------
 
 data CheckButtonCB = CheckButtonCB
-  { checkButtonRef    :: Lens' GUIElements CheckButton
+  { checkButtonRef    :: GUIElements -> CheckButton
   , checkButtonTarget :: Lens' GUIState Bool
   }
 
@@ -287,7 +287,7 @@ registerCheckButtonCB ::
   -> CheckButtonCB
   -> IO ()
 registerCheckButtonCB guiElems guiStateTVar withPartialUpdate callback =
-  let checkButton = guiElems ^. checkButtonRef callback
+  let checkButton = (checkButtonRef callback) guiElems
   in  void $ on checkButton buttonActivated $ withPartialUpdate $ do
         active <- toggleButtonGetActive checkButton
         atomically $ modifyTVar' guiStateTVar
@@ -297,7 +297,7 @@ setCheckButton :: GUIElements -> GUIState -> CheckButtonCB -> IO ()
 setCheckButton guiElems guiState checkButtonSpec =
   let checkButton = checkButtonRef    checkButtonSpec
       target      = checkButtonTarget checkButtonSpec
-  in  Gtk.set (guiElems ^. checkButton)
+  in  Gtk.set (checkButton guiElems)
               [ toggleButtonActive := (guiState ^. target) ]
 
 --------------------------------------------------------------------------------
@@ -305,7 +305,7 @@ setCheckButton guiElems guiState checkButtonSpec =
 --------------------------------------------------------------------------------
 
 data ComboBoxTextCB = forall a. ComboBoxTextCB
-  (Lens' GUIElements ComboBox) -- comboBoxRef
+  (GUIElements -> ComboBox)    -- comboBoxRef
   (Lens' GUIState (Int, a))    -- comboBoxTarget
   (Maybe T.Text -> a)          -- comboBoxReader
 
@@ -317,7 +317,7 @@ registerComboBoxTextCB ::
   -> IO ()
 registerComboBoxTextCB guiElems guiStateTVar withPartialUpdate
   (ComboBoxTextCB ref target reader) =
-  let comboBox = guiElems ^. ref
+  let comboBox = ref guiElems
   in  void $ on comboBox changed $ withPartialUpdate $ do
     index <- comboBoxGetActive comboBox
     listStore <- comboBoxGetModelText comboBox
@@ -327,7 +327,7 @@ registerComboBoxTextCB guiElems guiStateTVar withPartialUpdate
 
 setComboBoxText :: GUIElements -> GUIState -> ComboBoxTextCB -> IO ()
 setComboBoxText guiElems guiState (ComboBoxTextCB ref target _) =
-  let comboBox = guiElems ^. ref
+  let comboBox = ref guiElems
       index = guiState ^. target . _1
   in  comboBoxSetActive comboBox index
 
@@ -336,13 +336,13 @@ setComboBoxText guiElems guiState (ComboBoxTextCB ref target _) =
 --------------------------------------------------------------------------------
 
 data RadioButtonCB = forall a. RadioButtonCB
-  (Lens' GUIElements RadioButton) -- radioButtonRef
+  (GUIElements -> RadioButton)    -- radioButtonRef
   (Lens' GUIState a)              -- radioButtonTarget
   a                               -- radioButtonValue
 
 data RadioButtonGroup = forall a. (Bounded a, Enum a) => RadioButtonGroup
-  (Lens' GUIState a)                   -- radioButtonGroupTarget
-  (a -> Lens' GUIElements RadioButton) -- radioButtonGrouping
+  (Lens' GUIState a)                -- radioButtonGroupTarget
+  (a -> GUIElements -> RadioButton) -- radioButtonGrouping
 
 registerRadioButtonCB ::
      GUIElements
@@ -352,7 +352,7 @@ registerRadioButtonCB ::
   -> IO ()
 registerRadioButtonCB guiElems guiStateTVar withPartialUpdate
   (RadioButtonCB ref target value) =
-  let radioButton = guiElems ^. ref
+  let radioButton = ref guiElems
   in  void $ on radioButton buttonActivated $ withPartialUpdate $ do
         active <- toggleButtonGetActive radioButton
         when active $ atomically $ modifyTVar' guiStateTVar $ set target value
@@ -372,5 +372,5 @@ registerRadioButtonGroupCB guiElems guiStateTVar withPartialUpdate
 setRadioButtonGroup :: GUIElements -> GUIState -> RadioButtonGroup -> IO ()
 setRadioButtonGroup guiElems guiState (RadioButtonGroup target grouping) =
   let val          = guiState ^. target
-      radioButton  = guiElems ^. grouping val
+      radioButton  = grouping val guiElems
   in  Gtk.set radioButton [ toggleButtonActive := True ]

@@ -81,11 +81,11 @@ controllerMain = do
   (initializeInterpreter, getChart, getMatches, getJumps, getNewModel)
     <- setupInterpreter
 
-  windowSetDefaultSize (guiElems ^. controllerWindow) 1024 640
+  windowSetDefaultSize (controllerWindow guiElems) 1024 640
 
-  (pickFnTVar, requestDraw) <- setupRenderer (guiElems ^. controllerWindow)
-                                             (guiElems ^. image)
-                                             (guiElems ^. controllerWindowBox)
+  (pickFnTVar, requestDraw) <- setupRenderer (controllerWindow guiElems)
+                                             (image guiElems)
+                                             (controllerWindowBox guiElems)
 
   -- I am not very famillair with GTK+3, but as far as I know, GTK+3 GUI actions
   -- requiring updates to either the view or the GUI may trigger other such
@@ -148,17 +148,17 @@ controllerMain = do
   let quitWithConfirmation :: EventM EAny Bool
       quitWithConfirmation = liftIO $ do
         isResponseConfirm <-
-          confirmDialog (guiElems ^. controllerWindow) "Exit the program?"
+          confirmDialog (controllerWindow guiElems) "Exit the program?"
         if isResponseConfirm
           then mainQuit >> return False
           else return True
 
-  _ <- view controllerWindow guiElems `on` deleteEvent $ quitWithConfirmation
+  _ <- controllerWindow guiElems `on` deleteEvent $ quitWithConfirmation
 
   -- Writing files
   fileChooserSaveDialog <-
     fileChooserDialogNew (Just "Save an .ssa file")
-                         (Just (guiElems ^. controllerWindow))
+                         (Just (controllerWindow guiElems))
                          FileChooserActionSave
                          [   ("Cancel" :: String, ResponseCancel)
                            , ("Save"   :: String, ResponseAccept) ]
@@ -166,7 +166,7 @@ controllerMain = do
   fileChooserSetSelectMultiple          fileChooserSaveDialog False
   fileChooserSetDoOverwriteConfirmation fileChooserSaveDialog True
 
-  _ <- (guiElems ^. saveButton) `on` buttonActivated $ do
+  _ <- saveButton guiElems `on` buttonActivated $ do
     (originalDirectory, originalFileName) <-
       splitFileName . getFilePath <$> atomically (readTVar modelTVar)
     _ <- fileChooserSetCurrentFolder fileChooserSaveDialog originalDirectory
@@ -182,13 +182,13 @@ controllerMain = do
           Nothing -> return ()
           Just filePath -> atomically (readTVar modelTVar)
                        >>= saveSSAFile filePath
-                       >>= messageDialog (guiElems ^. controllerWindow)
+                       >>= messageDialog (controllerWindow guiElems)
       _ -> return ()
 
   -- Reading files
   fileChooserOpenDialog <- do
     fc <- fileChooserDialogNew (Just "Open an .ssa file")
-                               (Just (guiElems ^. controllerWindow))
+                               (Just (controllerWindow guiElems))
                                FileChooserActionOpen
                                [   ("Cancel" :: String, ResponseCancel)
                                  , ("Open"   :: String, ResponseAccept) ]
@@ -200,11 +200,11 @@ controllerMain = do
 
     return fc
 
-  _ <- (guiElems ^. openButton) `on` buttonActivated $ do
+  _ <- openButton guiElems `on` buttonActivated $ do
     responseID <- dialogRun fileChooserOpenDialog
     widgetHide fileChooserOpenDialog
     case responseID of
-      ResponseAccept -> guiRunExceptT (guiElems ^. controllerWindow) $ do
+      ResponseAccept -> guiRunExceptT (controllerWindow guiElems) $ do
         mFilePath <- liftIO $ fileChooserGetFilename fileChooserOpenDialog
         case mFilePath of
           Nothing -> ExceptT $ return $ Left "Could not get any files."
@@ -218,10 +218,10 @@ controllerMain = do
                 writeTVar guiStateTVar $ guiState &
                   setDefaultViewBounds model
                 initializeInterpreter model guiState
-              widgetShowAll (guiElems ^. controllerWindow)
+              widgetShowAll (controllerWindow guiElems)
 
               let labels = getLabels model
-                  cb = guiElems ^. referenceTraceComboBoxText
+                  cb = referenceTraceComboBoxText guiElems
               _ <- comboBoxSetModelText cb
               _ <- comboBoxAppendText cb (T.pack "None")
               forM_ labels $ comboBoxAppendText cb . T.pack
@@ -230,7 +230,7 @@ controllerMain = do
       _ -> return ()
 
   -- Auto page
-  _ <- (guiElems ^. autoButton) `on` buttonActivated $ withUpdate $ do
+  _ <- autoButton guiElems `on` buttonActivated $ withUpdate $ do
     matchLevels' <- atomically $ do
       model <- readTVar modelTVar
       guiState <- readTVar guiStateTVar
@@ -245,10 +245,10 @@ controllerMain = do
     let lvls = fromIntegral matchLevels'
         sqrtLvls = fromIntegral (floor $ sqrt lvls :: Integer)
     adjustment <- adjustmentNew 0 0 lvls 1 sqrtLvls 0
-    spinButtonSetAdjustment (guiElems ^. matchLevelSpinButton) adjustment
+    spinButtonSetAdjustment (matchLevelSpinButton guiElems) adjustment
 
   -- Applying cropping
-  _ <- (guiElems ^. applyCropButton) `on` buttonActivated
+  _ <- applyCropButton guiElems `on` buttonActivated
     $ withUpdate $ atomically $ do
       guiState <- readTVar guiStateTVar
       case guiState ^. currentPage of
@@ -267,9 +267,9 @@ controllerMain = do
         writeTVar modelTVar newModel
         modifyTVar' guiStateTVar resetGUIPreservingOptions
 
-  _ <- (guiElems ^. autoApplyButton)     `on` buttonActivated $ apply
-  _ <- (guiElems ^. singleApplyButton)   `on` buttonActivated $ apply
-  _ <- (guiElems ^. multipleApplyButton) `on` buttonActivated $ apply
+  _ <- autoApplyButton guiElems     `on` buttonActivated $ apply
+  _ <- singleApplyButton guiElems   `on` buttonActivated $ apply
+  _ <- multipleApplyButton guiElems `on` buttonActivated $ apply
 
   -------------------------------------------------------------------------------
   -- Mouse callbacks
@@ -277,7 +277,7 @@ controllerMain = do
   -- See Controller.Mouse for the definition of mouse gestures
 
   -- Zooming
-  _ <- (guiElems ^. imageEventBox) `on` scrollEvent $ do
+  _ <- imageEventBox guiElems `on` scrollEvent $ do
     pickFn <- liftIO $ readTVarIO pickFnTVar
     scrollDirection <- eventScrollDirection
     modifiers <- eventModifier
@@ -302,13 +302,13 @@ controllerMain = do
     return False
 
   -- Capturing mouse button presses
-  _ <- (guiElems ^. imageEventBox) `on` buttonPressEvent $ do
+  _ <- imageEventBox guiElems `on` buttonPressEvent $ do
     mouseEvent <- captureMouseEvent pickFnTVar
     liftIO $ atomically $ fillTMVar lastMousePressTMVar mouseEvent
     return False
 
   -- Capturing mouse button releases
-  _ <- (guiElems ^. imageEventBox) `on` buttonReleaseEvent $ do
+  _ <- imageEventBox guiElems `on` buttonReleaseEvent $ do
     maybeMouseEvent1 <- liftIO $ atomically $ tryReadTMVar lastMousePressTMVar
     case maybeMouseEvent1 of
       Nothing -> return False
@@ -392,8 +392,8 @@ controllerMain = do
   -- Go
   --------------------------------------------------------------------------------
 
-  widgetShowAll (guiElems ^. controllerWindow)
-  widgetHide (guiElems ^. image)
+  widgetShowAll (controllerWindow guiElems)
+  widgetHide (image guiElems)
 
   -- We use `insensitizeAll` to limit GUI functionality before any files have
   -- been opened, since otherwise the program as is will try to operate on an

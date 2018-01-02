@@ -26,7 +26,7 @@ import           Controller.GUIState
 -- acting on GUI elements, for example, by clicking or toggling buttons.
 
 data GUIAction =
-  forall a. WidgetClass a => GUIAction (Lens' GUIElements a) (a -> IO ())
+  forall a. WidgetClass a => GUIAction (GUIElements -> a) (a -> IO ())
 
 type Keybinding = ((String, [Modifier]), GUIAction)
 
@@ -166,14 +166,14 @@ registerKeyboardShortcuts guiElems guiStateMVar = do
 
         case lookup keyCombination bindings of
           Just (GUIAction ref action) ->
-            let guiElement = guiElems ^. ref
+            let guiElement = ref guiElems
             in  liftIO $ do
               isSensitive <- widgetIsSensitive guiElement
               when isSensitive $ action guiElement
               return True
           Nothing     -> return False
 
-  _ <- (guiElems ^. controllerWindow) `on` keyPressEvent $ interpretKeyPress
+  _ <- (controllerWindow guiElems) `on` keyPressEvent $ interpretKeyPress
 
   return ()
 

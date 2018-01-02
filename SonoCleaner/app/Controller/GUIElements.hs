@@ -1,14 +1,12 @@
 -- Data type that hold references to all relevant elements of the GUI
 
 {-# LANGUAGE RecordWildCards #-}
-{-# LANGUAGE TemplateHaskell #-}
 
 module Controller.GUIElements where
 
-import           Control.Lens
-import           Control.Monad
-import qualified Data.Text           as T
-import           Graphics.UI.Gtk     hiding (set)
+import           Control.Monad   (void)
+import qualified Data.Text       as T
+import           Graphics.UI.Gtk hiding (set)
 
 --------------------------------------------------------------------------------
 -- GUI elements
@@ -16,91 +14,89 @@ import           Graphics.UI.Gtk     hiding (set)
 
 data GUIElements = GUIElements
   -- Main window
-  { _controllerWindow               :: Window
-  , _image                          :: Image
-  , _imageEventBox                  :: EventBox
-  , _controllerWindowBox            :: Box
-  , _notebook                       :: Notebook
+  { controllerWindow               :: Window
+  , image                          :: Image
+  , imageEventBox                  :: EventBox
+  , controllerWindowBox            :: Box
+  , notebook                       :: Notebook
 
   -- Main page
-  , _openButton                     :: Button
-  , _saveButton                     :: Button
+  , openButton                     :: Button
+  , saveButton                     :: Button
 
-  , _prevTraceButton                :: Button
-  , _nextTraceButton                :: Button
-  , _twinTraceButton                :: Button
+  , prevTraceButton                :: Button
+  , nextTraceButton                :: Button
+  , twinTraceButton                :: Button
 
-  , _undoButton                     :: Button
-  , _redoButton                     :: Button
+  , undoButton                     :: Button
+  , redoButton                     :: Button
 
-  , _autoButton                     :: Button
-  , _labellingButton                :: Button
+  , autoButton                     :: Button
+  , labellingButton                :: Button
 
-  , _viewButton                     :: Button
-  , _cropButton                     :: Button
-  , _qualityButton                  :: Button
+  , viewButton                     :: Button
+  , cropButton                     :: Button
+  , qualityButton                  :: Button
 
-  , _mainFullViewButton             :: Button
-  , _mainFullViewXButton            :: Button
-  , _mainFullViewYButton            :: Button
+  , mainFullViewButton             :: Button
+  , mainFullViewXButton            :: Button
+  , mainFullViewYButton            :: Button
 
   -- Auto page
-  , _matchLevelSpinButton           :: SpinButton
+  , matchLevelSpinButton           :: SpinButton
 
-  , _autoCancelButton               :: Button
-  , _autoApplyButton                :: Button
+  , autoCancelButton               :: Button
+  , autoApplyButton                :: Button
 
   -- Single page
-  , _singleHoldComboBox             :: ComboBox
-  , _singleOffsetSpinButton         :: SpinButton
+  , singleHoldComboBox             :: ComboBox
+  , singleOffsetSpinButton         :: SpinButton
 
-  , _singleIgnoreRadioButton        :: RadioButton
-  , _singleZeroRadioButton          :: RadioButton
-  , _singleSlopeFitRadioButton      :: RadioButton
+  , singleIgnoreRadioButton        :: RadioButton
+  , singleZeroRadioButton          :: RadioButton
+  , singleSlopeFitRadioButton      :: RadioButton
 
-  , _singleCancelButton             :: Button
-  , _singleApplyButton              :: Button
+  , singleCancelButton             :: Button
+  , singleApplyButton              :: Button
 
   -- Multiple page
-  , _multipleOffsetSpinButton       :: SpinButton
+  , multipleOffsetSpinButton       :: SpinButton
 
-  , _multipleIgnoreRadioButton      :: RadioButton
-  , _multipleLineRadioButton        :: RadioButton
-  , _multipleCancelRadioButton      :: RadioButton
+  , multipleIgnoreRadioButton      :: RadioButton
+  , multipleLineRadioButton        :: RadioButton
+  , multipleCancelRadioButton      :: RadioButton
 
-  , _multipleCancelButton           :: Button
-  , _multipleApplyButton            :: Button
+  , multipleCancelButton           :: Button
+  , multipleApplyButton            :: Button
 
     -- Label page
-  , _levelShiftThresholdSpinButton  :: SpinButton
-  , _noiseThresholdSpinButton       :: SpinButton
+  , levelShiftThresholdSpinButton  :: SpinButton
+  , noiseThresholdSpinButton       :: SpinButton
 
-  , _defaultParametersButton        :: Button
+  , defaultParametersButton        :: Button
 
-  , _labelBackButton                :: Button
+  , labelBackButton                :: Button
 
     -- View page
-  , _showReplicateTracesCheckButton :: CheckButton
+  , showReplicateTracesCheckButton :: CheckButton
 
-  , _referenceTraceComboBoxText     :: ComboBox
+  , referenceTraceComboBoxText     :: ComboBox
 
-  , _viewBackButton                 :: Button
-
-    -- Crop page
-  , _applyCropButton                :: Button
-  , _applyUncropButton              :: Button
-
-  , _cropBackButton                 :: Button
+  , viewBackButton                 :: Button
 
     -- Crop page
-  , _qualityGoodButton              :: Button
-  , _qualityModerateButton          :: Button
-  , _qualityBadButton               :: Button
+  , applyCropButton                :: Button
+  , applyUncropButton              :: Button
 
-  , _qualityBackButton              :: Button
+  , cropBackButton                 :: Button
+
+    -- Crop page
+  , qualityGoodButton              :: Button
+  , qualityModerateButton          :: Button
+  , qualityBadButton               :: Button
+
+  , qualityBackButton              :: Button
   }
-
-makeLenses ''GUIElements
 
 --------------------------------------------------------------------------------
 -- Import GUI elements from Glade
@@ -116,9 +112,9 @@ importGUIElements builder = go where
   finalize :: GUIElements -> IO ()
   finalize guiElems = void $ do
     -- Set model of ComboBoxes to Text
-    _ <- comboBoxSetModelText (guiElems ^. referenceTraceComboBoxText)
+    _ <- comboBoxSetModelText (referenceTraceComboBoxText guiElems)
 
-    let shcb = guiElems ^. singleHoldComboBox
+    let shcb = singleHoldComboBox guiElems
     _ <- comboBoxSetModelText shcb
     _ <- comboBoxAppendText shcb (T.pack "Left")
     comboBoxAppendText shcb (T.pack "Right")
@@ -131,87 +127,87 @@ importGUIElements' builder = do
       getRadioButton = builderGetObject builder castToRadioButton
 
   -- Controller window
-  _controllerWindow <- builderGetObject builder castToWindow "controllerWindow"
-  _image <- builderGetObject builder castToImage "image"
-  _imageEventBox <- builderGetObject builder castToEventBox "imageEventBox"
-  _controllerWindowBox <- builderGetObject builder castToBox "controllerWindowBox"
-  _notebook <- builderGetObject builder castToNotebook "notebook"
+  controllerWindow <- builderGetObject builder castToWindow "controllerWindow"
+  image <- builderGetObject builder castToImage "image"
+  imageEventBox <- builderGetObject builder castToEventBox "imageEventBox"
+  controllerWindowBox <- builderGetObject builder castToBox "controllerWindowBox"
+  notebook <- builderGetObject builder castToNotebook "notebook"
 
   -- Main page
-  _openButton <- getButton "openButton"
-  _saveButton <- getButton "saveButton"
+  openButton <- getButton "openButton"
+  saveButton <- getButton "saveButton"
 
-  _prevTraceButton <- getButton "prevTraceButton"
-  _nextTraceButton <- getButton "nextTraceButton"
-  _twinTraceButton <- getButton "twinTraceButton"
+  prevTraceButton <- getButton "prevTraceButton"
+  nextTraceButton <- getButton "nextTraceButton"
+  twinTraceButton <- getButton "twinTraceButton"
 
-  _undoButton <- getButton "undoButton"
-  _redoButton <- getButton "redoButton"
+  undoButton <- getButton "undoButton"
+  redoButton <- getButton "redoButton"
 
-  _autoButton <- getButton "autoButton"
-  _labellingButton <- getButton "labellingButton"
+  autoButton <- getButton "autoButton"
+  labellingButton <- getButton "labellingButton"
 
-  _viewButton <- getButton "viewButton"
-  _cropButton <- getButton "cropButton"
-  _qualityButton <- getButton "qualityButton"
+  viewButton <- getButton "viewButton"
+  cropButton <- getButton "cropButton"
+  qualityButton <- getButton "qualityButton"
 
-  _mainFullViewButton <- getButton "mainFullViewButton"
-  _mainFullViewXButton <- getButton "mainFullViewXButton"
-  _mainFullViewYButton <- getButton "mainFullViewYButton"
+  mainFullViewButton <- getButton "mainFullViewButton"
+  mainFullViewXButton <- getButton "mainFullViewXButton"
+  mainFullViewYButton <- getButton "mainFullViewYButton"
 
   -- Auto page
-  _matchLevelSpinButton <- getSpinButton "matchLevelSpinButton"
+  matchLevelSpinButton <- getSpinButton "matchLevelSpinButton"
 
-  _autoCancelButton <- getButton "autoCancelButton"
-  _autoApplyButton <- getButton "autoApplyButton"
+  autoCancelButton <- getButton "autoCancelButton"
+  autoApplyButton <- getButton "autoApplyButton"
 
   -- Single page
-  _singleHoldComboBox <- builderGetObject builder castToComboBox "singleHoldComboBox"
-  _singleOffsetSpinButton <- getSpinButton "singleOffsetSpinButton"
+  singleHoldComboBox <- builderGetObject builder castToComboBox "singleHoldComboBox"
+  singleOffsetSpinButton <- getSpinButton "singleOffsetSpinButton"
 
-  _singleIgnoreRadioButton <- getRadioButton "singleIgnoreRadioButton"
-  _singleZeroRadioButton <- getRadioButton "singleZeroRadioButton"
-  _singleSlopeFitRadioButton <- getRadioButton "singleSlopeFitRadioButton"
+  singleIgnoreRadioButton <- getRadioButton "singleIgnoreRadioButton"
+  singleZeroRadioButton <- getRadioButton "singleZeroRadioButton"
+  singleSlopeFitRadioButton <- getRadioButton "singleSlopeFitRadioButton"
 
-  _singleCancelButton <- getButton "singleCancelButton"
-  _singleApplyButton <- getButton "singleApplyButton"
+  singleCancelButton <- getButton "singleCancelButton"
+  singleApplyButton <- getButton "singleApplyButton"
 
   -- Multiple page
-  _multipleOffsetSpinButton <- getSpinButton "multipleOffsetSpinButton"
+  multipleOffsetSpinButton <- getSpinButton "multipleOffsetSpinButton"
 
-  _multipleIgnoreRadioButton <- getRadioButton "multipleIgnoreRadioButton"
-  _multipleLineRadioButton <- getRadioButton "multipleLineRadioButton"
-  _multipleCancelRadioButton <- getRadioButton "multipleCancelRadioButton"
+  multipleIgnoreRadioButton <- getRadioButton "multipleIgnoreRadioButton"
+  multipleLineRadioButton <- getRadioButton "multipleLineRadioButton"
+  multipleCancelRadioButton <- getRadioButton "multipleCancelRadioButton"
 
-  _multipleCancelButton <- getButton "multipleCancelButton"
-  _multipleApplyButton <- getButton "multipleApplyButton"
+  multipleCancelButton <- getButton "multipleCancelButton"
+  multipleApplyButton <- getButton "multipleApplyButton"
 
   -- Label page
-  _levelShiftThresholdSpinButton <- getSpinButton "levelShiftThresholdSpinButton"
-  _noiseThresholdSpinButton <- getSpinButton "noiseThresholdSpinButton"
+  levelShiftThresholdSpinButton <- getSpinButton "levelShiftThresholdSpinButton"
+  noiseThresholdSpinButton <- getSpinButton "noiseThresholdSpinButton"
 
-  _defaultParametersButton <- getButton "defaultParametersButton"
+  defaultParametersButton <- getButton "defaultParametersButton"
 
-  _labelBackButton <- getButton "labelBackButton"
+  labelBackButton <- getButton "labelBackButton"
 
   -- View page
-  _showReplicateTracesCheckButton <- getCheckButton "showReplicateTracesCheckButton"
+  showReplicateTracesCheckButton <- getCheckButton "showReplicateTracesCheckButton"
 
-  _referenceTraceComboBoxText <- builderGetObject builder castToComboBox "referenceTraceComboBoxText"
+  referenceTraceComboBoxText <- builderGetObject builder castToComboBox "referenceTraceComboBoxText"
 
-  _viewBackButton <- getButton "viewBackButton"
+  viewBackButton <- getButton "viewBackButton"
 
   -- Crop page
-  _applyCropButton <- getButton "applyCropButton"
-  _applyUncropButton <- getButton "applyUncropButton"
+  applyCropButton <- getButton "applyCropButton"
+  applyUncropButton <- getButton "applyUncropButton"
 
-  _cropBackButton <- getButton "cropBackButton"
+  cropBackButton <- getButton "cropBackButton"
 
   -- Quality page
-  _qualityGoodButton <- getButton "qualityGoodButton"
-  _qualityModerateButton <- getButton "qualityModerateButton"
-  _qualityBadButton <- getButton "qualityBadButton"
+  qualityGoodButton <- getButton "qualityGoodButton"
+  qualityModerateButton <- getButton "qualityModerateButton"
+  qualityBadButton <- getButton "qualityBadButton"
 
-  _qualityBackButton <- getButton "qualityBackButton"
+  qualityBackButton <- getButton "qualityBackButton"
 
   pure GUIElements{..}
