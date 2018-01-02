@@ -32,13 +32,12 @@ estimateSlope ds jumps radius i
 
 -- Fails if vector is empty
 median :: V.Vector Double -> Double
-median v =
-  let n = V.length v
-      n2 = n `quot` 2
-      avg x y = (x+y)/2
-  in  runST $ do
-        mv <- V.thaw v
-        partialSort mv n2
-        if odd n
-          then VM.read mv n2
-          else avg <$> VM.read mv (pred n2) <*> VM.read mv n2
+median v
+  | odd n = v' V.! middleIndex
+  | otherwise = avg (v' V.! pred middleIndex) (v' V.! middleIndex)
+  where
+    n = V.length v
+    middle = n `quot` 2 + 1
+    middleIndex = pred middle
+    v' = V.modify (`partialSort` middle) v
+    avg x y = (x+y)/2
