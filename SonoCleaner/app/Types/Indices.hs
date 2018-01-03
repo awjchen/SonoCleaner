@@ -20,6 +20,9 @@ module Types.Indices
 
   , iiLeft
   , iiMember
+  , iiShrink
+  , iiToVector
+  , iiIndex
 
   , iiDiff
   , iiUndiff
@@ -33,26 +36,37 @@ module Types.Indices
   , ivIndex
   , ivSlice
 
-  , ivLength
-  , ivEnumFromN
-  , ivIndexed
-  , ivMap
-  , ivZip
-  , (*//)
-  , ivUpdate
+  , ivExtend0 
+  , ivExtend1 
+  , ivExtend2 
 
   , ivAverage
   , ivMinMax
+  , ivCount
+
+  , ivLength
+  , ivEnumFromN
+  , (*//)
+  , ivUpdate
+  , ivIndexed
+  , ivMap
+  , ivZip
+  , ivFindIndices2
 
   , IIntSet
 
   , iisOffset
 
-  , iisFromList
+  , iisFromList1
   , iisFilter
+
+  , IIntMap
+
+  , iimFromList1
   ) where
 
 import           Data.Coerce
+import qualified Data.IntMap                  as M
 import qualified Data.IntSet                  as S
 import qualified Data.Vector.Unboxed          as V
 import           Data.Vector.Unboxed.Deriving
@@ -132,6 +146,15 @@ iiLeft (IndexInterval (l, _)) = l
 iiMember :: Ord i => i -> IndexInterval i -> Bool
 iiMember i (IndexInterval (l, u)) = l <= i && i <= u
 
+iiShrink :: Enum i => IndexInterval i -> IndexInterval i
+iiShrink (IndexInterval (l, u)) = IndexInterval (succ l, pred u)
+
+iiToVector :: (IsInt i, V.Unbox i, Num i) => IndexInterval i -> V.Vector i
+iiToVector (IndexInterval (l, u)) = V.enumFromN l (toInt $ u-l+1)
+
+iiIndex :: (IsInt i, V.Unbox a) => IVector i a -> IndexInterval i -> (a, a)
+iiIndex (IVector v) (IndexInterval (l, u)) = (v V.! toInt l, v V.! toInt u)
+
 -- Index conversions
 
 iiDiff :: (IsInt i, IsInt (ISucc i), Enum i)
@@ -139,8 +162,8 @@ iiDiff :: (IsInt i, IsInt (ISucc i), Enum i)
 iiDiff (IndexInterval (l, u)) = IndexInterval ( fromInt $ toInt l
                                               , fromInt $ toInt $ pred u )
 
-iiUndiff :: (IsInt i, IsInt (ISucc i), Enum i)
-         => IndexInterval i -> IndexInterval (ISucc i)
+iiUndiff :: (IsInt i, IsInt (ISucc i), Enum (ISucc i))
+         => IndexInterval (ISucc i) -> IndexInterval i
 iiUndiff (IndexInterval (l, u)) = IndexInterval ( fromInt $ toInt l
                                                 , fromInt $ toInt $ succ u )
 
@@ -150,7 +173,8 @@ iiUndiff (IndexInterval (l, u)) = IndexInterval ( fromInt $ toInt l
 
 -- The individual elements of an `IVector i a` may only be accessed through the
 -- use of indices of type `i`. This precludes many functions from the regular
--- Vector API, for example, folds.
+-- Vector API, like folding, but also those which do not preserve indices, like
+-- filtering.
 newtype IVector i a = IVector { runIVector :: V.Vector a }
   deriving (Monoid)
 
@@ -165,7 +189,7 @@ ivDiff (IVector v) = (V.head v, IVector $ V.zipWith (-) (V.tail v) v)
 ivUndiff :: (Num a, V.Unbox a) => (a, IVector (ISucc i) a) -> IVector i a
 ivUndiff (h, (IVector v)) = IVector $ V.scanl' (+) h v
 
--- Indexing
+-- Indexing by typesafe indices
 
 ivIndex :: (IsInt i, V.Unbox a) => IVector i a -> i -> a
 ivIndex (IVector v) i = v V.! toInt i
@@ -175,39 +199,29 @@ ivSlice (IndexInterval (i, j)) (IVector v) =
   let i' = toInt i; j' = toInt j
   in  IVector $ V.slice i' (j'-i'+1) v
 
---------------------------------------------------------------------------------
--- Indexed `Vectors` -- Vector API
---------------------------------------------------------------------------------
+-- Index-specific functions
 
-ivLength :: (IsInt i, V.Unbox a) => IVector i a -> i
-ivLength = fromInt . V.length . coerce
+ivExtend0 :: V.Unbox a => Int -> IVector Index0 a -> IVector Index0 a
+ivExtend0 r (IVector v) = IVector $ V.concat
+  [ V.replicate r (V.head v)
+  , v
+  , V.replicate r (V.last v) ]
 
-ivEnumFromN :: (IsInt i, Num a, V.Unbox a) =>  a -> i -> IVector i a
-ivEnumFromN z i = IVector $ V.enumFromN z (toInt i)
+ivExtend1 :: (V.Unbox a, Num a) => Int -> IVector Index1 a -> IVector Index1 a
+ivExtend1 r (IVector dv) = IVector $ V.concat
+  [ V.replicate r 0
+  , dv
+  , V.replicate r 0 ]
 
-_ivIndices :: (V.Unbox i, Num i, V.Unbox a) => IVector i a -> IVector i i
-_ivIndices (IVector v) = IVector $ V.enumFromN 0 (V.length v)
+ivExtend2 :: (V.Unbox a, Num a) => Int -> IVector Index2 a -> IVector Index2 a
+ivExtend2 r (IVector ddv) = IVector $ V.concat
+  [ V.replicate (r-1) 0
+  , V.singleton (V.head ddv)
+  , ddv
+  , V.singleton (negate $ V.last ddv)
+  , V.replicate (r-1) 0 ]
 
-ivIndexed :: (V.Unbox i, Num i, V.Unbox a) => IVector i a -> IVector i (i, a)
-ivIndexed iv = ivZip (_ivIndices iv) iv
-
-ivMap :: (V.Unbox a, V.Unbox b) => (a -> b) -> IVector i a -> IVector i b
-ivMap f (IVector v) = IVector $ V.map f v
-
-ivZip :: (V.Unbox a, V.Unbox b)
-      => IVector i a -> IVector i b -> IVector i (a, b)
-ivZip (IVector v) (IVector w) = IVector $ V.zip v w
-
--- * is just an arbitrary prefix, since 'iv' canont be used.
-(*//) :: V.Unbox a => IVector Index1 a -> [(Index1, a)] -> IVector Index1 a
-(*//) (IVector v) updates = IVector $ v V.// (coerce updates)
-
-ivUpdate :: V.Unbox a
-         => IVector Index1 a -> IVector Index1 (Index1, a) -> IVector Index1 a
-ivUpdate (IVector v) (IVector updates) =
-  IVector $ V.update v (V.map coerce updates)
-
--- Folds
+-- Special functions
 
 ivAverage :: IVector i Double -> Double
 ivAverage (IVector v) = V.sum v / fromIntegral (V.length v)
@@ -222,6 +236,57 @@ ivMinMax (IVector v) =
         maxAcc' = max x maxAcc
     in  minAcc' `seq` maxAcc' `seq` (minAcc', maxAcc')
 
+ivCount :: V.Unbox a => (a -> Bool) -> IVector i a -> Int
+ivCount f (IVector v) = V.length $ V.filter f v
+
+--------------------------------------------------------------------------------
+-- Indexed `Vectors` -- Vector API
+--------------------------------------------------------------------------------
+
+-- Accessors
+
+ivLength :: (IsInt i, V.Unbox a) => IVector i a -> i
+ivLength = fromInt . V.length . coerce
+
+-- Construction
+
+ivEnumFromN :: (IsInt i, Num a, V.Unbox a) =>  a -> i -> IVector i a
+ivEnumFromN z i = IVector $ V.enumFromN z (toInt i)
+
+-- ivConcat :: V.Unbox a => [IVector i a] -> IVector i a
+-- ivConcat = IVector . V.concat . coerce
+
+-- Modifying vectors
+
+-- * is just an arbitrary prefix, since 'iv' canont be used.
+(*//) :: V.Unbox a => IVector Index1 a -> [(Index1, a)] -> IVector Index1 a
+(*//) (IVector v) updates = IVector $ v V.// (coerce updates)
+
+ivUpdate :: V.Unbox a
+         => IVector Index1 a -> IVector Index1 (Index1, a) -> IVector Index1 a
+ivUpdate (IVector v) (IVector updates) =
+  IVector $ V.update v (V.map coerce updates)
+
+-- Elementwise operations
+
+_ivIndices :: (V.Unbox i, Num i, V.Unbox a) => IVector i a -> IVector i i
+_ivIndices (IVector v) = IVector $ V.enumFromN 0 (V.length v)
+
+ivIndexed :: (V.Unbox i, Num i, V.Unbox a) => IVector i a -> IVector i (i, a)
+ivIndexed iv = ivZip (_ivIndices iv) iv
+
+ivMap :: (V.Unbox a, V.Unbox b) => (a -> b) -> IVector i a -> IVector i b
+ivMap f (IVector v) = IVector $ V.map f v
+
+ivZip :: (V.Unbox a, V.Unbox b)
+      => IVector i a -> IVector i b -> IVector i (a, b)
+ivZip (IVector v) (IVector w) = IVector $ V.zip v w
+
+-- The type is specialized because I don't know how use coerce polymorphically.
+ivFindIndices2 :: (V.Unbox a)
+              => (a -> Bool) -> IVector Index2 a -> V.Vector Index2
+ivFindIndices2 f (IVector v) = coerce $ V.findIndices f v
+
 --------------------------------------------------------------------------------
 -- Indexed `IntSet`s
 --------------------------------------------------------------------------------
@@ -229,8 +294,8 @@ ivMinMax (IVector v) =
 newtype IIntSet i   = IIntSet { runIIntSet :: S.IntSet }
   deriving (Monoid)
 
-_iintset :: S.IntSet -> IIntSet i
-_iintset = IIntSet
+-- _iintset :: S.IntSet -> IIntSet i
+-- _iintset = IIntSet
 
 iisOffset :: IsInt i => i -> IIntSet i -> IIntSet i
 iisOffset i (IIntSet s) =
@@ -240,10 +305,20 @@ iisOffset i (IIntSet s) =
 -- Indexed `IntSet`s -- IntSet API
 --------------------------------------------------------------------------------
 
--- The type is specialized to Index1 because I don't know how use coerce
--- polymorphically.
-iisFromList :: [Index1] -> IIntSet Index1
-iisFromList = IIntSet . S.fromList . coerce
+-- The type is specialized because I don't know how use coerce polymorphically.
+iisFromList1 :: [Index1] -> IIntSet Index1
+iisFromList1 = IIntSet . S.fromList . coerce
 
 iisFilter :: IsInt i => (i -> Bool) -> IIntSet i -> IIntSet i
 iisFilter f (IIntSet s) = IIntSet $ S.filter (f . fromInt) s
+
+--------------------------------------------------------------------------------
+-- Indexed `IntMap`s
+--------------------------------------------------------------------------------
+
+newtype IIntMap i a = IIntMap { runIIntMap :: M.IntMap a }
+  deriving (Monoid)
+
+-- The type is specialized because I don't know how use coerce polymorphically.
+iimFromList1 :: V.Unbox a => [(Index1, a)] -> IIntMap Index1 a
+iimFromList1 = IIntMap . M.fromList . coerce

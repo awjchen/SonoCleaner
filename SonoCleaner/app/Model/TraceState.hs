@@ -98,4 +98,4 @@ updateDiffSeries offset updates traceState =
   let diffSeries'  =
         bimap (+offset) (*// updates) (traceState ^. diffSeries)
   in  setDiffSeries diffSeries' traceState
-        & over modifiedJumps (mappend (iisFromList $ fst $ unzip updates))
+        & over modifiedJumps (mappend (iisFromList1 $ fst $ unzip updates))
