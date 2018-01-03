@@ -16,11 +16,8 @@ module Model.TraceState
   ) where
 
 import           Control.Lens
-import qualified Data.IntSet         as S
-import qualified Data.Vector.Unboxed as V
 
-import qualified Types.IndexInterval as I
-import           Types.Series
+import           Types.Indices
 
 --------------------------------------------------------------------------------
 -- Types
@@ -30,11 +27,11 @@ data TraceContext = RootContext | CroppedContext TraceState
 
 data TraceState = TraceState
   { _context       :: TraceContext
-  , _series        :: V.Vector Double
-  , _diffSeries    :: (Double, V.Vector Double)
-  , _diff2Series   :: (Double, (Double, V.Vector Double))
+  , _series        :: IVector Index0 Double
+  , _diffSeries    :: (Double, IVector Index1 Double)
+  , _diff2Series   :: (Double, (Double, IVector Index2 Double))
   , _seriesBounds  :: (Double, Double)
-  , _modifiedJumps :: S.IntSet
+  , _modifiedJumps :: IIntSet Index1
   }
 makeLenses ''TraceState
 
@@ -42,61 +39,63 @@ makeLenses ''TraceState
 -- Cropping
 --------------------------------------------------------------------------------
 
-cropTraceState :: I.IndexInterval -> TraceState -> TraceState
+cropTraceState :: IndexInterval Index0 -> TraceState -> TraceState
 cropTraceState cropInterval ts =
-  let croppedSeries = I.slice cropInterval (ts ^. series)
+  let croppedSeries = ivSlice cropInterval (ts ^. series)
       context' = CroppedContext ts
-      modifiedJumps' = S.map (subtract (I.leftEndpoint cropInterval))
-                     $ S.filter (`I.elem` I.diff cropInterval)
-                     $ ts ^. modifiedJumps
+      modifiedJumps' = let diffInterval = iiDiff cropInterval in
+          iisOffset (negate $ iiLeft diffInterval)
+        $ iisFilter (`iiMember` diffInterval)
+        $ ts ^. modifiedJumps
   in  initTraceState croppedSeries
         & context .~ context'
         & modifiedJumps .~ modifiedJumps'
 
-uncropTraceState :: I.IndexInterval -> TraceState -> TraceState
+uncropTraceState :: IndexInterval Index0 -> TraceState -> TraceState
 uncropTraceState cropInterval ts = case ts ^. context of
   RootContext -> ts
   CroppedContext cts ->
-    let start = I.leftEndpoint cropInterval
+    let start = iiLeft $ iiDiff cropInterval
         ds = snd $ ts ^. diffSeries
-        updates = V.zip (V.enumFromN start (V.length ds)) ds
-        diffSeries' = fmap (`V.update` updates) (cts ^. diffSeries)
-        newModifiedJumps = S.map (+start) (ts ^. modifiedJumps)
+        updates = ivZip (ivEnumFromN start (ivLength ds)) ds
+        diffSeries' = fmap (`ivUpdate` updates) (cts ^. diffSeries)
+        modifiedJumps' = iisOffset start (ts ^. modifiedJumps)
     in  setDiffSeries diffSeries' cts
-          & modifiedJumps %~ S.union newModifiedJumps
+          & modifiedJumps %~ mappend modifiedJumps'
 
 --------------------------------------------------------------------------------
 -- Construction
 --------------------------------------------------------------------------------
 
-initTraceState :: V.Vector Double -> TraceState
+initTraceState :: IVector Index0 Double -> TraceState
 initTraceState series' =
   TraceState
     { _context       = RootContext
     , _series        = series'
     , _diffSeries    = diffSeries'
     , _diff2Series   = diff2Series'
-    , _seriesBounds  = unboxedMinAndMax series'
-    , _modifiedJumps = S.empty }
-  where diffSeries'  = diff series'
-        diff2Series' = fmap diff diffSeries'
+    , _seriesBounds  = ivMinMax series'
+    , _modifiedJumps = mempty }
+  where diffSeries'  = ivDiff series'
+        diff2Series' = fmap ivDiff diffSeries'
 
 --------------------------------------------------------------------------------
 -- Modification
 --------------------------------------------------------------------------------
 
-setDiffSeries :: (Double, V.Vector Double) -> TraceState -> TraceState
-setDiffSeries diffSeries' =
-    set seriesBounds (unboxedMinAndMax series')
-  . set series      series'
-  . set diffSeries  diffSeries'
-  . set diff2Series diff2Series'
-  where series'      = undiff diffSeries'
-        diff2Series' = fmap diff diffSeries'
+setDiffSeries :: (Double, IVector Index1 Double) -> TraceState -> TraceState
+setDiffSeries diffSeries' traceState =
+  traceState
+    { _series       = series'
+    , _diffSeries   = diffSeries'
+    , _diff2Series  = diff2Series'
+    , _seriesBounds = (ivMinMax series')
+    } where series'      = ivUndiff diffSeries'
+            diff2Series' = fmap ivDiff diffSeries'
 
-updateDiffSeries :: Double -> [(Int, Double)] -> TraceState -> TraceState
+updateDiffSeries :: Double -> [(Index1, Double)] -> TraceState -> TraceState
 updateDiffSeries offset updates traceState =
   let diffSeries'  =
-        bimap (+offset) (V.// updates) (traceState ^. diffSeries)
+        bimap (+offset) (*// updates) (traceState ^. diffSeries)
   in  setDiffSeries diffSeries' traceState
-        & over modifiedJumps (S.union (S.fromList $ fst $ unzip updates))
+        & over modifiedJumps (mappend (iisFromList $ fst $ unzip updates))
