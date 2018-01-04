@@ -118,7 +118,8 @@ readViewParams gst = ViewParams
   }
 
 --------------------------------------------------------------------------------
--- Parameter dependencies for validating the intermediate cached computations
+-- Parameter dependencies for tracking the "freshness" of the cached
+-- intermediate computations
 --------------------------------------------------------------------------------
 
 -- B
@@ -143,8 +144,8 @@ data DisplayDependencies = DisplayDependencies
   } deriving (Eq)
 
 --------------------------------------------------------------------------------
--- The 'objects/vertices' of the data flow
--- (Cached data annotated with precomputations and parameter dependencies)
+-- The 'objects' of the data flow (cached intermediate data annotated with
+-- dependencies)
 --------------------------------------------------------------------------------
 
 -- B, C
@@ -160,8 +161,7 @@ data AnnotatedChartSpec = AnnotatedChartSpec
   , acsChartSpec    :: ChartSpec  }
 
 --------------------------------------------------------------------------------
--- The 'morphisms/edges' of the data flow
--- (Functions between the 'objects/vertices')
+-- The functions between the 'objects'
 --------------------------------------------------------------------------------
 
 -- 1

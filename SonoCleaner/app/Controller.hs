@@ -324,10 +324,7 @@ controllerMain = do
             timeAtPoint' = timeAtPoint model
             timeAtSlope' = timeAtSlope model
             mid' (x, y) = 0.5*(x+y)
-            -- dt = getTimeStep model
             s = getCurrentState model ^. series
-            -- pointBounds = iiGetIVectorBounds s
-            -- lastIndex = ivLength s - 1
 
         case interpretMouseGesture mouseEvent1 mouseEvent2 of
           -- Left-click: panning
@@ -362,7 +359,6 @@ controllerMain = do
                 case iimFindIntermediateIndices1
                        (IndexInterval (lowerTarget, upperTarget)) jumps of
                     Just (js@(_:_:_)) ->
-                      -- let t = 0.5 * (toTime (head js) + toTime (last js))
                       let t = mid' $ over both timeAtSlope' $ (head &&& last) js
                       in  atomically $ modifyTVar' guiStateTVar $
                               set currentPage (MultiplePage js)
@@ -373,10 +369,7 @@ controllerMain = do
                 let (l, u) = runIndexInterval $ iiBoundByIVector s
                            $ IndexInterval $ over both nearestPoint'
                            $ (xLeft, xRight)
-                -- let lowerIndex = max 0         $ nearestPoint' xLeft
-                --     upperIndex = min lastIndex $ nearestPoint' xRight
                     t = mid' $ over both timeAtPoint' $ (l, u)
-                    -- t = 0.5 * (toTime lowerIndex + toTime upperIndex)
                 in  atomically $ modifyTVar' guiStateTVar $
                         set currentPage (CropPage $ Just $ IndexInterval (l, u))
                       . set (viewBounds . toViewPort . viewPortCenter . _1) t

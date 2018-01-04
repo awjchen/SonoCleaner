@@ -96,14 +96,9 @@ xAxis pixelsX plotSpec =
     plotXBoundsIndices =
         iiBoundByIVector (plotSeries plotSpec)
       $ IndexInterval
-      $ over _2 succ -- toIndex rounds down
       $ over both toIndex
       $ plotXBounds
-    -- plotXBoundsIndices = IndexInterval $ plotXBounds
-    --   & over _1 (max 0               . toIndex) -- inclusive
-    --   . over _2 (min maxIndex . succ . toIndex) -- inclusive
       where toIndex = plotToIndex plotSpec
-            -- maxIndex = V.length (plotSeries plotSpec) - 1
 
     compressibleTimeSteps = floor $ timeStepsPerPixel / 2
       where
@@ -275,33 +270,28 @@ simplifySeries
   :: V.Unbox a => Int -> IVector Index0 (a, Double) -> [(a, Double)]
 simplifySeries bucketSize' path
   | ivLength path <= 2 = V.toList $ unsafeRunIVector path
-  | otherwise =
-  -- casting `bucketSize'` is okay because it is "affine-y":
-  -- it will only be compared against the difference of two `Index0`.
-  let bucketSize = index0 bucketSize'
-      len = ivLength path
-      -- pred beacuse the last two buckets are added later
-      nDivisions = (pred len) `div` bucketSize
-      indices = fmap (*bucketSize) [0..nDivisions-1]
-                ++ [ mid (nDivisions*bucketSize) len , len ]
-        where mid i j = (i+j) `div` 2
-      buckets = map IndexInterval $ zip indices (map pred $ tail indices)
-      -- slices = fmap (\(a, b) -> (a, b-a)) buckets
+  | otherwise = concatMap (simplifySegment . (`ivSlice` path)) buckets
+  where
+    bucketSize = index0 bucketSize'
+    len = ivLength path
+    nDivisions = (pred len) `div` bucketSize -- pred beacuse the last two buckets are added later
+    indices = fmap (*bucketSize) [0..nDivisions-1]
+              ++ [ mid (nDivisions*bucketSize) len , len ]
+      where mid i j = (i+j) `div` 2
+    buckets = map IndexInterval $ zip indices (map pred $ tail indices)
 
-      simplifySegment
-        :: V.Unbox a => IVector Index0 (a, Double) -> [(a, Double)]
-      simplifySegment segment =
-        let (xs, ys) = ivUnzip segment
-            minAndMax = ivMinMax ys
-            xs' = unsafeRunIVector xs
-            ys' = unsafeRunIVector ys
-            -- for cosmetics
-            (y1', y2') = if V.head ys' < V.last ys'
-              then      minAndMax
-              else swap minAndMax
-        in  [(V.head xs', y1'), (V.last xs', y2')]
-
-  in  concatMap (simplifySegment . (`ivSlice` path)) buckets
+    simplifySegment
+      :: V.Unbox a => IVector Index0 (a, Double) -> [(a, Double)]
+    simplifySegment segment =
+      let (xs, ys) = ivUnzip segment
+          minAndMax = ivMinMax ys
+          xs' = unsafeRunIVector xs
+          ys' = unsafeRunIVector ys
+          -- for cosmetics
+          (y1', y2') = if V.head ys' < V.last ys'
+            then      minAndMax
+            else swap minAndMax
+      in  [(V.head xs', y1'), (V.last xs', y2')]
 
 simplifyJumps
   :: IVector Index0 Double
@@ -313,8 +303,6 @@ simplifyJumps v toTime bucketSize' =
     concatMap (map plot' . evenConcat . map bounds')
   . groupBy (\a b -> b - a < bucketSize)
   where
-    -- casting `bucketSize'` is okay because it is "affine-y":
-    -- it will only be compared against the difference of two `Index1`.
     bucketSize = index1 bucketSize'
 
     bounds' :: Index1 -> SP Index1 Bounds
@@ -369,4 +357,3 @@ splitAtIndices jumpIndices v =
     intervals :: [IndexInterval Index0]
     intervals = map (iiShrink . iiUndiff . IndexInterval)
               $ zip (firstCut : jumpIndices) (jumpIndices ++ [lastCut])
-    -- getSlice (i0, i1) = V.slice i0 (i1-i0+1) v
