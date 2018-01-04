@@ -175,8 +175,8 @@ readIdAnnotation dataParams model =
 
       dataVersion = getTraceDataVersion model
       idTraceState = getCurrentState model
-      idJumps = labelTraceStateJumps nt lst idTraceState
-      idMatches = matchJumps nt idJumps idTraceState
+      idJumps = labelLevelShifts nt lst idTraceState
+      idMatches = matchLevelShifts nt idJumps idTraceState
 
   in  AnnotatedTraceState
         { atsDependencies      = IdDataDependencies
@@ -202,11 +202,11 @@ applyOperation traceOp ats =
   in  if isIdentityOp transform
       then ats{ atsDependencies = newDependencies }
       else  let newTraceState = getOp transform (atsTraceState ats)
-                newJumps = labelTraceStateJumps
+                newJumps = labelLevelShifts
                             (dpNoiseThreshold dataParams)
                             (dpLevelShiftThreshold dataParams)
                             newTraceState
-                newMatches = matchJumps
+                newMatches = matchLevelShifts
                           (dpNoiseThreshold dataParams) newJumps newTraceState
             in  AnnotatedTraceState
                   { atsDependencies      = newDependencies

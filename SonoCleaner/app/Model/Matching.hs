@@ -8,7 +8,7 @@
 module Model.Matching
   ( LevelShiftMatches, matchLevels
   , applyMatches
-  , matchJumps
+  , matchLevelShifts
   ) where
 
 import           Control.Lens
@@ -31,8 +31,6 @@ import qualified Model.IndexedChain         as IC
 import           Model.Slope
 import           Model.TraceState
 
--- Note: In this module, level-shifts are referred to as "jumps".
-
 -------------------------------------------------------------------------------
 -- Interface types
 -------------------------------------------------------------------------------
@@ -51,18 +49,17 @@ instance Default LevelShiftMatches where
 -- Internal types
 -------------------------------------------------------------------------------
 
-type GroupCount   = Int
-type GroupSpan    = Index1 -- index of last jump minus index of first
-type GroupError   = Double
-type JumpPosition = Index1
-type JumpError    = Double
+type GroupCount = Int
+type GroupSpan  = Index1 -- span: difference of the indices of the first and last level-shifts
+type GroupError = Double
+type LevelShiftPosition = Index1
+type LevelShiftError    = Double
 
 type MatchSeedCandidate = (GroupSpan, IC.ElemIndex)
 
--- Holds state as well, since we are in the ST monad
 data MatchingEnv s = MatchingEnv
   { envNoiseThreshold :: Double
-  , envChain          :: IC.IndexedChain s (JumpPosition, JumpError)
+  , envChain          :: IC.IndexedChain s (LevelShiftPosition, LevelShiftError)
   , envHeap           :: STRef s (H.Heap MatchSeedCandidate)
   }
 
@@ -71,11 +68,11 @@ type Run s a = ReaderT (MatchingEnv s) (ST s) a
 data Match = Match
   { matchSpan          :: GroupSpan
   , matchErrorSum      :: GroupError
-  , matchedJumpIndices :: [JumpPosition]
+  , matchedLevelShiftIndices :: [LevelShiftPosition]
   }
 
 data ZeroSumSearchResult
-  = ZeroSum JumpError [JumpPosition]
+  = ZeroSum LevelShiftError [LevelShiftPosition]
   | NextSpan GroupSpan
   | NoSolution
 
@@ -83,23 +80,25 @@ data ZeroSumSearchResult
 -- Constants
 -------------------------------------------------------------------------------
 
--- -- groupCountLimit:
--- --   The maximum number of jumps in a jump group.
+-- groupCountLimit:
+-- The maximum number of level-shifts in a matching group.
 groupCountLimit :: Int
 groupCountLimit = 8
 
--- -- searchGroupCountLimit:
--- --   The maximum number of jumps to consider when searching for a jump group.
--- --   (This is a vague description, sorry. Examine its use in the code.)
+-- searchGroupCountLimit:
+-- In order to find all matching groups, we need to consider groups larger than
+-- the `groupCountLimit`, due to the implementation of the procedure.
+-- Considering groups of arbitrary size leads to terrible worst-case complexity,
+-- so we enforce an empirically-determined limit.
 searchGroupCountLimit :: Int
 searchGroupCountLimit = 2*groupCountLimit
 
--- -- interpolationLimit:
--- --   The time span of the jump group, in terms of the number of data points
--- --   within the span of the jumps (alternatively, the number of "displaced"
--- --   data points), at or below which the correction method applied will be
--- --   linear interpolation rather than the usual method of "redistribution".
--- --   For example, a single-point-outlier displaces one point.
+-- interpolationLimit:
+-- The time span of the level-shift group, in terms of the number of data points
+-- within the span of the level-shifts (alternatively, the number of "displaced"
+-- data points), at or below which the correction method applied will be linear
+-- interpolation rather than the usual method of "redistribution". For example,
+-- a single-point-outlier displaces one point.
 interpolationLimit :: Index1
 interpolationLimit = 3
 
@@ -111,28 +110,28 @@ applyMatches :: LevelShiftMatches -> Int -> TraceState -> TraceState
 applyMatches matches progression = updateDiffSeries 0 updates
   where updates = concat $ take progression $ getLevelShiftMatches matches
 
-matchJumps
+matchLevelShifts
   :: Double
   -> IIntMap Index1 Double
   -> TraceState
   -> LevelShiftMatches
-matchJumps noiseTh jumpsMap ts = levelShiftMatches corrections
+matchLevelShifts noiseTh levelShiftsMap ts = levelShiftMatches corrections
   where
     (_, ds) = ts ^. diffSeries
-    jumpSlopesMap = iimMapWithKey estimateSlope' jumpsMap where
-      estimateSlope' k _ = estimateSlope ds jumpsMap radius k
+    levelShiftSlopesMap = iimMapWithKey estimateSlope' levelShiftsMap where
+      estimateSlope' k _ = estimateSlope ds levelShiftsMap radius k
         where radius = 4
-    jumpErrorsMap = iimUnionWith (-) jumpsMap jumpSlopesMap
+    levelShiftErrorsMap = iimUnionWith (-) levelShiftsMap levelShiftSlopesMap
 
     matches = runST $
-      case NE.nonEmpty (iimToList1 jumpErrorsMap) of
+      case NE.nonEmpty (iimToList1 levelShiftErrorsMap) of
         Nothing -> return []
-        Just neJumpList -> do
-          matchEnv <- initMatchingEnv noiseTh neJumpList
-          runReaderT matchJumps' matchEnv
+        Just neLevelShiftList -> do
+          matchEnv <- initMatchingEnv noiseTh neLevelShiftList
+          runReaderT matchLevelShifts' matchEnv
 
-    corrections =
-      (map.concatMap) (applyCorrection (ts ^. series) jumpSlopesMap) matches
+    corrections = (map.concatMap)
+                    (applyCorrection (ts ^. series) levelShiftSlopesMap) matches
 
 -------------------------------------------------------------------------------
 -- Corrections on matches
@@ -143,23 +142,20 @@ applyCorrection
   -> IIntMap Index1 Double
   -> Match
   -> [(Index1, Double)]
-applyCorrection v jumps match
+applyCorrection v levelShifts match
   | matchSpan match <= interpolationLimit = interpolate v match
-  | otherwise                             = redistribute jumps match
+  | otherwise                             = redistribute levelShifts match
 
 redistribute :: IIntMap Index1 Double -> Match -> [(Index1, Double)]
-redistribute jumps (Match _ err jumpPositions) =
-  let slopeEstimates = map (fromJust . flip iimLookup jumps) jumpPositions
-  in  zip jumpPositions $ over _head (+err) slopeEstimates
+redistribute levelShifts (Match _ err levelShiftPositions) =
+  let slopeEstimates =
+        map (fromJust . flip iimLookup levelShifts) levelShiftPositions
+  in  zip levelShiftPositions $ over _head (+err) slopeEstimates
 
 interpolate :: IVector Index0 Double -> Match -> [(Index1, Double)]
-interpolate v (Match groupSpan _ jumpPositions) =
+interpolate v (Match groupSpan _ levelShiftPositions) =
   interpolationUpdates v (iiUndiff $ IndexInterval (i, i+groupSpan))
-  where i = head jumpPositions
-  -- let pointInterval = I.undiff $ I.fromEndpoints (i, i+groupSpan)
-  --       where i = head jumpPositions
-  --     yPair = over both (v V.!) $ I.getEndpoints pointInterval
-  -- in  interpolationUpdates pointInterval yPair
+  where i = head levelShiftPositions
 
 -------------------------------------------------------------------------------
 -- The matching procedure
@@ -167,12 +163,12 @@ interpolate v (Match groupSpan _ jumpPositions) =
 
 initMatchingEnv
   :: Double
-  -> NE.NonEmpty (JumpPosition, JumpError)
+  -> NE.NonEmpty (LevelShiftPosition, LevelShiftError)
   -> ST s (MatchingEnv s)
-initMatchingEnv noiseTh neJumpsList = do
-  let jumpsList = NE.toList neJumpsList
-  chain <- IC.fromList jumpsList
-  heap <- let positions = map fst jumpsList
+initMatchingEnv noiseTh neLevelShiftsList = do
+  let levelShiftsList = NE.toList neLevelShiftsList
+  chain <- IC.fromList levelShiftsList
+  heap <- let positions = map fst levelShiftsList
               distances = zipWith (-) (tail positions) positions
               heapElems = zip distances [0..]
           in  newSTRef $ H.fromList heapElems
@@ -182,9 +178,9 @@ initMatchingEnv noiseTh neJumpsList = do
     , envHeap                = heap
     }
 
--- Returns matches grouped by (increasing) span.
-matchJumps' :: Run s [[Match]]
-matchJumps' =
+-- Returns matches grouped by span, which increases monotonically.
+matchLevelShifts' :: Run s [[Match]]
+matchLevelShifts' =
       groupBy ((==) `on` matchSpan) . catMaybes
   <$> whileJust popCandidate tryCandidate
 
@@ -196,29 +192,29 @@ popCandidate = do
     Nothing        -> pure Nothing
     Just (c, heap) -> lift (writeSTRef heapRef heap) >> pure (Just c)
 
--- Try the next candidate
 tryCandidate :: MatchSeedCandidate -> Run s (Maybe Match)
-tryCandidate (targetSpan, targetJumpID) = do
-  searchResult <- searchZeroSum targetSpan targetJumpID
+tryCandidate (targetSpan, targetLevelShiftID) = do
+  searchResult <- searchZeroSum targetSpan targetLevelShiftID
   case searchResult of
     (NoSolution, _) -> pure Nothing
     (NextSpan nextSpan, _) -> do
       heapRef <- asks envHeap
-      lift $ modifySTRef' heapRef (H.insert (nextSpan, targetJumpID))
+      lift $ modifySTRef' heapRef (H.insert (nextSpan, targetLevelShiftID))
       pure Nothing
-    (ZeroSum err jumpPositions, jumpIDs) -> do
+    (ZeroSum err levelShiftPositions, levelShiftIDs) -> do
       chain <- asks envChain
       lift $ do
-        mapM_ (IC.remove chain) jumpIDs
-        pure $ Just $ Match targetSpan err jumpPositions
+        mapM_ (IC.remove chain) levelShiftIDs
+        pure $ Just $ Match targetSpan err levelShiftPositions
 
 -------------------------------------------------------------------------------
--- Searching for zero-sum groups of jumps
+-- Searching for zero-sum groups of level-shifts
 -------------------------------------------------------------------------------
 
--- Search for a contiguous interval of jumps starting at 'startIdx', spanning
--- exactly 'spanLimit' time units, containing at most 'groupCountLimit' jumps,
--- and whose displacements sum to zero (within some tolerance).
+-- Search for a contiguous interval of level-shifts starting at 'startIdx',
+-- spanning exactly 'spanLimit' time units, containing at most 'groupCountLimit'
+-- level-shifts, and whose displacements sum to zero (within some tolerance
+-- `envNoiseThreshold`).
 searchZeroSum
   :: GroupSpan -> IC.ElemIndex -> Run s (ZeroSumSearchResult, [IC.ElemIndex])
 searchZeroSum spanLimit startIdx = do
@@ -236,11 +232,11 @@ searchZeroSum spanLimit startIdx = do
 
 searchZeroSumHelper
   :: Double
-  -> JumpPosition
-  -> JumpPosition
-  -> (JumpPosition, JumpError)
-  -> (GroupCount, GroupError, [JumpPosition])
-  -> ST s (Either ZeroSumSearchResult (GroupCount, GroupError, [JumpPosition]))
+  -> LevelShiftPosition
+  -> LevelShiftPosition
+  -> (LevelShiftPosition, LevelShiftError)
+  -> (GroupCount, GroupError, [LevelShiftPosition])
+  -> ST s (Either ZeroSumSearchResult (GroupCount, GroupError, [LevelShiftPosition]))
 searchZeroSumHelper
   errLim startPos targetPos (pos, err) (accCount, accErr, accPos) =
   let accCount' = succ accCount
@@ -263,18 +259,12 @@ searchZeroSumHelper
           pure $ Left $ NextSpan (pos - startPos)
 
 foldChainFrom :: (V.Unbox a)
-  -- Combining function, returning Left to terminate and Right to continue
-  => (a -> b -> ST s (Either c b))
-  -- Termination function, in case there are no more elements
-  -> (b -> c)
-  -- Initial accumulator
-  -> b
-  -- Initial index
-  -> IC.ElemIndex
-  -- The chain
-  -> IC.IndexedChain s a
-  -- Also returns a list of visited indices
-  -> ST s (c, [IC.ElemIndex])
+  => (a -> b -> ST s (Either c b)) -- Combining function, returning Left to terminate and Right to continue
+  -> (b -> c) -- Termination function to call in case there are no more elements
+  -> b -- Initial accumulator
+  -> IC.ElemIndex -- Initial index
+  -> IC.IndexedChain s a -- The chain
+  -> ST s (c, [IC.ElemIndex]) -- Also returns a list of visited indices
 foldChainFrom f g z idx chain = do
   mbVal <- IC.query chain idx
   case mbVal of Nothing -> pure (g z, [])
@@ -284,10 +274,10 @@ foldChainFrom f g z idx chain = do
                     Left c  -> pure (c, [idx])
                     Right b -> foldChainFrom' f g b idx [idx] chain
 
--- Because 'next' obtains the both next index and its value simultaneously,
--- to avoid redundant queries we use the following invariant:
--- there exists an element at index 'idx' in the chain,
--- and its value is already incorporated into the accumulator 'z'.
+-- Because 'next' obtains the both next index and its value simultaneously, we
+-- use `foldChainFrom'` to avoid redundant queries. It assumes that there exists
+-- an element at index 'idx' in the chain, and its value is already incorporated
+-- into the accumulator 'z'.
 foldChainFrom' :: (V.Unbox a)
   => (a -> b -> ST s (Either c b)) -> (b -> c) -> b -> IC.ElemIndex
   -> [IC.ElemIndex] -> IC.IndexedChain s a -> ST s (c, [IC.ElemIndex])

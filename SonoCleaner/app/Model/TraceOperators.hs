@@ -1,3 +1,6 @@
+-- TraceOperators are "blessed" transformations (TraceState -> TraceState),
+-- being the only ones allowed to act upon the data in the Model.
+
 module Model.TraceOperators
   ( TraceOperator (IdOperator)
   , isIdentityOp
@@ -24,8 +27,6 @@ import           Types.LevelShifts
 
 --------------------------------------------------------------------------------
 
--- TraceOperators are "blessed" transformations (TraceState -> TraceState),
--- being the only ones allowed to act upon the data in the Model.
 data TraceOperator
   = IdOperator
   | TraceOperator (TraceState -> TraceState)

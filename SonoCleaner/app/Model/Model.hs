@@ -1,4 +1,4 @@
--- The type that holds all the data on which the program operates
+-- The type that holds all the data the program is intended to process
 
 {-# LANGUAGE DeriveGeneric     #-}
 {-# LANGUAGE OverloadedStrings #-}

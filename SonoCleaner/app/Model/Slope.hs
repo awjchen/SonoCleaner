@@ -1,3 +1,5 @@
+-- Slope estimates
+
 module Model.Slope
   ( estimateSlope
   , median

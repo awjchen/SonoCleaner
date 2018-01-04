@@ -1,6 +1,5 @@
 -- A data type to hold a sonomicrometry distance trace and some metadata
 
-{-# LANGUAGE PatternSynonyms #-}
 {-# LANGUAGE TemplateHaskell #-}
 
 module Model.TraceState
