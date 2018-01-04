@@ -5,7 +5,7 @@ module Model.TraceOperators
 
   , interpolateGapsOp
 
-  , zeroJumpOp
+  , setZeroOp
   , estimateSlopeBothOp
 
   , interpolateBetweenJumpsOp
@@ -14,13 +14,12 @@ module Model.TraceOperators
   , applyMatchesOp
   ) where
 
-import qualified Data.IntMap.Strict as M
-
 import           Model.Gaps
 import           Model.Jumps
 import           Model.Matching
 import           Model.TraceState
 
+import           Types.Indices
 import           Types.LevelShifts
 
 --------------------------------------------------------------------------------
@@ -41,24 +40,26 @@ getOp (TraceOperator f) = f
 
 -- Gaps
 interpolateGapsOp
-  :: LabelledStratum
-  -> (Int, Int)
+  :: ReplaceDataAboveOrBelow
+  -> IndexInterval Index0
   -> (Double, Double)
   -> TraceOperator
 interpolateGapsOp = (fmap.fmap.fmap) TraceOperator interpolateGaps
 
 -- Jumps: single
-zeroJumpOp :: Hold -> Double -> Int -> M.IntMap Double -> TraceOperator
-zeroJumpOp = (fmap.fmap.fmap.fmap) TraceOperator zeroJump
+setZeroOp :: Hold -> Double -> Index1 -> IIntMap Index1 Double -> TraceOperator
+setZeroOp = (fmap.fmap.fmap.fmap) TraceOperator setZero
 
-estimateSlopeBothOp :: Hold -> Double -> Int -> M.IntMap Double -> TraceOperator
-estimateSlopeBothOp = (fmap.fmap.fmap.fmap) TraceOperator estimateSlopeBoth
+estimateSlopeBothOp
+  :: Hold -> Double -> Index1 -> IIntMap Index1 Double -> TraceOperator
+estimateSlopeBothOp = (fmap.fmap.fmap.fmap) TraceOperator setMedianSlope
 
 -- Jumps: multiple
-interpolateBetweenJumpsOp :: Double -> [Int] -> M.IntMap Double -> TraceOperator
-interpolateBetweenJumpsOp = (fmap.fmap.fmap) TraceOperator interpolateBetweenJumps
+interpolateBetweenJumpsOp
+  :: Double -> [Index1] -> IIntMap Index1 Double -> TraceOperator
+interpolateBetweenJumpsOp = (fmap.fmap.fmap) TraceOperator interpolateGroup
 
-matchGroupOp :: Double -> [Int] -> M.IntMap Double -> TraceOperator
+matchGroupOp :: Double -> [Index1] -> IIntMap Index1 Double -> TraceOperator
 matchGroupOp = (fmap.fmap.fmap) TraceOperator matchGroup
 
 -- Matching
