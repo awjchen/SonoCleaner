@@ -10,23 +10,22 @@ module Controller.Interpreter
   ( setupInterpreter
   ) where
 
+import           Control.Arrow          ((&&&))
 import           Control.Concurrent.STM
 import           Control.Lens           hiding (index, indices, transform)
 import           Control.Monad          (when)
 import           Data.Colour            (blend, opaque)
 import           Data.Colour.Names
 import           Data.Default
-import qualified Data.IntMap.Strict     as M
 import qualified Data.Text              as T
 import           Data.Text.Lens
-import qualified Data.Vector.Unboxed    as V
 import           System.FilePath        (splitFileName)
 import           Text.Printf
 
 import           Controller.GUIState
 import           Model
 import           Types.Bounds
-import qualified Types.IndexInterval    as I
+import           Types.Indices
 import           Types.LevelShifts
 import           View.Types
 
@@ -59,7 +58,7 @@ data DataParams = DataParams
   } deriving (Eq)
 
 -- 2
-type LevelShiftIndex = Int
+type LevelShiftIndex = Index1
 type MatchLevel = Int
 type Offset = Double
 
@@ -68,7 +67,7 @@ data TraceOperation =
   | AutoOp MatchLevel
   | ManualSingleOp   SingleAction   LevelShiftIndex   Offset (Int, Hold)
   | ManualMultipleOp MultipleAction [LevelShiftIndex] Offset
-  | CropOp (Maybe I.IndexInterval)
+  | CropOp (Maybe (IndexInterval Index0))
   deriving (Eq)
 
 -- 3
@@ -152,7 +151,7 @@ data DisplayDependencies = DisplayDependencies
 data AnnotatedTraceState a = AnnotatedTraceState
   { atsDependencies      :: a
   , atsTraceState        :: TraceState
-  , atsJumps             :: M.IntMap Double
+  , atsJumps             :: IIntMap Index1 Double
   , atsLevelShiftMatches :: LevelShiftMatches }
 
 -- D
@@ -226,12 +225,12 @@ getTraceStateTransform traceOp ats = case traceOp of
     applyMatchesOp (atsLevelShiftMatches ats) matchLevel'
   ManualSingleOp action index offset holdPair -> case action of
     SingleIgnore   -> IdOperator
-    SingleZero     -> apply zeroJumpOp
-    SingleSlopeFit -> apply estimateSlopeBothOp
+    SingleZero     -> apply setZeroOp
+    SingleSlopeFit -> apply setMedianOp
     where apply f = f (snd holdPair) offset index (atsJumps ats)
   ManualMultipleOp action indices offset -> case action of
     MultipleIgnore -> IdOperator
-    MultipleLine   -> apply interpolateBetweenJumpsOp
+    MultipleLine   -> apply interpolateGroupOp
     MultipleCancel -> apply matchGroupOp
     where apply f = f offset indices (atsJumps ats)
   CropOp _ -> IdOperator
@@ -350,25 +349,27 @@ specifyChart model viewParams ats =
                   (y0, y1) = ts ^. seriesBounds
                   c1 = (y1+y0)/2
                   r1 = (y1-y0)/2
-              in  Just $ V.map (\y -> (y-c1)*r2/r1 + c2) $ ts ^. series
+              in  Just $ ivMap (\y -> (y-c1)*r2/r1 + c2) $ ts ^. series
 
     highlightRegion = case nddOperation (atsDependencies ats) of
       IdentityOp -> Nothing
       AutoOp _ -> Nothing
-      ManualSingleOp _ i _ _ ->
-        Just $ over both toTime (i, succ i)
-      ManualMultipleOp _ is _ ->
-        Just $ over both toTime (head is, succ (last is))
+      ManualSingleOp _ j _ _ ->
+        Just $ over both toTime $ runIndexInterval $ jumpEndpoints j
+      ManualMultipleOp _ js _ ->
+        Just $ over both toTime $ runIndexInterval
+             $ iiUndiff $ IndexInterval $ (head &&& last) js
       CropOp cropBounds ->
-        fmap (over both toTime . I.getEndpoints) cropBounds
+        fmap (over both toTime . runIndexInterval) cropBounds
 
     annotation = case nddOperation (atsDependencies ats) of
-      ManualSingleOp _ i _ _ ->
+      ManualSingleOp _ j _ _ ->
         let idSeries = getCurrentState model ^. series
-            x2 = toTime (succ i)
-            y1 = idSeries V.! i
-            y2 = idSeries V.! succ i
-        in  Just (x2, (y1+y2)/2, printf "%.2f" (y2-y1))
+            (i0, i1) = runIndexInterval $ jumpEndpoints j
+            x1 = toTime i1
+            y0 = ivIndex idSeries i0
+            y1 = ivIndex idSeries i1
+        in  Just (x1, (y0+y1)/2, printf "%.2f" (y1-y0))
       _ -> Nothing
 
 --------------------------------------------------------------------------------
@@ -378,7 +379,7 @@ specifyChart model viewParams ats =
 setupInterpreter :: IO ( Model -> GUIState -> STM ()
                        , Model -> GUIState -> STM ChartSpec
                        , Model -> GUIState -> STM LevelShiftMatches
-                       , Model -> GUIState -> STM (M.IntMap Double)
+                       , Model -> GUIState -> STM (IIntMap Index1 Double)
                        , Model -> GUIState -> STM Model )
 setupInterpreter = do
   idAnnotationTVar       <- newTVarIO undefined
@@ -443,7 +444,7 @@ setupInterpreter = do
         updateData model guiState
         atsLevelShiftMatches <$> readTVar idAnnotationTVar
 
-  let getJumps :: Model -> GUIState -> STM (M.IntMap Double)
+  let getJumps :: Model -> GUIState -> STM (IIntMap Index1 Double)
       getJumps model guiState = do
         updateData model guiState
         atsJumps <$> readTVar idAnnotationTVar

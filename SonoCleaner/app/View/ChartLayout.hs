@@ -211,12 +211,9 @@ jumps plotSpec xParams =
   where
     interval' = iiDiff $ plotInterval xParams
 
-    jumpEndpoints :: Index1 -> (Index0, Index0)
-    jumpEndpoints j = runIndexInterval $ iiUndiff $ IndexInterval (j, j)
-
     plotJump :: Index1 -> [(Double, Double)]
     plotJump j = [(toTime i0, ivIndex v i0), (toTime i1, ivIndex v i1)]
-      where (i0, i1) = jumpEndpoints j
+      where (i0, i1) = runIndexInterval $ jumpEndpoints j
             v = plotSeries plotSpec
             toTime = plotToTime plotSpec
 
@@ -320,12 +317,9 @@ simplifyJumps v toTime bucketSize' =
     -- it will only be compared against the difference of two `Index1`.
     bucketSize = index1 bucketSize'
 
-    jumpEndpoints :: Index1 -> (Index0, Index0)
-    jumpEndpoints j = runIndexInterval $ iiUndiff $ IndexInterval (j, j)
-
     bounds' :: Index1 -> SP Index1 Bounds
     bounds' j = SP j (makeBounds (ivIndex v i0) (ivIndex v (succ i1)))
-      where (i0, i1) = jumpEndpoints j
+      where (i0, i1) = runIndexInterval $ jumpEndpoints j
 
     union' :: SP Index1 Bounds -> SP Index1 Bounds -> SP Index1 Bounds
     union' (SP i0 b0) (SP _ b1) = SP i0 (b0 <> b1)
@@ -336,7 +330,7 @@ simplifyJumps v toTime bucketSize' =
 
     plot' :: SP Index1 Bounds -> [(Double, Double)]
     plot' (SP j (Bounds l u)) = [(toTime i0, l), (toTime (succ i1), u)]
-      where (i0, i1) = jumpEndpoints j
+      where (i0, i1) = runIndexInterval $ jumpEndpoints j
 
 --------------------------------------------------------------------------------
 -- Bounds

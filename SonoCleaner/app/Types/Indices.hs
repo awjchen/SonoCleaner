@@ -32,6 +32,7 @@ module Types.Indices
 
   , iiDiff
   , iiUndiff
+  , jumpEndpoints
 
   , IVector
   , ivector
@@ -163,6 +164,7 @@ type family ISucc i where
 -- We assume that l <= u in `IndexInterval (l, u)`.
 
 newtype IndexInterval i = IndexInterval { runIndexInterval :: (i, i) }
+  deriving (Eq)
 makePrisms ''IndexInterval
 
 derivingUnbox "IndexInterval0"
@@ -220,6 +222,9 @@ iiUndiff :: (IsInt i, IsInt (ISucc i), Enum (ISucc i))
          => IndexInterval (ISucc i) -> IndexInterval i
 iiUndiff (IndexInterval (l, u)) = IndexInterval ( fromInt $ toInt l
                                                 , fromInt $ toInt $ succ u )
+
+jumpEndpoints :: Index1 -> IndexInterval Index0
+jumpEndpoints j = iiUndiff $ IndexInterval (j, j)
 
 --------------------------------------------------------------------------------
 -- Indexed vectors

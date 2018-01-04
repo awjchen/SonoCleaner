@@ -6,9 +6,9 @@ module Model.TraceOperators
   , interpolateGapsOp
 
   , setZeroOp
-  , estimateSlopeBothOp
+  , setMedianOp
 
-  , interpolateBetweenJumpsOp
+  , interpolateGroupOp
   , matchGroupOp
 
   , applyMatchesOp
@@ -50,14 +50,14 @@ interpolateGapsOp = (fmap.fmap.fmap) TraceOperator interpolateGaps
 setZeroOp :: Hold -> Double -> Index1 -> IIntMap Index1 Double -> TraceOperator
 setZeroOp = (fmap.fmap.fmap.fmap) TraceOperator setZero
 
-estimateSlopeBothOp
+setMedianOp
   :: Hold -> Double -> Index1 -> IIntMap Index1 Double -> TraceOperator
-estimateSlopeBothOp = (fmap.fmap.fmap.fmap) TraceOperator setMedianSlope
+setMedianOp = (fmap.fmap.fmap.fmap) TraceOperator setMedianSlope
 
 -- Jumps: multiple
-interpolateBetweenJumpsOp
+interpolateGroupOp
   :: Double -> [Index1] -> IIntMap Index1 Double -> TraceOperator
-interpolateBetweenJumpsOp = (fmap.fmap.fmap) TraceOperator interpolateGroup
+interpolateGroupOp = (fmap.fmap.fmap) TraceOperator interpolateGroup
 
 matchGroupOp :: Double -> [Index1] -> IIntMap Index1 Double -> TraceOperator
 matchGroupOp = (fmap.fmap.fmap) TraceOperator matchGroup

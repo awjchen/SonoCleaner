@@ -14,7 +14,7 @@ import qualified Data.Text           as T
 
 import           Model
 import           Types.Bounds
-import qualified Types.IndexInterval as I
+import           Types.Indices
 import           Types.LevelShifts
 
 --------------------------------------------------------------------------------
@@ -24,11 +24,11 @@ import           Types.LevelShifts
 data NotebookPage
   = MainPage
   | AutoPage
-  | SinglePage Int
-  | MultiplePage [Int]
+  | SinglePage Index1
+  | MultiplePage [Index1]
   | LabelPage
   | ViewPage
-  | CropPage (Maybe I.IndexInterval)
+  | CropPage (Maybe (IndexInterval Index0))
   | QualityPage
   deriving (Eq)
 
