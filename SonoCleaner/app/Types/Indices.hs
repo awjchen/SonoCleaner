@@ -21,10 +21,12 @@ module Types.Indices
   , iiLeft
   , iiMember
   , iiShrink
+  , iiGrow 
   , iiToList 
   , iiToVector
   , iiToIVector 
   , iiIndex
+  , iiBoundToIVector 
 
   , iiDiff
   , iiUndiff
@@ -157,6 +159,9 @@ iiMember i (IndexInterval (l, u)) = l <= i && i <= u
 iiShrink :: Enum i => IndexInterval i -> IndexInterval i
 iiShrink (IndexInterval (l, u)) = IndexInterval (succ l, pred u)
 
+iiGrow :: Enum i => IndexInterval i -> IndexInterval i
+iiGrow (IndexInterval (l, u)) = IndexInterval (pred l, succ u)
+
 iiToList :: Enum i => IndexInterval i -> [i]
 iiToList (IndexInterval (l, u)) = [l..u]
 
@@ -168,6 +173,12 @@ iiToIVector (IndexInterval (l, u)) = IVector $ V.enumFromN l (toInt $ u-l+1)
 
 iiIndex :: (IsInt i, V.Unbox a) => IVector i a -> IndexInterval i -> (a, a)
 iiIndex (IVector v) (IndexInterval (l, u)) = (v V.! toInt l, v V.! toInt u)
+
+iiBoundToIVector :: (IsInt i, V.Unbox a)
+        => IVector i a -> IndexInterval i -> IndexInterval i
+iiBoundToIVector (IVector v) (IndexInterval (l, u)) =
+  IndexInterval ( fromInt $ max 0 $ toInt l
+                , fromInt $ min (V.length v - 1) $ toInt u)
 
 -- Index conversions
 
