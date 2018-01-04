@@ -37,7 +37,7 @@ labelGaps replaceWhat xInterval (y0, y1) s =
   --       $ filter (not.onSelectionBoundary)
   --       $ intervalsFromAdjacent $ V.toList gapIndices
   where
-    (IndexInterval (i0, i1)) = iiBoundToIVector s xInterval
+    (IndexInterval (i0, i1)) = iiBoundByIVector s xInterval
 
     cutLine :: Index0 -> Double
     cutLine i = let dydx = (y1-y0) / fromIntegral (i1-i0)

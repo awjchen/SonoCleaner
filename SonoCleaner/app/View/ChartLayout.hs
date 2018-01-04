@@ -14,16 +14,13 @@ import           Control.Lens             hiding (indices)
 import           Data.Colour              (AlphaColour, blend, opaque)
 import           Data.Colour.Names
 import           Data.Default
-import qualified Data.IntMap.Strict       as M
-import qualified Data.IntSet              as S
 import           Data.List                (groupBy)
+import           Data.Semigroup
 import           Data.Tuple               (swap)
 import qualified Data.Vector.Unboxed      as V
 import           Graphics.Rendering.Chart
 
-import qualified Types.IndexInterval      as I
-import           Types.IntMap
-import           Types.Series             (unboxedMinAndMax)
+import           Types.Indices
 import           View.Types
 
 --------------------------------------------------------------------------------
@@ -63,7 +60,7 @@ chartLayout plotSpec (pixelsX, _) = layout where
 --------------------------------------------------------------------------------
 
 data XAxisParameters = XAxisParameters
-  { plotInterval         :: I.IndexInterval
+  { plotInterval          :: IndexInterval Index0
   , compressibleTimeSteps :: Int
   }
 
@@ -96,11 +93,17 @@ xAxis pixelsX plotSpec =
                 $ view axis_grid
                 $ xScaledAxis [lb, ub]
 
-    plotXBoundsIndices = I.fromEndpoints $ plotXBounds
-      & over _1 (max 0               . toIndex) -- inclusive
-      . over _2 (min maxIndex . succ . toIndex) -- inclusive
+    plotXBoundsIndices =
+        iiBoundByIVector (plotSeries plotSpec)
+      $ IndexInterval
+      $ over _2 succ -- toIndex rounds down
+      $ over both toIndex
+      $ plotXBounds
+    -- plotXBoundsIndices = IndexInterval $ plotXBounds
+    --   & over _1 (max 0               . toIndex) -- inclusive
+    --   . over _2 (min maxIndex . succ . toIndex) -- inclusive
       where toIndex = plotToIndex plotSpec
-            maxIndex = V.length (plotSeries plotSpec) - 1
+            -- maxIndex = V.length (plotSeries plotSpec) - 1
 
     compressibleTimeSteps = floor $ timeStepsPerPixel / 2
       where
@@ -153,35 +156,38 @@ yAxis plotSpec = axis . oppositeAxis . grid
 
 
 traces :: ChartSpec -> XAxisParameters -> [PlotLines Double Double]
-traces plotSpec XAxisParameters{..} =
+traces plotSpec xParams =
   -- Order matters: later items will draw over earlier items
   [ twinTrace
   , customTrace
   , originalTrace
   , focusedTrace ]
   where
-    (lb, ub) = I.getEndpoints plotInterval
-    croppedTimes = I.slice plotInterval $ plotTimes plotSpec
+    interval = plotInterval xParams
+    croppedTimes = ivSlice interval $ plotTimes plotSpec
 
-    cropIndexList :: M.IntMap Double -> [Int]
-    cropIndexList = map (subtract lb) . M.keys . boundIntMap (lb, pred ub)
+    cropIndexList :: IIntMap Index1 Double -> [Index1]
+    cropIndexList = map (subtract $ iiLeft interval')
+                  . iimKeys1 . iimBound interval'
+      where interval' = iiDiff interval
 
-    simplifySeries' :: V.Vector (Double, Double) -> [(Double, Double)]
-    simplifySeries' = if compressibleTimeSteps < 2
-      then V.toList
-      else simplifySeries compressibleTimeSteps
+    simplifySeries' :: IVector Index0 (Double, Double) -> [(Double, Double)]
+    simplifySeries' = if compressibleTimeSteps xParams < 2
+      then V.toList . unsafeRunIVector
+      else simplifySeries (compressibleTimeSteps xParams)
 
-    makeMainTrace :: M.IntMap Double -> V.Vector Double -> [[(Double, Double)]]
+    makeMainTrace
+      :: IIntMap Index1 Double -> IVector Index0 Double -> [[(Double, Double)]]
     makeMainTrace splitIndices =
         map simplifySeries'
       . splitAtIndices (cropIndexList splitIndices)
-      . V.zip croppedTimes
-      . I.slice plotInterval
+      . ivZip croppedTimes
+      . ivSlice interval
 
-    makeOptionalTrace :: Maybe (V.Vector Double) -> [(Double, Double)]
+    makeOptionalTrace :: Maybe (IVector Index0 Double) -> [(Double, Double)]
     makeOptionalTrace =
         simplifySeries'
-      . maybe V.empty (V.zip croppedTimes . I.slice plotInterval)
+      . maybe mempty (ivZip croppedTimes . ivSlice interval)
 
     focusedTrace =
         makeLines 1 (opaque black)
@@ -199,42 +205,47 @@ traces plotSpec XAxisParameters{..} =
 
 
 jumps :: ChartSpec -> XAxisParameters -> [PlotLines Double Double]
-jumps plotSpec XAxisParameters{..} =
+jumps plotSpec xParams =
   -- Order matters: later items will draw over earlier items
   closedJumps ++ openJumps
   where
-    (lb, ub) = I.getEndpoints plotInterval
+    interval' = iiDiff $ plotInterval xParams
 
-    plotJump :: Int -> [(Double, Double)]
-    plotJump i = [(toTime i, v V.! i), (toTime i1, v V.! i1)]
-      where v = plotSeries plotSpec
+    jumpEndpoints :: Index1 -> (Index0, Index0)
+    jumpEndpoints j = runIndexInterval $ iiUndiff $ IndexInterval (j, j)
+
+    plotJump :: Index1 -> [(Double, Double)]
+    plotJump j = [(toTime i0, ivIndex v i0), (toTime i1, ivIndex v i1)]
+      where (i0, i1) = jumpEndpoints j
+            v = plotSeries plotSpec
             toTime = plotToTime plotSpec
-            i1 = succ i
 
-    simplifyJumps' :: [Int] -> [[(Double, Double)]]
+    simplifyJumps' :: [Index1] -> [[(Double, Double)]]
     simplifyJumps' indices =
-      if   compressibleTimeSteps < 4
+      if   compressibleTimeSteps xParams < 4
       then map plotJump indices
       else simplifyJumps (plotSeries plotSpec)
                          (plotToTime plotSpec)
-                         compressibleTimeSteps
+                         (compressibleTimeSteps xParams)
                          indices
 
     openJumps = zipWith3 makeLine (repeat 2) openColours
               $ simplifyJumps'
-              $ M.keys . boundIntMap (lb, pred ub)
+              $ iimKeys1 . iimBound interval'
               $ openJumps'
       where openJumps' = plotJumpIndices plotSpec
             openColours = drop parity $ cycle [opaque magenta, opaque yellow]
-            parity = (`mod` 2) $ M.size $ fst $ M.split lb openJumps'
+            parity = (`mod` 2) $ iimSize
+                   $ fst $ iimSplit (iiLeft interval') openJumps'
 
     closedJumps = zipWith3 makeLine (repeat 2) closedColours
                 $ simplifyJumps'
-                $ S.toList . boundIntSet (lb, pred ub)
+                $ iisToList1 . iisBound interval'
                 $ closedJumps'
       where closedJumps' = plotModifiedIndices plotSpec
             closedColours = drop parity $ cycle [opaque white, opaque cyan]
-            parity = (`mod` 2) $ S.size $ fst $ S.split lb closedJumps'
+            parity = (`mod` 2) $ iisSize
+                   $ fst $ iisSplit (iiLeft interval') closedJumps'
 
 
 highlightInterval :: Maybe (Double, Double) -> PlotLines Double y
@@ -263,52 +274,69 @@ jumpAnnotation (Just (x, y, str)) =
 -- Downsampling
 --------------------------------------------------------------------------------
 
-simplifySeries :: V.Unbox a => Int -> V.Vector (a, Double) -> [(a, Double)]
-simplifySeries bucketSize path
-  | V.length path <= 2 = V.toList path
+simplifySeries
+  :: V.Unbox a => Int -> IVector Index0 (a, Double) -> [(a, Double)]
+simplifySeries bucketSize' path
+  | ivLength path <= 2 = V.toList $ unsafeRunIVector path
   | otherwise =
-  let nDivisions = (pred (V.length path)) `div` bucketSize
+  -- casting `bucketSize'` is okay because it is "affine-y":
+  -- it will only be compared against the difference of two `Index0`.
+  let bucketSize = index0 bucketSize'
+      len = ivLength path
+      -- pred beacuse the last two buckets are added later
+      nDivisions = (pred len) `div` bucketSize
       indices = fmap (*bucketSize) [0..nDivisions-1]
-              ++ [ mid (nDivisions*bucketSize) (V.length path)
-                 , V.length path ]
+                ++ [ mid (nDivisions*bucketSize) len , len ]
         where mid i j = (i+j) `div` 2
-      buckets = zip indices (tail indices)
-      slices = fmap (\(a, b) -> (a, b-a)) buckets
+      buckets = map IndexInterval $ zip indices (map pred $ tail indices)
+      -- slices = fmap (\(a, b) -> (a, b-a)) buckets
 
-      simplifySegment :: V.Unbox a => V.Vector (a, Double) -> [(a, Double)]
+      simplifySegment
+        :: V.Unbox a => IVector Index0 (a, Double) -> [(a, Double)]
       simplifySegment segment =
-        let (xs, ys) = V.unzip segment
-            minAndMax = unboxedMinAndMax ys
+        let (xs, ys) = ivUnzip segment
+            minAndMax = ivMinMax ys
+            xs' = unsafeRunIVector xs
+            ys' = unsafeRunIVector ys
             -- for cosmetics
-            (y1', y2') = if V.head ys < V.last ys
+            (y1', y2') = if V.head ys' < V.last ys'
               then      minAndMax
               else swap minAndMax
-        in  [(V.head xs, y1'), (V.last xs, y2')]
+        in  [(V.head xs', y1'), (V.last xs', y2')]
 
-  in  concatMap (simplifySegment . (flip (uncurry V.slice) path)) slices
+  in  concatMap (simplifySegment . (`ivSlice` path)) buckets
 
 simplifyJumps
-  :: V.Vector Double
-  -> (Int -> Double)
+  :: IVector Index0 Double
+  -> (Index0 -> Double)
   -> Int
-  -> [Int]
+  -> [Index1]
   -> [[(Double, Double)]]
-simplifyJumps v toTime bucketSize =
-    concatMap (map plot' . evenReduce . map bounds')
+simplifyJumps v toTime bucketSize' =
+    concatMap (map plot' . evenConcat . map bounds')
   . groupBy (\a b -> b - a < bucketSize)
   where
-    bounds' :: Int -> SP Int Bounds
-    bounds' i = SP i (makeBounds (v V.! i) (v V.! succ i))
+    -- casting `bucketSize'` is okay because it is "affine-y":
+    -- it will only be compared against the difference of two `Index1`.
+    bucketSize = index1 bucketSize'
 
-    union' :: SP Int Bounds -> SP Int Bounds -> SP Int Bounds
-    union' (SP i0 b0) (SP _ b1) = SP i0 (boundsUnion b0 b1)
+    jumpEndpoints :: Index1 -> (Index0, Index0)
+    jumpEndpoints j = runIndexInterval $ iiUndiff $ IndexInterval (j, j)
 
-    evenReduce :: [SP Int Bounds] -> [SP Int Bounds]
-    evenReduce (a:b:c:xs) = evenReduce $ (a `union'` b `union'` c):xs
-    evenReduce xs         = xs
+    bounds' :: Index1 -> SP Index1 Bounds
+    bounds' j = SP j (makeBounds (ivIndex v i0) (ivIndex v (succ i1)))
+      where (i0, i1) = jumpEndpoints j
 
-    plot' :: SP Int Bounds -> [(Double, Double)]
-    plot' (SP i (Bounds l u)) = [(toTime i, l), (toTime (succ i), u)]
+    union' :: SP Index1 Bounds -> SP Index1 Bounds -> SP Index1 Bounds
+    union' (SP i0 b0) (SP _ b1) = SP i0 (b0 <> b1)
+
+    evenConcat :: [SP Index1 Bounds] -> [SP Index1 Bounds]
+    evenConcat (a:b:c:xs) = evenConcat $ (a `union'` b `union'` c):xs
+    evenConcat xs         = xs
+
+    plot' :: SP Index1 Bounds -> [(Double, Double)]
+    plot' (SP j (Bounds l u)) = [(toTime i0, l), (toTime (succ i1), u)]
+      where (i0, i1) = jumpEndpoints j
 
 --------------------------------------------------------------------------------
 -- Bounds
@@ -319,8 +347,8 @@ data Bounds = Bounds !Double !Double
 makeBounds :: Double -> Double -> Bounds
 makeBounds a b = if a < b then Bounds a b else Bounds b a
 
-boundsUnion :: Bounds -> Bounds -> Bounds
-boundsUnion (Bounds l u) (Bounds l' u') = Bounds (min l l') (max u u')
+instance Semigroup Bounds where
+  (Bounds l u) <> (Bounds l' u') = Bounds (min l l') (max u u')
 
 --------------------------------------------------------------------------------
 -- Utility
@@ -337,11 +365,14 @@ makeLines strokeWidth color lineList =
       & plot_lines_style . line_color .~ color
       & plot_lines_style . line_width .~ strokeWidth
 
-splitAtIndices :: V.Unbox a => [Int] -> V.Vector a -> [V.Vector a]
-splitAtIndices jumpIndices tracePoints =
-  map getSlice $ filter (uncurry (/=)) intervals
+splitAtIndices
+  :: V.Unbox a => [Index1] -> IVector Index0 a -> [IVector Index0 a]
+splitAtIndices jumpIndices v =
+  map (`ivSlice` v) $ filter (not . iiIsSingleton) intervals
   where
-    intervals :: [(Int, Int)]
-    intervals = zip (0 : map succ jumpIndices)
-                    (jumpIndices ++ [V.length tracePoints - 1])
-    getSlice (i0, i1) = V.slice i0 (i1-i0+1) tracePoints
+    (firstCut, lastCut) =
+      runIndexInterval $ iiGrow $ iiDiff $ IndexInterval (0, ivLength v)
+    intervals :: [IndexInterval Index0]
+    intervals = map (iiShrink . iiUndiff . IndexInterval)
+              $ zip (firstCut : jumpIndices) (jumpIndices ++ [lastCut])
+    -- getSlice (i0, i1) = V.slice i0 (i1-i0+1) v

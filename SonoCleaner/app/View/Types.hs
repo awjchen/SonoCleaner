@@ -2,9 +2,8 @@ module View.Types where
 
 import           Data.Colour         (AlphaColour)
 import           Data.Default
-import qualified Data.IntMap.Strict  as M
-import qualified Data.IntSet         as S
-import qualified Data.Vector.Unboxed as V
+
+import           Types.Indices
 
 --------------------------------------------------------------------------------
 -- Specification of the display
@@ -13,21 +12,21 @@ import qualified Data.Vector.Unboxed as V
 data ChartSpec = ChartSpec
   { plotTitle            :: String
   , plotTitleColour      :: AlphaColour Double
-  , plotSeries           :: V.Vector Double
-  , plotJumpIndices      :: M.IntMap Double
-  , plotModifiedIndices  :: S.IntSet
-  , plotOriginalSeries   :: Maybe (V.Vector Double)
-  , plotTwinSeries       :: Maybe (V.Vector Double)
-  , plotCustomSeries     :: Maybe (V.Vector Double)
+  , plotSeries           :: IVector Index0 Double
+  , plotJumpIndices      :: IIntMap Index1 Double
+  , plotModifiedIndices  :: IIntSet Index1
+  , plotOriginalSeries   :: Maybe (IVector Index0 Double)
+  , plotTwinSeries       :: Maybe (IVector Index0 Double)
+  , plotCustomSeries     :: Maybe (IVector Index0 Double)
   , plotHighlightRegion  :: Maybe (Double, Double)
   , plotXRange           :: (Double, Double)
   , plotYRange           :: (Double, Double)
   , plotBackgroundColour :: AlphaColour Double
   , plotAnnotation       :: Maybe (Double, Double, String)
-  , plotTimes            :: V.Vector Double
+  , plotTimes            :: IVector Index0 Double
   , plotTimeStep         :: Double
-  , plotToTime           :: Int -> Double
-  , plotToIndex          :: Double -> Int
+  , plotToTime           :: Index0 -> Double
+  , plotToIndex          :: Double -> Index0
   }
 
 -------------------------------------------------------------------------------
