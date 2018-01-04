@@ -40,9 +40,10 @@ module Model.Model
   , getTraceBounds
 
   , getTimes
-  , getIndexTimeConversions
-  , getIndexToTime
-  , getTimeToIndex
+  , timeAtPoint
+  , timeAtSlope
+  , nearestPoint
+  , nearestSlope
 
   , getQuality
 
@@ -271,26 +272,34 @@ getTraceBounds :: Model -> ViewBounds
 getTraceBounds model =
   let traceState = getCurrentState model
       s = traceState ^. series
-      toTime = getIndexToTime model
-      boundsX = (toTime 0, toTime (ivLength s - 1))
+      time = timeAtPoint model
+      boundsX = (time 0, time (ivLength s - 1))
       boundsY = traceState ^. seriesBounds
   in  ViewBounds boundsX boundsY
 
 getTimes :: Model -> IVector Index0 Double
 getTimes model = ivSlice (getCropBounds model) $ model ^. fakeTimes
 
-getIndexTimeConversions :: Model -> (Index0 -> Double, Double -> Index0)
-getIndexTimeConversions model =
+timeAtPoint :: Model -> Index0 -> Double
+timeAtPoint model i = getTimes model `ivIndex` i
+
+timeAtSlope :: Model -> Index1 -> Double
+timeAtSlope model j = let mid (x, y) = 0.5*(x+y) in
+  mid $ over both (timeAtPoint model) $ runIndexInterval $ jumpEndpoints j
+
+nearestPoint :: Model -> Double -> Index0
+nearestPoint model t =
   let offset = iiLeft $ getCropBounds model
       dt = getTimeStep model
-  in  ( \i -> dt * fromIntegral (i+offset)
-      , \x -> subtract offset $ floor (x/dt) )
+      bounds = iiGetIVectorBounds (getTimes model)
+  in  iiBound bounds $ subtract offset $ round $ t/dt
 
-getIndexToTime :: Model -> Index0 -> Double
-getIndexToTime = fst . getIndexTimeConversions
-
-getTimeToIndex :: Model -> Double -> Index0
-getTimeToIndex = snd . getIndexTimeConversions
+nearestSlope :: Model -> Double -> Index1
+nearestSlope model t =
+  let offset = iiLeft $ iiDiff $ getCropBounds model
+      dt = getTimeStep model
+      bounds = iiDiff $ iiGetIVectorBounds (getTimes model)
+  in  iiBound bounds $ subtract offset $ round $ t/dt - 0.5
 
 getQuality :: Model -> TraceQuality
 getQuality = view $ currentTrace . quality

@@ -33,13 +33,13 @@ estimateSlope ds jumps radius i
 median :: V.Vector Double -> Double
 median v
   | odd n = v' V.! middleIndex
-  | otherwise = avg (v' V.! pred middleIndex) (v' V.! middleIndex)
+  | otherwise = mid (v' V.! pred middleIndex) (v' V.! middleIndex)
   where
     n = V.length v
     middle = n `quot` 2 + 1
     middleIndex = pred middle
     v' = V.modify (`partialSort` middle) v
-    avg x y = (x+y)/2
+    mid x y = (x+y)/2
 
 getSurroundingSlopes
   :: IVector Index1 Double

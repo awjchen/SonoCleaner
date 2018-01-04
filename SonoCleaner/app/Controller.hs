@@ -14,6 +14,7 @@ module Controller
   ( controllerMain
   ) where
 
+import           Control.Arrow               ((&&&))
 import           Control.Concurrent.STM
 import           Control.Lens
 import           Control.Monad
@@ -21,7 +22,6 @@ import           Control.Monad.IO.Class      (liftIO)
 import           Control.Monad.Trans.Except
 import           Data.Default
 import qualified Data.Text                   as T
-import qualified Data.Vector.Unboxed         as V
 import           Graphics.Rendering.Chart
 import           Graphics.UI.Gtk             hiding (set)
 import           System.FilePath             (splitFileName)
@@ -37,8 +37,7 @@ import           Controller.Sensitivity
 import           Controller.Util
 import           Model
 import           Types.Bounds
-import qualified Types.IndexInterval         as I
-import           Types.IntMap
+import           Types.Indices
 import           View
 
 -------------------------------------------------------------------------------
@@ -320,10 +319,15 @@ controllerMain = do
           jumps' <- getJumps model' guiState'
           return (model', guiState', jumps')
 
-        let (toTime, toIndex) = getIndexTimeConversions model
-            dt = getTimeStep model
+        let nearestPoint' = nearestPoint model
+            nearestSlope' = nearestSlope model
+            timeAtPoint' = timeAtPoint model
+            timeAtSlope' = timeAtSlope model
+            mid' (x, y) = 0.5*(x+y)
+            -- dt = getTimeStep model
             s = getCurrentState model ^. series
-            lastIndex = V.length s - 1
+            -- pointBounds = iiGetIVectorBounds s
+            -- lastIndex = ivLength s - 1
 
         case interpretMouseGesture mouseEvent1 mouseEvent2 of
           -- Left-click: panning
@@ -337,12 +341,14 @@ controllerMain = do
           Just (MouseClickRight pt) -> liftIO $ withUpdate $
             case guiState ^. currentPage of
               MainPage ->
-                case findNearestIndex (toIndex (p_x pt)) jumps of
+                case iimFindNearestIndex (nearestSlope' (p_x pt)) jumps of
                   Nothing -> return ()
-                  Just i -> let t = toTime i + 0.5*dt
-                                h = 0.5 * (s V.! i + s V.! (i+1))
+                  Just j ->
+                    let t = timeAtSlope' j
+                        h = mid' $ over both (ivIndex s)
+                          $ runIndexInterval $ jumpEndpoints j
                     in  atomically $ modifyTVar' guiStateTVar $
-                            set currentPage (SinglePage i)
+                            set currentPage (SinglePage j)
                           . set (viewBounds.toViewPort.viewPortCenter) (t, h)
               _ -> return ()
 
@@ -351,23 +357,28 @@ controllerMain = do
             case guiState ^. currentPage of
               -- Selecting multiple level-shifts in a time interval
               MainPage ->  do
-                let lowerTarget = toIndex xLeft
-                    upperTarget = toIndex xRight
-                case findIntermediateIndices (lowerTarget, upperTarget) jumps of
-                    Just (is@(_:_:_)) ->
-                      let t = 0.5 * (toTime (head is) + toTime (last is))
+                let lowerTarget = nearestSlope' xLeft
+                    upperTarget = nearestSlope' xRight
+                case iimFindIntermediateIndices1
+                       (IndexInterval (lowerTarget, upperTarget)) jumps of
+                    Just (js@(_:_:_)) ->
+                      -- let t = 0.5 * (toTime (head js) + toTime (last js))
+                      let t = mid' $ over both timeAtSlope' $ (head &&& last) js
                       in  atomically $ modifyTVar' guiStateTVar $
-                              set currentPage (MultiplePage is)
+                              set currentPage (MultiplePage js)
                             . set (viewBounds.toViewPort.viewPortCenter._1) t
                     _ -> return ()
               -- Selecting crop boundaries
               CropPage _ ->
-                let lowerIndex = max 0         $ toIndex xLeft
-                    upperIndex = min lastIndex $ toIndex xRight
-                    t = 0.5 * (toTime lowerIndex + toTime upperIndex)
+                let (l, u) = runIndexInterval $ iiBoundByIVector s
+                           $ IndexInterval $ over both nearestPoint'
+                           $ (xLeft, xRight)
+                -- let lowerIndex = max 0         $ nearestPoint' xLeft
+                --     upperIndex = min lastIndex $ nearestPoint' xRight
+                    t = mid' $ over both timeAtPoint' $ (l, u)
+                    -- t = 0.5 * (toTime lowerIndex + toTime upperIndex)
                 in  atomically $ modifyTVar' guiStateTVar $
-                        set currentPage (CropPage $ Just $
-                              I.fromEndpoints (lowerIndex, upperIndex))
+                        set currentPage (CropPage $ Just $ IndexInterval (l, u))
                       . set (viewBounds . toViewPort . viewPortCenter . _1) t
               _ -> return ()
 
@@ -376,11 +387,12 @@ controllerMain = do
             liftIO $ withUpdate $ case guiState ^. currentPage of
               MainPage ->
                 let stratum = case keyMod of
-                      ModControl -> LabelLower
-                      ModShift   -> LabelUpper
-                      _          -> LabelLower
-                    operator = interpolateGapsOp stratum
-                                (toIndex x1, toIndex x2) (y1, y2)
+                      ModControl -> ReplaceLowerData
+                      ModShift   -> ReplaceUpperData
+                      _          -> ReplaceLowerData
+                    interval = IndexInterval
+                                 (nearestPoint' x1, nearestPoint' x2)
+                    operator = interpolateGapsOp stratum interval (y1, y2)
                 in  withUpdate $ atomically $
                       writeTVar modelTVar (applyToModel operator model)
               _ -> return ()

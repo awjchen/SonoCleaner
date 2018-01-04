@@ -27,6 +27,8 @@ module Types.Indices
   , iiToVector
   , iiToIVector
   , iiIndex
+  , iiBound
+  , iiGetIVectorBounds
   , iiBoundByIVector
   , iiIsSingleton
 
@@ -86,6 +88,8 @@ module Types.Indices
   , iimUnionWith
   , iimSplit
   , iimBound
+  , iimFindNearestIndex
+  , iimFindIntermediateIndices1
   ) where
 
 import           Control.Applicative
@@ -201,6 +205,16 @@ iiToIVector (IndexInterval (l, u)) = IVector $ V.enumFromN l (toInt $ u-l+1)
 
 iiIndex :: (IsInt i, V.Unbox a) => IVector i a -> IndexInterval i -> (a, a)
 iiIndex (IVector v) (IndexInterval (l, u)) = (v V.! toInt l, v V.! toInt u)
+
+iiBound :: Ord i => IndexInterval i -> i -> i
+iiBound (IndexInterval (l, u)) i
+  | i < l = l
+  | i > u = u
+  | otherwise = i
+
+iiGetIVectorBounds
+  :: (IsInt i, Num i, V.Unbox a) => IVector i a -> IndexInterval i
+iiGetIVectorBounds iv = IndexInterval (0, ivLength iv - 1)
 
 iiBoundByIVector :: (IsInt i, V.Unbox a)
         => IVector i a -> IndexInterval i -> IndexInterval i
@@ -324,9 +338,6 @@ ivLength = fromInt . V.length . coerce
 
 ivEnumFromN :: (IsInt i, Num a, V.Unbox a) =>  a -> i -> IVector i a
 ivEnumFromN z i = IVector $ V.enumFromN z (toInt i)
-
--- ivConcat :: V.Unbox a => [IVector i a] -> IVector i a
--- ivConcat = IVector . V.concat . coerce
 
 -- Modifying vectors
 

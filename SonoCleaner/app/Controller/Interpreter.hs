@@ -282,7 +282,8 @@ specifyChart model viewParams ats =
     , plotToIndex          = toIndex
     }
   where
-    (toTime, toIndex)  = getIndexTimeConversions model
+    toTime  = timeAtPoint model
+    toIndex = nearestPoint model
 
     traceSet = if vpShowReplicateTraces viewParams
       then TraceSet { showOriginal = True
