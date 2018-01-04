@@ -1,6 +1,7 @@
 module Model.Slope
   ( estimateSlope
   , median
+  , getSurroundingSlopes
   ) where
 
 import           Data.Vector.Algorithms.Intro (partialSort)
@@ -22,11 +23,7 @@ estimateSlope ds jumps radius i
   | pValue' < 0.10             = median slopes
   | otherwise                  = 0
   where
-    i0 = max 0                 (i-radius)
-    i1 = min (ivLength ds - 1) (i+radius)
-    -- run = i1-i0+1
-    slopes = V.fromList $ map (ivIndex ds)
-                        $ filter (not . flip iimMember jumps) [i0..i1]
+    slopes = V.fromList $ getSurroundingSlopes ds jumps radius i
     nonZeroSlopes = V.filter (/= 0) slopes
     pairs = V.zip nonZeroSlopes (V.replicate (V.length nonZeroSlopes) 0)
     pValue' = pValue $ testSignificance
@@ -43,3 +40,15 @@ median v
     middleIndex = pred middle
     v' = V.modify (`partialSort` middle) v
     avg x y = (x+y)/2
+
+getSurroundingSlopes
+  :: IVector Index1 Double
+  -> IIntMap Index1 Double
+  -> Index1
+  -> Index1
+  -> [Double]
+getSurroundingSlopes ds jumps radius i =
+  map (ivIndex ds) $ filter (not . flip iimMember jumps) [i0..i1]
+  where
+    i0 = max 0                 (i-radius)
+    i1 = min (ivLength ds - 1) (i+radius)

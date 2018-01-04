@@ -3,138 +3,149 @@
 {-# LANGUAGE MultiWayIf #-}
 
 module Model.Jumps
-  ( zeroJump
-  , estimateSlopeBoth
+  ( setZero
+  , setMedianSlope
 
-  , interpolateBetweenJumps
+  , interpolateGroup
   , matchGroup
   ) where
 
-import           Control.Applicative
+import           Control.Arrow       ((&&&))
 import           Control.Lens        hiding (indices)
-import qualified Data.IntMap.Strict  as M
 import           Data.Maybe          (fromMaybe)
 import qualified Data.Vector.Unboxed as V
 
-import qualified Types.IndexInterval as I
+import           Types.Indices
 import           Types.LevelShifts
-import           Types.Series
 
 import           Model.Slope
 import           Model.TraceState
 
 -------------------------------------------------------------------------------
--- Manual operatons on single jumps
+-- Manual corrections on single level-shifts
 -------------------------------------------------------------------------------
 
-type SingleShift =
-  V.Vector Double -> M.IntMap Double -> Int -> Double -> Maybe Double
+samplingRadius :: Index1
+samplingRadius = 4
 
-liftToTrace ::
-     SingleShift
+type ReplaceSingleLevelShift
+  =  IVector Index1 Double
+  -> IIntMap Index1 Double
+  -> Index1
+  -> Maybe Double
+
+setZero' :: ReplaceSingleLevelShift
+setZero' _ _ _ = Just 0
+
+setMedianSlope' :: ReplaceSingleLevelShift
+setMedianSlope' ds jumps i
+  | null slopes = Nothing
+  | otherwise   = Just $ median $ V.fromList slopes
+  where
+  slopes = getSurroundingSlopes ds jumps samplingRadius i
+
+singleToTrace
+  :: ReplaceSingleLevelShift
   -> Hold
   -> Double
-  -> Int -- Index of jump
-  -> M.IntMap Double
+  -> Index1
+  -> IIntMap Index1 Double
   -> TraceState
   -> TraceState
-liftToTrace f direction offset i jumps traceState =
+singleToTrace replace hold offset i jumps traceState =
   fromMaybe traceState $ do
-    x <- M.lookup i jumps -- jump height
+    oldHeight <- iimLookup i jumps
     let ds = snd $ traceState ^. diffSeries
-    x' <- (+offset) <$> f ds jumps i x -- new jump height
-    let updates = [(i, x')]
-        shift = case direction of
+    newHeight <- (+offset) <$> replace ds jumps i
+    let updates = [(i, newHeight)]
+        leftShift = case hold of
           HoldLeft  -> 0
-          HoldRight -> x - x'
-    return $ updateDiffSeries shift updates traceState
+          HoldRight -> oldHeight - newHeight
+    pure $ updateDiffSeries leftShift updates traceState
 
-slopeEstimationRadius :: Int
-slopeEstimationRadius = 4
-
-zeroJump, estimateSlopeBoth
+setZero, setMedianSlope
   :: Hold
   -> Double
-  -> Int -- Index of jump
-  -> M.IntMap Double
+  -> Index1
+  -> IIntMap Index1 Double
   -> TraceState
   -> TraceState
-zeroJump           = liftToTrace  zeroJump'
-estimateSlopeBoth  = liftToTrace (estimateSlopeBoth'  slopeEstimationRadius)
+setZero        = singleToTrace setZero'
+setMedianSlope = singleToTrace setMedianSlope'
 
--- SingleShift:
--- series -> jumps map -> jump index -> jump height -> Maybe newHeight
+-- avgSlopeLeft' :: Index1 -> SingleShift
+-- avgSlopeLeft' radius ds jumps i _ =
+--   -- new stuff, not finished
+--   let slopes = filter (not . flip iimMember jumps)
+--              $ iiToList
+--              $ iiBoundToIVector ds
+--              $ IndexInterval (i- radius, i-1)
+  -- let boundedRadius = i - max 0 (i - radius)
+  --     i0 = i-boundedRadius
+  --     prevDiffs = V.map snd
+  --       $ V.filter (not . flip M.member jumps . fst)
+  --       $ V.zip (V.generate boundedRadius (+i0))
+  --       $ V.slice i0 boundedRadius ds
+  -- in  if V.null prevDiffs then Nothing else Just $ unboxedAverage prevDiffs
 
-zeroJump' :: SingleShift
-zeroJump' _ _ _ _ = Just 0
+-- estimateSlopeRight' :: Int -> SingleShift
+-- estimateSlopeRight' radius ds jumps i _ =
+--   let boundedRadius = min (V.length ds - 1) (i + radius) - i
+--       i0 = i+1
+--       nextDiffs = V.map snd
+--         $ V.filter (not . flip M.member jumps . fst)
+--         $ V.zip (V.generate boundedRadius (+i0))
+--         $ V.slice (i+1) boundedRadius ds
+--   in  if V.null nextDiffs then Nothing else Just $ unboxedAverage nextDiffs
 
-estimateSlopeLeft' :: Int -> SingleShift
-estimateSlopeLeft' radius ds jumps i _ =
-  let boundedRadius = i - max 0 (i - radius)
-      i0 = i-boundedRadius
-      prevDiffs = V.map snd
-        $ V.filter (not . flip M.member jumps . fst)
-        $ V.zip (V.generate boundedRadius (+i0))
-        $ V.slice i0 boundedRadius ds
-  in  if V.null prevDiffs then Nothing else Just $ unboxedAverage prevDiffs
-
-estimateSlopeRight' :: Int -> SingleShift
-estimateSlopeRight' radius ds jumps i _ =
-  let boundedRadius = min (V.length ds - 1) (i + radius) - i
-      i0 = i+1
-      nextDiffs = V.map snd
-        $ V.filter (not . flip M.member jumps . fst)
-        $ V.zip (V.generate boundedRadius (+i0))
-        $ V.slice (i+1) boundedRadius ds
-  in  if V.null nextDiffs then Nothing else Just $ unboxedAverage nextDiffs
-
--- Average the left and right estimates; or, if one side doesn't exist, use the
--- side that does.
-estimateSlopeBoth' :: Int -> SingleShift
-estimateSlopeBoth' radius ds jumps i x =
-  let left  = estimateSlopeLeft'  radius ds jumps i x
-      right = estimateSlopeRight' radius ds jumps i x
-      avg   = fmap (/2) $ (+) <$> left <*> right
-  in  avg <|> left <|> right
+-- -- Average the left and right estimates; or, if one side doesn't exist, use the
+-- -- side that does.
+-- estimateSlopeBoth' :: Int -> SingleShift
+-- estimateSlopeBoth' radius ds jumps i h =
+--   let left  = estimateSlopeLeft'  radius ds jumps i h
+--       right = estimateSlopeRight' radius ds jumps i h
+--       avg   = fmap (/2) $ (+) <$> left <*> right
+--   in  avg <|> left <|> right
 
 -------------------------------------------------------------------------------
 -- Manual operations on pairs and groups of jumps
 -------------------------------------------------------------------------------
 
 -- 'Line'
-interpolateBetweenJumps ::
+interpolateGroup ::
      Double
-  -> [Int]
-  -> M.IntMap Double
+  -> [Index1]
+  -> IIntMap Index1 Double
   -> TraceState
   -> TraceState
-interpolateBetweenJumps _ indices _ traceState =
+interpolateGroup _ indices _ traceState =
   case indices of
-    (j0:_:_) ->
-      let j1 = last indices
-          v = traceState ^. series
-          pointInterval = I.undiff $ I.fromEndpoints (j0, j1)
-          yPair = over both (v V.!) $ I.getEndpoints pointInterval
-          updates = I.interpolationUpdates pointInterval yPair
+    (_:_:_) ->
+      let -- j1 = last indices
+          -- v = (traceState ^. series)
+          -- pointInterval = I.undiff $ I.fromEndpoints (j0, j1)
+          -- yPair = over both (v V.!) $ I.getEndpoints pointInterval
+          -- updates = I.interpolationUpdates pointInterval yPair
+          updates = interpolationUpdates (traceState ^. series)
+                  $ iiUndiff $ IndexInterval $ (head &&& last) indices
       in  updateDiffSeries 0 updates traceState
     _  -> traceState
 
 -- 'Sum'
 matchGroup
   :: Double
-  -> [Int]
-  -> M.IntMap Double
+  -> [Index1]
+  -> IIntMap Index1 Double
   -> TraceState
   -> TraceState
 matchGroup offset indices jumps traceState
   | (_:_:_) <- indices
-  , Just slopes <- traverse (`M.lookup` jumps) indices
+  , Just slopes <- traverse (`iimLookup` jumps) indices
   = let ds = snd $ traceState ^. diffSeries
-        slopeEsts = map (estimateSlope ds jumps radius) indices
-          where radius = 4
+        slopeEsts = map (estimateSlope ds jumps samplingRadius) indices
         slopeErrors = zipWith (-) slopes slopeEsts
-        err = sum slopeErrors + head slopeEsts
-        newSlopes = err : tail slopeEsts
+        totalError = sum slopeErrors
+        newSlopes = totalError + head slopeEsts : tail slopeEsts
           & _last %~ subtract offset
           & _head %~ (+offset)
         updates = zip indices newSlopes

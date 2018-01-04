@@ -141,6 +141,9 @@ type family ISucc i where
 -- endpoint of an interval is inclusive or exclusive. `IndexInterval`s represent
 -- _closed_ intervals in `Int`s.
 
+-- We assume that l <= u in `IndexInterval (l, u)`. This should be enforced, but
+-- is not yet the case.
+
 newtype IndexInterval i = IndexInterval { runIndexInterval :: (i, i) }
 
 derivingUnbox "IndexInterval0"
