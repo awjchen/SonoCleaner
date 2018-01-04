@@ -365,7 +365,7 @@ splitAtIndices jumpIndices v =
   map (`ivSlice` v) $ filter (not . iiIsSingleton) intervals
   where
     (firstCut, lastCut) =
-      runIndexInterval $ iiGrow $ iiDiff $ IndexInterval (0, ivLength v)
+      runIndexInterval $ iiGrow $ iiDiff $ iiGetIVectorBounds v
     intervals :: [IndexInterval Index0]
     intervals = map (iiShrink . iiUndiff . IndexInterval)
               $ zip (firstCut : jumpIndices) (jumpIndices ++ [lastCut])

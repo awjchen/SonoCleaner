@@ -102,8 +102,7 @@ span' eq (x:xs) = let (as, bs) = go x xs in (x:as, bs) where
 groupBy' :: (a -> a -> Bool) -> [a] -> [[a]]
 groupBy' eq = go
   where go xs = let (ys, xs') = span' eq xs
-                in  if null ys then [xs'] else ys : go xs'
-  -- null ys => xs' == [], but make this change after the refactoring
+                in  if null ys then [] else ys : go xs'
 
 -- Input list assumed to have unique elements
 groupRuns :: (Eq a, Enum a) => [a] -> [[a]]
