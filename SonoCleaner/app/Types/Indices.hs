@@ -12,27 +12,29 @@
 {-# LANGUAGE TypeFamilies               #-}
 
 module Types.Indices
-  ( Index0, index0
+  ( Index0, index0, unsafeRunIndex0
   , Index1, index1
   , Index2, index2
 
   , IndexInterval (..)
+  , _IndexInterval
 
   , iiLeft
   , iiMember
   , iiShrink
-  , iiGrow 
-  , iiToList 
+  , iiGrow
+  , iiToList
   , iiToVector
-  , iiToIVector 
+  , iiToIVector
   , iiIndex
-  , iiBoundToIVector 
+  , iiBoundToIVector
 
   , iiDiff
   , iiUndiff
 
   , IVector
   , ivector
+  , unsafeRunIVector 
 
   , ivDiff
   , ivUndiff
@@ -40,9 +42,9 @@ module Types.Indices
   , ivIndex
   , ivSlice
 
-  , ivExtend0 
-  , ivExtend1 
-  , ivExtend2 
+  , ivExtend0
+  , ivExtend1
+  , ivExtend2
 
   , ivAverage
   , ivMinMax
@@ -68,13 +70,14 @@ module Types.Indices
   , IIntMap
 
   , iimFromList1
-  , iimToList1 
-  , iimMapWithKey 
-  , iimMember 
-  , iimLookup 
-  , iimUnionWith 
+  , iimToList1
+  , iimMapWithKey
+  , iimMember
+  , iimLookup
+  , iimUnionWith
   ) where
 
+import           Control.Lens
 import           Data.Coerce
 import qualified Data.IntMap                  as M
 import qualified Data.IntSet                  as S
@@ -103,6 +106,9 @@ newtype Index2 = Index2 { runIndex2 :: Int }
 
 index0 :: Int -> Index0
 index0 = coerce
+
+unsafeRunIndex0 :: Index0 -> Int
+unsafeRunIndex0 = coerce
 
 index1 :: Int -> Index1
 index1 = coerce
@@ -141,10 +147,10 @@ type family ISucc i where
 -- endpoint of an interval is inclusive or exclusive. `IndexInterval`s represent
 -- _closed_ intervals in `Int`s.
 
--- We assume that l <= u in `IndexInterval (l, u)`. This should be enforced, but
--- is not yet the case.
+-- We assume that l <= u in `IndexInterval (l, u)`.
 
 newtype IndexInterval i = IndexInterval { runIndexInterval :: (i, i) }
+makePrisms ''IndexInterval
 
 derivingUnbox "IndexInterval0"
   [t| IndexInterval Index0 -> (Int, Int) |] [| coerce |] [| coerce |]
@@ -209,6 +215,9 @@ newtype IVector i a = IVector { runIVector :: V.Vector a }
 
 ivector :: V.Vector a -> IVector i a
 ivector = IVector
+
+unsafeRunIVector :: IVector i a -> V.Vector a
+unsafeRunIVector = runIVector
 
 -- Index conversions
 

@@ -76,14 +76,14 @@ import           Data.Maybe                 (fromMaybe, mapMaybe)
 import           Data.Tuple                 (swap)
 import qualified Data.Vector                as V
 import qualified Data.Vector.Unboxed        as VU
-import           GHC.Generics
+import           GHC.Generics               hiding (to)
 import           System.Directory           (createDirectoryIfMissing)
 import           System.FilePath            (splitFileName, (</>))
 import           Text.Printf                (printf)
 
 import           SonoSsa.Ssa
 import           Types.Bounds
-import qualified Types.IndexInterval        as I
+import           Types.Indices
 import qualified Types.Zipper               as Z
 
 import           Model.TraceOperators
@@ -99,10 +99,10 @@ data Model = Model
   { _filePath         :: FilePath
   , _ssaFile          :: SSA
   -- We store the (fake) timestamps here merely to avoid their recomputation
-  , _fakeTimes        :: VU.Vector Double
+  , _fakeTimes        :: IVector Index0 Double
   , _traces           :: Z.Zipper TraceInfo
   , _timeStep         :: Double
-  , _cropHistory      :: NE.NonEmpty I.IndexInterval
+  , _cropHistory      :: NE.NonEmpty (IndexInterval Index0)
   , _traceDataVersion :: Integer }
 
 initUndefinedModel :: Model
@@ -170,7 +170,7 @@ applyToModel traceOp = incrementVersion
 allTraceStates :: Traversal' Model TraceState
 allTraceStates = traces . traverse . history . traverse
 
-crop :: I.IndexInterval -> Model -> Model
+crop :: IndexInterval Index0 -> Model -> Model
 crop cropInterval = incrementVersion
   . over allTraceStates (cropTraceState cropInterval)
   . over cropHistory (cropInterval NE.<|)
@@ -244,11 +244,11 @@ getTraceDataVersion = view traceDataVersion
 getFilePath :: Model -> String
 getFilePath = view filePath
 
-getCropBounds :: Model -> I.IndexInterval
+getCropBounds :: Model -> IndexInterval Index0
 getCropBounds model =
   let (mostRecentCrop NE.:| previousCrops) = model ^. cropHistory
-      previousOffset = sum $ fmap (fst . I.getEndpoints) previousCrops
-  in  I.translate previousOffset mostRecentCrop
+      offset = sum $ fmap (fst . runIndexInterval) previousCrops
+  in  over (_IndexInterval . both) (+offset) mostRecentCrop
 
 -- Current trace information
 
@@ -272,24 +272,24 @@ getTraceBounds model =
   let traceState = getCurrentState model
       s = traceState ^. series
       toTime = getIndexToTime model
-      boundsX = (toTime 0, toTime (VU.length s - 1))
+      boundsX = (toTime 0, toTime (ivLength s - 1))
       boundsY = traceState ^. seriesBounds
   in  ViewBounds boundsX boundsY
 
-getTimes :: Model -> VU.Vector Double
-getTimes model = I.slice (getCropBounds model) $ model ^. fakeTimes
+getTimes :: Model -> IVector Index0 Double
+getTimes model = ivSlice (getCropBounds model) $ model ^. fakeTimes
 
-getIndexTimeConversions :: Model -> (Int -> Double, Double -> Int)
+getIndexTimeConversions :: Model -> (Index0 -> Double, Double -> Index0)
 getIndexTimeConversions model =
-  let offset = I.leftEndpoint $ getCropBounds model
+  let offset = iiLeft $ getCropBounds model
       dt = getTimeStep model
   in  ( \i -> dt * fromIntegral (i+offset)
       , \x -> subtract offset $ floor (x/dt) )
 
-getIndexToTime :: Model -> Int -> Double
+getIndexToTime :: Model -> Index0 -> Double
 getIndexToTime = fst . getIndexTimeConversions
 
-getTimeToIndex :: Model -> Double -> Int
+getTimeToIndex :: Model -> Double -> Index0
 getTimeToIndex = snd . getIndexTimeConversions
 
 getQuality :: Model -> TraceQuality
@@ -359,11 +359,11 @@ loadSSAFile filePath' model = do
       readQuality ti = ti & set quality
         (fromMaybe Good $ Prelude.lookup (ti ^. label) traceQualities)
       dataLength = VU.length (ssa ^. ssaIndexTrace . traceSeries)
-      bounds = I.fromEndpoints (0, dataLength - 1)
+      bounds = IndexInterval $ over both index0 $ (0, dataLength - 1)
       -- We assume that the data is a time series, allowing us to pretend that
       -- the measurements are evenly spaced in time. Using these fake timestamps
       -- makes conversions between times and indices much simpler.
-      fakeTimes' = VU.generate dataLength ((*dt) . fromIntegral)
+      fakeTimes' = ivector $ VU.generate dataLength ((*dt) . fromIntegral)
       traces' = Z.unsafeFromList
               $ map (readQuality . initTraceInfo)
               $ ssa ^. ssaDataTraces
@@ -377,10 +377,10 @@ loadSSAFile filePath' model = do
 
 initTraceInfo :: Trace -> TraceInfo
 initTraceInfo tr =
-  let s = tr ^. traceSeries
+  let series' = ivector $ tr ^. traceSeries
   in TraceInfo
     { _label   = tr ^. traceLabel
-    , _history = Z.fromNonEmpty $ pure $ initTraceState s
+    , _history = Z.fromNonEmpty $ pure $ initTraceState series'
     , _quality = Good
     }
 
@@ -399,11 +399,12 @@ readQualityFile ssaFilePath' =
 
 toSSA :: Model -> SSA
 toSSA model =
-  let newSeries = model ^.. traces . folded . history . Z.extract . series
-      oldTraces = model ^.  ssaFile . ssaDataTraces
+  let newSeries = model & toListOf
+        (traces . folded . history . Z.extract . series . to unsafeRunIVector)
+      oldTraces = model ^. ssaFile . ssaDataTraces
       newTraces = zipWith (set traceSeries) newSeries oldTraces
       traceLength = VU.length $ head newSeries
-      offset = I.leftEndpoint $ getCropBounds model
+      offset = unsafeRunIndex0 $ iiLeft $ getCropBounds model
   in  model ^. ssaFile & ssaDataTraces .~ newTraces
                        & ssaIndexTrace . traceSeries %~
                            VU.slice offset traceLength
