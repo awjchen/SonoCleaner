@@ -3,7 +3,7 @@ module Model.TraceOperators
   , isIdentityOp
   , getOp
 
-  , interpolateGapsOp
+  , interpolationBrushOp
 
   , setZeroOp
   , setMedianOp
@@ -14,8 +14,8 @@ module Model.TraceOperators
   , applyMatchesOp
   ) where
 
-import           Model.Gaps
-import           Model.Jumps
+import           Model.InterpolationBrush
+import           Model.Manual
 import           Model.Matching
 import           Model.TraceState
 
@@ -38,15 +38,15 @@ getOp :: TraceOperator -> TraceState -> TraceState
 getOp IdOperator        = id
 getOp (TraceOperator f) = f
 
--- Gaps
-interpolateGapsOp
+-- Interpolation brush
+interpolationBrushOp
   :: ReplaceDataAboveOrBelow
   -> IndexInterval Index0
   -> (Double, Double)
   -> TraceOperator
-interpolateGapsOp = (fmap.fmap.fmap) TraceOperator interpolateGaps
+interpolationBrushOp = (fmap.fmap.fmap) TraceOperator interpolationBrush
 
--- Jumps: single
+-- Manual correction: single
 setZeroOp :: Hold -> Double -> Index1 -> IIntMap Index1 Double -> TraceOperator
 setZeroOp = (fmap.fmap.fmap.fmap) TraceOperator setZero
 
@@ -54,7 +54,7 @@ setMedianOp
   :: Hold -> Double -> Index1 -> IIntMap Index1 Double -> TraceOperator
 setMedianOp = (fmap.fmap.fmap.fmap) TraceOperator setMedianSlope
 
--- Jumps: multiple
+-- Manual correction: multiple
 interpolateGroupOp
   :: Double -> [Index1] -> IIntMap Index1 Double -> TraceOperator
 interpolateGroupOp = (fmap.fmap.fmap) TraceOperator interpolateGroup
@@ -62,6 +62,6 @@ interpolateGroupOp = (fmap.fmap.fmap) TraceOperator interpolateGroup
 matchGroupOp :: Double -> [Index1] -> IIntMap Index1 Double -> TraceOperator
 matchGroupOp = (fmap.fmap.fmap) TraceOperator matchGroup
 
--- Matching
+-- Automated correction
 applyMatchesOp :: LevelShiftMatches -> Int -> TraceOperator
 applyMatchesOp = (fmap.fmap) TraceOperator applyMatches

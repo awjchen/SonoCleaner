@@ -1,6 +1,6 @@
-module Model.Gaps
+module Model.InterpolationBrush
   ( ReplaceDataAboveOrBelow (..)
-  , interpolateGaps
+  , interpolationBrush
   ) where
 
 import           Control.Arrow       ((&&&))
@@ -17,25 +17,14 @@ import           Model.TraceState
 data ReplaceDataAboveOrBelow = ReplaceLowerData | ReplaceUpperData
 
 labelGaps
-  :: ReplaceDataAboveOrBelow
+  :: IVector Index0 Double
+  -> ReplaceDataAboveOrBelow
   -> IndexInterval Index0
   -> (Double, Double)
-  -> IVector Index0 Double
   -> [IndexInterval Index0]
-labelGaps replaceWhat xInterval (y0, y1) s =
+labelGaps s replaceWhat xInterval (y0, y1) =
   let gapIndices = filter include [i0..i1]
   in  filter (not . onSelectionBoundary) $ groupRunsToIntvl gapIndices
-      -- len = ivLength s
-      -- indexed = V.zip (V.generate len id) s
-      -- sliced = V.slice i0' (i1'-i0'+1) indexed
-      --   where i0' = max 0 i0; i1' = min (len-1) i1
-      -- gapIndices = V.map fst $ V.filter (\(i, y) -> y `cmp` cutLine i) sliced
-      --   where cmp = case replaceWhat of
-      --           LabelLower -> (<)
-      --           LabelUpper -> (>)
-  -- in  map IndexInterval
-  --       $ filter (not.onSelectionBoundary)
-  --       $ intervalsFromAdjacent $ V.toList gapIndices
   where
     (IndexInterval (i0, i1)) = iiBoundByIVector s xInterval
 
@@ -55,35 +44,19 @@ labelGaps replaceWhat xInterval (y0, y1) s =
     groupRunsToIntvl :: [Index0] -> [IndexInterval Index0]
     groupRunsToIntvl = map (IndexInterval . (head &&& last)) . groupRuns
 
-    -- intervalsFromAdjacent :: [Int] -> [(Int, Int)]
-    -- intervalsFromAdjacent [] = []
-    -- intervalsFromAdjacent (i:is) = go i i is where
-    --   go :: Int -> Int -> [Int] -> [(Int, Int)]
-    --   go start end []     = [(start, end)]
-    --   go start end (j:js) =
-    --     if j == end + 1 then go start j js else (start, end) : go j j js
-
-interpolateGaps
+interpolationBrush
   :: ReplaceDataAboveOrBelow
   -> IndexInterval Index0
   -> (Double, Double)
   -> TraceState
   -> TraceState
-interpolateGaps replaceWhat xInterval ybounds traceState =
+interpolationBrush replaceWhat xInterval ybounds traceState =
   updateDiffSeries 0 updates traceState
     where
       series' = traceState ^. series
-      gapIntervals = labelGaps replaceWhat xInterval ybounds series'
+      gapIntervals = labelGaps series' replaceWhat xInterval ybounds
       interpolationIntervals = map iiGrow gapIntervals
       updates = concatMap (interpolationUpdates series') interpolationIntervals
-      -- interpolationIntervals = gapIntervals
-      --   & filter (uncurry (&&) . ((/= 0) *** (/= lastIndex)) . I.getEndpoints)
-      --   & map I.grow
-      --   where lastIndex = V.length series' - 1
-      -- yPairs = map (over both (series' V.!) . I.getEndpoints)
-      --              interpolationIntervals
-      -- updates = concatMap (uncurry interpolationUpdates)
-      --         $ zip interpolationIntervals yPairs
 
 --------------------------------------------------------------------------------
 -- Utility
@@ -98,12 +71,11 @@ span' eq (x:xs) = let (as, bs) = go x xs in (x:as, bs) where
     | otherwise = ([], zzs)
   go _ [] = ([], [])
 
--- Like `groupBy`, except defined using `span'` instead of `span`
+-- Like `groupBy` except defined using `span'` instead of `span`
 groupBy' :: (a -> a -> Bool) -> [a] -> [[a]]
 groupBy' eq = go
   where go xs = let (ys, xs') = span' eq xs
                 in  if null ys then [] else ys : go xs'
 
--- Input list assumed to have unique elements
 groupRuns :: (Eq a, Enum a) => [a] -> [[a]]
 groupRuns = groupBy' (\i j -> succ i == j)

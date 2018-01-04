@@ -21,10 +21,10 @@ executable SonoCleaner
                      , Controller.Sensitivity
                      , Controller.Util
                      , Model
-                     , Model.Gaps
                      , Model.IndexedChain
-                     , Model.Jumps
+                     , Model.InterpolationBrush
                      , Model.Labelling
+                     , Model.Manual
                      , Model.Matching
                      , Model.Model
                      , Model.Slope

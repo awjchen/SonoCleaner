@@ -392,7 +392,7 @@ controllerMain = do
                       _          -> ReplaceLowerData
                     interval = IndexInterval
                                  (nearestPoint' x1, nearestPoint' x2)
-                    operator = interpolateGapsOp stratum interval (y1, y2)
+                    operator = interpolationBrushOp stratum interval (y1, y2)
                 in  withUpdate $ atomically $
                       writeTVar modelTVar (applyToModel operator model)
               _ -> return ()

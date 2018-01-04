@@ -9,9 +9,9 @@ module Model
   ( module M
   ) where
 
-import           Model.Gaps           as M
-import           Model.Labelling      as M
-import           Model.Matching       as M
-import           Model.Model          as M
-import           Model.TraceOperators as M
-import           Model.TraceState     as M
+import           Model.InterpolationBrush as M
+import           Model.Labelling          as M
+import           Model.Matching           as M
+import           Model.Model              as M
+import           Model.TraceOperators     as M
+import           Model.TraceState         as M
