@@ -21,7 +21,9 @@ module Types.Indices
   , iiLeft
   , iiMember
   , iiShrink
+  , iiToList 
   , iiToVector
+  , iiToIVector 
   , iiIndex
 
   , iiDiff
@@ -43,6 +45,7 @@ module Types.Indices
   , ivAverage
   , ivMinMax
   , ivCount
+  , interpolationUpdates
 
   , ivLength
   , ivEnumFromN
@@ -63,6 +66,11 @@ module Types.Indices
   , IIntMap
 
   , iimFromList1
+  , iimToList1 
+  , iimMapWithKey 
+  , iimMember 
+  , iimLookup 
+  , iimUnionWith 
   ) where
 
 import           Data.Coerce
@@ -83,13 +91,13 @@ class IsInt i where
   fromInt :: Int -> i
 
 newtype Index0 = Index0 { runIndex0 :: Int }
-  deriving (Eq, Ord, Enum, Num)
+  deriving (Eq, Ord, Enum, Num, Real, Integral)
 
 newtype Index1 = Index1 { runIndex1 :: Int }
-  deriving (Eq, Ord, Enum, Num)
+  deriving (Eq, Ord, Enum, Num, Real, Integral)
 
 newtype Index2 = Index2 { runIndex2 :: Int }
-  deriving (Eq, Ord, Enum, Num)
+  deriving (Eq, Ord, Enum, Num, Real, Integral)
 
 index0 :: Int -> Index0
 index0 = coerce
@@ -149,8 +157,14 @@ iiMember i (IndexInterval (l, u)) = l <= i && i <= u
 iiShrink :: Enum i => IndexInterval i -> IndexInterval i
 iiShrink (IndexInterval (l, u)) = IndexInterval (succ l, pred u)
 
+iiToList :: Enum i => IndexInterval i -> [i]
+iiToList (IndexInterval (l, u)) = [l..u]
+
 iiToVector :: (IsInt i, V.Unbox i, Num i) => IndexInterval i -> V.Vector i
 iiToVector (IndexInterval (l, u)) = V.enumFromN l (toInt $ u-l+1)
+
+iiToIVector :: (IsInt i, V.Unbox i, Num i) => IndexInterval i -> IVector i i
+iiToIVector (IndexInterval (l, u)) = IVector $ V.enumFromN l (toInt $ u-l+1)
 
 iiIndex :: (IsInt i, V.Unbox a) => IVector i a -> IndexInterval i -> (a, a)
 iiIndex (IVector v) (IndexInterval (l, u)) = (v V.! toInt l, v V.! toInt u)
@@ -174,7 +188,8 @@ iiUndiff (IndexInterval (l, u)) = IndexInterval ( fromInt $ toInt l
 -- The individual elements of an `IVector i a` may only be accessed through the
 -- use of indices of type `i`. This precludes many functions from the regular
 -- Vector API, like folding, but also those which do not preserve indices, like
--- filtering.
+-- filtering. However, our notion of 'index-preserving' allows for "translation"
+-- of the indices so that we can do slicing.
 newtype IVector i a = IVector { runIVector :: V.Vector a }
   deriving (Monoid)
 
@@ -238,6 +253,15 @@ ivMinMax (IVector v) =
 
 ivCount :: V.Unbox a => (a -> Bool) -> IVector i a -> Int
 ivCount f (IVector v) = V.length $ V.filter f v
+
+-- Does not use internals
+interpolationUpdates
+  :: IVector Index0 Double -> IndexInterval Index0 -> [(Index1, Double)]
+interpolationUpdates v interval@(IndexInterval (l, u)) =
+  let xSpan = u - l
+      ySpan = ivIndex v u - ivIndex v l
+      avgSlope = ySpan / fromIntegral xSpan
+  in  zip (iiToList $ iiDiff interval) (repeat avgSlope)
 
 --------------------------------------------------------------------------------
 -- Indexed `Vectors` -- Vector API
@@ -322,3 +346,19 @@ newtype IIntMap i a = IIntMap { runIIntMap :: M.IntMap a }
 -- The type is specialized because I don't know how use coerce polymorphically.
 iimFromList1 :: V.Unbox a => [(Index1, a)] -> IIntMap Index1 a
 iimFromList1 = IIntMap . M.fromList . coerce
+
+-- The type is specialized because I don't know how use coerce polymorphically.
+iimToList1 :: V.Unbox a => IIntMap Index1 a -> [(Index1, a)]
+iimToList1 (IIntMap m) = coerce $ M.toList m
+
+iimMapWithKey :: IsInt i => (i -> a -> b) -> IIntMap i a -> IIntMap i b
+iimMapWithKey f (IIntMap m) = IIntMap $ M.mapWithKey (f . fromInt) m
+
+iimMember :: IsInt i => i -> IIntMap i a -> Bool
+iimMember i (IIntMap m) = M.member (toInt i) m
+
+iimLookup :: IsInt i => i -> IIntMap i a -> Maybe a
+iimLookup i (IIntMap m) = M.lookup (toInt i) m
+
+iimUnionWith :: (a -> a -> a) -> IIntMap i a -> IIntMap i a -> IIntMap i a
+iimUnionWith f (IIntMap m1) (IIntMap m2) = IIntMap $ M.unionWith f m1 m2
