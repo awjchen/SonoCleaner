@@ -74,6 +74,7 @@ module Types.Indices
   , iisSize
   , iisFilter
   , iisSplit
+  , iisUnion
   , iisBound
   , iisMember
   , iisFindNearestIndex
@@ -406,6 +407,9 @@ iisFilter f (IIntSet s) = IIntSet $ S.filter (f . fromInt) s
 
 iisSplit :: IsInt i => i -> IIntSet i -> (IIntSet i, IIntSet i)
 iisSplit i (IIntSet s) = IIntSet *** IIntSet $ S.split (toInt i) s
+
+iisUnion :: IIntSet i -> IIntSet i -> IIntSet i
+iisUnion (IIntSet s) (IIntSet t) = IIntSet $ S.union s t
 
 iisBound :: IsInt i => IndexInterval i -> IIntSet i -> IIntSet i
 iisBound (IndexInterval (l, u)) (IIntSet s) =
