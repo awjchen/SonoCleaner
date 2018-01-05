@@ -118,7 +118,7 @@ matchLevelShifts
 matchLevelShifts noiseTh levelShifts ts = levelShiftMatches corrections
   where
     (_, ds) = ts ^. diffSeries
-    noSlopeInfo = mappend levelShifts $ ts ^. modifiedJumps
+    noSlopeInfo = mappend levelShifts $ ts ^. modifiedSegments
     levelShiftSlopesMap = iimFromSet estimateSlope' levelShifts where
       estimateSlope' j = estimateSlope ds noSlopeInfo radius j
         where radius = 4

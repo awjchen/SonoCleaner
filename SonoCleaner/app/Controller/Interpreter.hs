@@ -268,8 +268,8 @@ specifyChart model viewParams ats =
     { plotTitle            = title
     , plotTitleColour      = titleColour
     , plotSeries           = newSeries
-    , plotJumpIndices      = newJumpIndices
-    , plotModifiedIndices  = newModifiedIndices
+    , plotLevelShifts      = newLevelShifts
+    , plotModifiedSegments = newModifiedSegments
     , plotOriginalSeries   = originalSeries
     , plotTwinSeries       = twinSeries
     , plotCustomSeries     = customSeries
@@ -325,9 +325,9 @@ specifyChart model viewParams ats =
 
     newSeries = ats ^. to atsTraceState . series
 
-    newJumpIndices = atsLevelShifts ats
+    newLevelShifts = atsLevelShifts ats
 
-    newModifiedIndices = ats ^. to atsTraceState . modifiedJumps
+    newModifiedSegments = ats ^. to atsTraceState . modifiedSegments
 
     originalSeries =
       if not $ showOriginal traceSet
@@ -358,7 +358,7 @@ specifyChart model viewParams ats =
       IdentityOp -> Nothing
       AutoOp _ -> Nothing
       ManualSingleOp _ j _ _ ->
-        Just $ over both toTime $ runIndexInterval $ jumpEndpoints j
+        Just $ over both toTime $ runIndexInterval $ levelShiftEndpoints j
       ManualMultipleOp _ js _ ->
         Just $ over both toTime $ runIndexInterval
              $ iiUndiff $ IndexInterval $ (head &&& last) js
@@ -368,7 +368,7 @@ specifyChart model viewParams ats =
     annotation = case nddOperation (atsDependencies ats) of
       ManualSingleOp _ j _ _ ->
         let idSeries = getCurrentState model ^. series
-            (i0, i1) = runIndexInterval $ jumpEndpoints j
+            (i0, i1) = runIndexInterval $ levelShiftEndpoints j
             x1 = toTime i1
             y0 = ivIndex idSeries i0
             y1 = ivIndex idSeries i1
@@ -447,8 +447,8 @@ setupInterpreter = do
         updateData model guiState
         atsLevelShiftMatches <$> readTVar idAnnotationTVar
 
-  let getJumps :: Model -> GUIState -> STM (IIntSet Index1)
-      getJumps model guiState = do
+  let getLevelShifts :: Model -> GUIState -> STM (IIntSet Index1)
+      getLevelShifts model guiState = do
         updateData model guiState
         atsLevelShifts <$> readTVar idAnnotationTVar
 
@@ -461,7 +461,11 @@ setupInterpreter = do
             newModel = applyToModel traceStateOp model
         return newModel
 
-  return (initializeInterpreter, getChart, getMatches, getJumps, getNewModel)
+  return ( initializeInterpreter
+         , getChart
+         , getMatches
+         , getLevelShifts
+         , getNewModel)
 
 --------------------------------------------------------------------------------
 -- Utility

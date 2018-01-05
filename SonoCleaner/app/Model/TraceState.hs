@@ -4,7 +4,7 @@
 
 module Model.TraceState
   ( TraceState
-  , context, series, diffSeries, diff2Series, seriesBounds, modifiedJumps
+  , context, series, diffSeries, diff2Series, seriesBounds, modifiedSegments
   , TraceContext (..)
 
   , cropTraceState
@@ -25,12 +25,12 @@ import           Types.Indices
 data TraceContext = RootContext | CroppedContext TraceState
 
 data TraceState = TraceState
-  { _context       :: TraceContext
-  , _series        :: IVector Index0 Double
-  , _diffSeries    :: (Double, IVector Index1 Double)
-  , _diff2Series   :: (Double, (Double, IVector Index2 Double))
-  , _seriesBounds  :: (Double, Double)
-  , _modifiedJumps :: IIntSet Index1
+  { _context          :: TraceContext
+  , _series           :: IVector Index0 Double
+  , _diffSeries       :: (Double, IVector Index1 Double)
+  , _diff2Series      :: (Double, (Double, IVector Index2 Double))
+  , _seriesBounds     :: (Double, Double)
+  , _modifiedSegments :: IIntSet Index1
   }
 makeLenses ''TraceState
 
@@ -42,13 +42,13 @@ cropTraceState :: IndexInterval Index0 -> TraceState -> TraceState
 cropTraceState cropInterval ts =
   let croppedSeries = ivSlice cropInterval (ts ^. series)
       context' = CroppedContext ts
-      modifiedJumps' = let diffInterval = iiDiff cropInterval in
+      modifiedSegments' = let diffInterval = iiDiff cropInterval in
           iisOffset (negate $ iiLeft diffInterval)
         $ iisFilter (`iiMember` diffInterval)
-        $ ts ^. modifiedJumps
+        $ ts ^. modifiedSegments
   in  initTraceState croppedSeries
         & context .~ context'
-        & modifiedJumps .~ modifiedJumps'
+        & modifiedSegments .~ modifiedSegments'
 
 uncropTraceState :: IndexInterval Index0 -> TraceState -> TraceState
 uncropTraceState cropInterval ts = case ts ^. context of
@@ -58,9 +58,9 @@ uncropTraceState cropInterval ts = case ts ^. context of
         ds = snd $ ts ^. diffSeries
         updates = ivZip (ivEnumFromN start (ivLength ds)) ds
         diffSeries' = fmap (`ivUpdate` updates) (cts ^. diffSeries)
-        modifiedJumps' = iisOffset start (ts ^. modifiedJumps)
+        modifiedSegments' = iisOffset start (ts ^. modifiedSegments)
     in  setDiffSeries diffSeries' cts
-          & modifiedJumps %~ mappend modifiedJumps'
+          & modifiedSegments %~ mappend modifiedSegments'
 
 --------------------------------------------------------------------------------
 -- Construction
@@ -69,12 +69,12 @@ uncropTraceState cropInterval ts = case ts ^. context of
 initTraceState :: IVector Index0 Double -> TraceState
 initTraceState series' =
   TraceState
-    { _context       = RootContext
-    , _series        = series'
-    , _diffSeries    = diffSeries'
-    , _diff2Series   = diff2Series'
-    , _seriesBounds  = ivMinMax series'
-    , _modifiedJumps = mempty }
+    { _context          = RootContext
+    , _series           = series'
+    , _diffSeries       = diffSeries'
+    , _diff2Series      = diff2Series'
+    , _seriesBounds     = ivMinMax series'
+    , _modifiedSegments = mempty }
   where diffSeries'  = ivDiff series'
         diff2Series' = fmap ivDiff diffSeries'
 
@@ -97,4 +97,4 @@ updateDiffSeries offset updates traceState =
   let diffSeries'  =
         bimap (+offset) (*// updates) (traceState ^. diffSeries)
   in  setDiffSeries diffSeries' traceState
-        & over modifiedJumps (mappend (iisFromList1 $ fst $ unzip updates))
+        & over modifiedSegments (mappend (iisFromList1 $ fst $ unzip updates))

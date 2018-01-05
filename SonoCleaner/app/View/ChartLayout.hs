@@ -34,16 +34,16 @@ chartLayout plotSpec (pixelsX, _) = layout where
   addYAxis                    = yAxis plotSpec
 
   tracePlotLines = traces plotSpec xAxisParameters
-  jumpsPlotLines = jumps  plotSpec xAxisParameters
+  segmentsPlotLines = segments  plotSpec xAxisParameters
 
   highlight = highlightInterval (plotHighlightRegion plotSpec)
 
-  annotation = jumpAnnotation (plotAnnotation plotSpec)
+  annotation = segmentAnnotation (plotAnnotation plotSpec)
 
   plots =
     -- Order matters: later items will draw over earlier items
        map toPlot tracePlotLines
-    ++ map toPlot jumpsPlotLines
+    ++ map toPlot segmentsPlotLines
     ++ [toPlot highlight, toPlot annotation]
 
   layout = def
@@ -175,7 +175,7 @@ traces plotSpec xParams =
       :: IIntSet Index1 -> IVector Index0 Double -> [[(Double, Double)]]
     makeMainTrace splitIndices =
         map simplifySeries'
-      . splitAtIndices (cropIndexList splitIndices)
+      . splitAtSegments (cropIndexList splitIndices)
       . ivZip croppedTimes
       . ivSlice interval
 
@@ -186,7 +186,7 @@ traces plotSpec xParams =
 
     focusedTrace =
         makeLines 1 (opaque black)
-      $ makeMainTrace (plotJumpIndices plotSpec) (plotSeries plotSpec)
+      $ makeMainTrace (plotLevelShifts plotSpec) (plotSeries plotSpec)
 
     originalTrace =
         makeLine 1 (opaque (blend 0.38 grey black))
@@ -199,45 +199,45 @@ traces plotSpec xParams =
       $ makeOptionalTrace $ plotCustomSeries plotSpec
 
 
-jumps :: ChartSpec -> XAxisParameters -> [PlotLines Double Double]
-jumps plotSpec xParams =
+segments :: ChartSpec -> XAxisParameters -> [PlotLines Double Double]
+segments plotSpec xParams =
   -- Order matters: later items will draw over earlier items
-  closedJumps ++ openJumps
+  closedSegments ++ openSegments
   where
     interval' = iiDiff $ plotInterval xParams
 
-    plotJump :: Index1 -> [(Double, Double)]
-    plotJump j = [(toTime i0, ivIndex v i0), (toTime i1, ivIndex v i1)]
-      where (i0, i1) = runIndexInterval $ jumpEndpoints j
+    plotSegment :: Index1 -> [(Double, Double)]
+    plotSegment j = [(toTime i0, ivIndex v i0), (toTime i1, ivIndex v i1)]
+      where (i0, i1) = runIndexInterval $ levelShiftEndpoints j
             v = plotSeries plotSpec
             toTime = plotToTime plotSpec
 
-    simplifyJumps' :: [Index1] -> [[(Double, Double)]]
-    simplifyJumps' indices =
+    simplifySegments' :: [Index1] -> [[(Double, Double)]]
+    simplifySegments' indices =
       if   compressibleTimeSteps xParams < 4
-      then map plotJump indices
-      else simplifyJumps (plotSeries plotSpec)
-                         (plotToTime plotSpec)
-                         (compressibleTimeSteps xParams)
-                         indices
+      then map plotSegment indices
+      else simplifySegments (plotSeries plotSpec)
+                            (plotToTime plotSpec)
+                            (compressibleTimeSteps xParams)
+                            indices
 
-    openJumps = zipWith3 makeLine (repeat 2) openColours
-              $ simplifyJumps'
-              $ iisToList1 . iisBound interval'
-              $ openJumps'
-      where openJumps' = plotJumpIndices plotSpec
+    openSegments = zipWith3 makeLine (repeat 2) openColours
+                 $ simplifySegments'
+                 $ iisToList1 . iisBound interval'
+                 $ openSegments'
+      where openSegments' = plotLevelShifts plotSpec
             openColours = drop parity $ cycle [opaque magenta, opaque yellow]
             parity = (`mod` 2) $ iisSize
-                   $ fst $ iisSplit (iiLeft interval') openJumps'
+                   $ fst $ iisSplit (iiLeft interval') openSegments'
 
-    closedJumps = zipWith3 makeLine (repeat 2) closedColours
-                $ simplifyJumps'
-                $ iisToList1 . iisBound interval'
-                $ closedJumps'
-      where closedJumps' = plotModifiedIndices plotSpec
+    closedSegments = zipWith3 makeLine (repeat 2) closedColours
+                   $ simplifySegments'
+                   $ iisToList1 . iisBound interval'
+                   $ closedSegments'
+      where closedSegments' = plotModifiedSegments plotSpec
             closedColours = drop parity $ cycle [opaque white, opaque cyan]
             parity = (`mod` 2) $ iisSize
-                   $ fst $ iisSplit (iiLeft interval') closedJumps'
+                   $ fst $ iisSplit (iiLeft interval') closedSegments'
 
 
 highlightInterval :: Maybe (Double, Double) -> PlotLines Double y
@@ -250,9 +250,10 @@ highlightInterval (Just (l, r)) =
       & plot_lines_style . line_width .~ 1
 
 
-jumpAnnotation :: Maybe (Double, Double, String) -> PlotAnnotation Double Double
-jumpAnnotation Nothing = def
-jumpAnnotation (Just (x, y, str)) =
+segmentAnnotation
+  :: Maybe (Double, Double, String) -> PlotAnnotation Double Double
+segmentAnnotation Nothing = def
+segmentAnnotation (Just (x, y, str)) =
   def & plot_annotation_hanchor .~ HTA_Left
       & plot_annotation_vanchor .~ VTA_Centre
       & plot_annotation_style   .~
@@ -293,13 +294,13 @@ simplifySeries bucketSize' path
             else swap minAndMax
       in  [(V.head xs', y1'), (V.last xs', y2')]
 
-simplifyJumps
+simplifySegments
   :: IVector Index0 Double
   -> (Index0 -> Double)
   -> Int
   -> [Index1]
   -> [[(Double, Double)]]
-simplifyJumps v toTime bucketSize' =
+simplifySegments v toTime bucketSize' =
     concatMap (map plot' . evenConcat . map bounds')
   . groupBy (\a b -> b - a < bucketSize)
   where
@@ -307,7 +308,7 @@ simplifyJumps v toTime bucketSize' =
 
     bounds' :: Index1 -> SP Index1 Bounds
     bounds' j = SP j (makeBounds (ivIndex v i0) (ivIndex v (succ i1)))
-      where (i0, i1) = runIndexInterval $ jumpEndpoints j
+      where (i0, i1) = runIndexInterval $ levelShiftEndpoints j
 
     union' :: SP Index1 Bounds -> SP Index1 Bounds -> SP Index1 Bounds
     union' (SP i0 b0) (SP _ b1) = SP i0 (b0 <> b1)
@@ -318,7 +319,7 @@ simplifyJumps v toTime bucketSize' =
 
     plot' :: SP Index1 Bounds -> [(Double, Double)]
     plot' (SP j (Bounds l u)) = [(toTime i0, l), (toTime (succ i1), u)]
-      where (i0, i1) = runIndexInterval $ jumpEndpoints j
+      where (i0, i1) = runIndexInterval $ levelShiftEndpoints j
 
 --------------------------------------------------------------------------------
 -- Bounds
@@ -347,13 +348,13 @@ makeLines strokeWidth color lineList =
       & plot_lines_style . line_color .~ color
       & plot_lines_style . line_width .~ strokeWidth
 
-splitAtIndices
+splitAtSegments
   :: V.Unbox a => [Index1] -> IVector Index0 a -> [IVector Index0 a]
-splitAtIndices jumpIndices v =
+splitAtSegments segmentIndices v =
   map (`ivSlice` v) $ filter (not . iiIsSingleton) intervals
   where
     (firstCut, lastCut) =
       runIndexInterval $ iiGrow $ iiDiff $ iiGetIVectorBounds v
     intervals :: [IndexInterval Index0]
     intervals = map (iiShrink . iiUndiff . IndexInterval)
-              $ zip (firstCut : jumpIndices) (jumpIndices ++ [lastCut])
+              $ zip (firstCut : segmentIndices) (segmentIndices ++ [lastCut])

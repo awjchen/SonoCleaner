@@ -343,7 +343,7 @@ controllerMain = do
                   Just j ->
                     let t = timeAtSlope' j
                         h = mid' $ over both (ivIndex s)
-                          $ runIndexInterval $ jumpEndpoints j
+                          $ runIndexInterval $ levelShiftEndpoints j
                     in  atomically $ modifyTVar' guiStateTVar $
                             set currentPage (SinglePage j)
                           . set (viewBounds.toViewPort.viewPortCenter) (t, h)

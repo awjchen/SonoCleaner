@@ -34,7 +34,7 @@ module Types.Indices
 
   , iiDiff
   , iiUndiff
-  , jumpEndpoints
+  , levelShiftEndpoints
 
   , IVector
   , ivector
@@ -266,9 +266,9 @@ iiUndiff :: (IsInt i, IsInt (ISucc i), Enum (ISucc i))
 iiUndiff (IndexInterval (l, u)) = IndexInterval ( fromInt $ toInt l
                                                 , fromInt $ toInt $ succ u )
 
-{-# INLINE jumpEndpoints #-}
-jumpEndpoints :: Index1 -> IndexInterval Index0
-jumpEndpoints j = iiUndiff $ IndexInterval (j, j)
+{-# INLINE levelShiftEndpoints #-}
+levelShiftEndpoints :: Index1 -> IndexInterval Index0
+levelShiftEndpoints j = iiUndiff $ IndexInterval (j, j)
 
 --------------------------------------------------------------------------------
 -- Indexed vectors

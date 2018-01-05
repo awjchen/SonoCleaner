@@ -285,7 +285,7 @@ timeAtPoint model i = getTimes model `ivIndex` i
 
 timeAtSlope :: Model -> Index1 -> Double
 timeAtSlope model j = let mid (x, y) = 0.5*(x+y) in
-  mid $ over both (timeAtPoint model) $ runIndexInterval $ jumpEndpoints j
+  mid $ over both (timeAtPoint model) $ runIndexInterval $ levelShiftEndpoints j
 
 nearestPoint :: Model -> Double -> Index0
 nearestPoint model t =

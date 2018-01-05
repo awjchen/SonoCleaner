@@ -38,11 +38,11 @@ setZero' _ _ _ = Just 0
 
 -- 'Slope'
 setMedianSlope' :: ReplaceSingleLevelShift
-setMedianSlope' ds jumps i
+setMedianSlope' ds badSegments i
   | null slopes = Nothing
   | otherwise   = Just $ median $ V.fromList slopes
   where
-  slopes = getSurroundingSlopes ds jumps samplingRadius i
+  slopes = getSurroundingSlopes ds badSegments samplingRadius i
 
 singleToTrace
   :: ReplaceSingleLevelShift
@@ -52,11 +52,12 @@ singleToTrace
   -> IIntSet Index1
   -> TraceState
   -> TraceState
-singleToTrace replace hold offset i jumps traceState =
+singleToTrace replace hold offset i levelShifts traceState =
   fromMaybe traceState $ do
     let ds = snd $ traceState ^. diffSeries
         oldHeight = ivIndex ds i
-    newHeight <- (+offset) <$> replace ds jumps i
+        noSlopeInfo = mappend levelShifts $ traceState ^. modifiedSegments
+    newHeight <- (+offset) <$> replace ds noSlopeInfo i
     let updates = [(i, newHeight)]
         leftShift = case hold of
           HoldLeft  -> 0
@@ -99,12 +100,13 @@ matchGroup
   -> IIntSet Index1
   -> TraceState
   -> TraceState
-matchGroup offset indices jumps traceState
+matchGroup offset indices levelShifts traceState
   | (_:_:_) <- indices
   = let ds = snd $ traceState ^. diffSeries
         slopes = map (ivIndex ds) indices
         slopeEsts = map (estimateSlope ds noSlopeInfo samplingRadius) indices
-          where noSlopeInfo = mappend jumps $ traceState ^. modifiedJumps
+          where noSlopeInfo = mappend levelShifts
+                            $ traceState ^. modifiedSegments
         slopeErrors = zipWith (-) slopes slopeEsts
         totalError = sum slopeErrors
         newSlopes = slopeEsts

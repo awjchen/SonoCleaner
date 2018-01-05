@@ -19,14 +19,14 @@ import           Model.TraceState
 -------------------------------------------------------------------------------
 -- See the 'Procedural details' section of the user's guide.
 
-maxNonJumps :: Int
-maxNonJumps = 4
+maxNonLevelShifts :: Int
+maxNonLevelShifts = 4
 
 labelLevelShifts :: Double -> Double -> TraceState -> IIntSet Index1
-labelLevelShifts maxNoise jumpTolerance traceState =
+labelLevelShifts maxNoise levelShiftTolerance traceState =
   let dv  = snd $ traceState ^. diffSeries
       ddv = snd $ snd $ traceState ^. diff2Series
-      levelShifts = labelLevelShifts' maxNoise jumpTolerance (dv, ddv)
+      levelShifts = labelLevelShifts' maxNoise levelShiftTolerance (dv, ddv)
   in  iisFromList1 $ V.toList levelShifts
 
 labelLevelShifts'
@@ -34,12 +34,12 @@ labelLevelShifts'
   -> Double
   -> (IVector Index1 Double, IVector Index2 Double)
   -> V.Vector Index1
-labelLevelShifts' maxNoise jumpTolerance =
-  -- We extend the data to detect jumps at the trace edges
+labelLevelShifts' maxNoise levelShiftTolerance =
+  -- We extend the data to detect level-shifts at the trace edges
   dimap (ivExtend1 1 *** ivExtend2 1) (V.map (subtract 1)) labelLevelShifts''
   where
-    slopeLimit = jumpTolerance - maxNoise
-    curveLimit = jumpTolerance - maxNoise
+    slopeLimit = levelShiftTolerance - maxNoise
+    curveLimit = levelShiftTolerance - maxNoise
     matchLimit = 2*maxNoise
 
     labelLevelShifts''
@@ -68,8 +68,9 @@ matchSlopes matchLimit slopeLimit dv = go
            -- keep only intervals over which there is no total change in slope
            $ V.dropWhile ((> matchLimit) . abs . snd) $ V.indexed
            $ V.map (uncurry subtract . iiIndex dv . iiUndiff)
-           -- limit the number of non-jumps in the interval
-           $ V.takeWhile ((<= maxNonJumps) . countNonJumps . innerInterval) -- quadratic ?
+           -- limit the number of non-level-shifts in the interval
+           $ V.takeWhile
+             ((<= maxNonLevelShifts) . countNonLevelShifts . innerInterval) -- quadratic ?
            -- form candidate intervals
            $ V.map (IndexInterval . (i0,)) is
       in  case maybeMatchingInterval of
@@ -79,8 +80,8 @@ matchSlopes matchLimit slopeLimit dv = go
               remainingSlopes = V.drop (n+1) is
           in  Just (matchingInterval, remainingSlopes)
 
-    countNonJumps :: IndexInterval Index1 -> Int
-    countNonJumps = ivCount ((< slopeLimit) . abs) . (`ivSlice` dv)
+    countNonLevelShifts :: IndexInterval Index1 -> Int
+    countNonLevelShifts = ivCount ((< slopeLimit) . abs) . (`ivSlice` dv)
 
 -------------------------------------------------------------------------------
 -- Utility
