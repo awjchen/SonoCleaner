@@ -74,7 +74,6 @@ module Types.Indices
   , iisSize
   , iisFilter
   , iisSplit
-  , iisUnion
   , iisBound
   , iisMember
   , iisFindNearestIndex
@@ -128,28 +127,38 @@ newtype Index1 = Index1 { runIndex1 :: Int }
 newtype Index2 = Index2 { runIndex2 :: Int }
   deriving (Eq, Ord, Enum, Num, Real, Integral)
 
+{-# INLINE index0 #-}
 index0 :: Int -> Index0
 index0 = coerce
 
+{-# INLINE unsafeRunIndex0 #-}
 unsafeRunIndex0 :: Index0 -> Int
 unsafeRunIndex0 = coerce
 
+{-# INLINE index1 #-}
 index1 :: Int -> Index1
 index1 = coerce
 
+{-# INLINE index2 #-}
 index2 :: Int -> Index2
 index2 = coerce
 
 instance IsInt Index0 where
+  {-# INLINE toInt #-}
   toInt = coerce
+  {-# INLINE fromInt #-}
   fromInt = coerce
 
 instance IsInt Index1 where
+  {-# INLINE toInt #-}
   toInt = coerce
+  {-# INLINE fromInt #-}
   fromInt = coerce
 
 instance IsInt Index2 where
+  {-# INLINE toInt #-}
   toInt = coerce
+  {-# INLINE fromInt #-}
   fromInt = coerce
 
 derivingUnbox "Index0" [t| Index0 -> Int |] [| coerce |] [| coerce |]
@@ -188,61 +197,76 @@ derivingUnbox "IndexInterval2"
 --   (IndexInterval (l, u)) <> (IndexInterval (l', u')) =
 --     IndexInterval (min l l', max u u')
 
+{-# INLINE iiLeft #-}
 iiLeft :: IndexInterval i -> i
 iiLeft (IndexInterval (l, _)) = l
 
+{-# INLINE iiMember #-}
 iiMember :: Ord i => i -> IndexInterval i -> Bool
 iiMember i (IndexInterval (l, u)) = l <= i && i <= u
 
+{-# INLINE iiShrink #-}
 iiShrink :: Enum i => IndexInterval i -> IndexInterval i
 iiShrink (IndexInterval (l, u)) = IndexInterval (succ l, pred u)
 
+{-# INLINE iiGrow #-}
 iiGrow :: Enum i => IndexInterval i -> IndexInterval i
 iiGrow (IndexInterval (l, u)) = IndexInterval (pred l, succ u)
 
+{-# INLINE iiToList #-}
 iiToList :: Enum i => IndexInterval i -> [i]
 iiToList (IndexInterval (l, u)) = [l..u]
 
+{-# INLINE iiToVector #-}
 iiToVector :: (IsInt i, V.Unbox i, Num i) => IndexInterval i -> V.Vector i
 iiToVector (IndexInterval (l, u)) = V.enumFromN l (toInt $ u-l+1)
 
+{-# INLINE iiToIVector #-}
 iiToIVector :: (IsInt i, V.Unbox i, Num i) => IndexInterval i -> IVector i i
 iiToIVector (IndexInterval (l, u)) = IVector $ V.enumFromN l (toInt $ u-l+1)
 
+{-# INLINE iiIndex #-}
 iiIndex :: (IsInt i, V.Unbox a) => IVector i a -> IndexInterval i -> (a, a)
 iiIndex (IVector v) (IndexInterval (l, u)) = (v V.! toInt l, v V.! toInt u)
 
+{-# INLINE iiBound #-}
 iiBound :: Ord i => IndexInterval i -> i -> i
 iiBound (IndexInterval (l, u)) i
   | i < l = l
   | i > u = u
   | otherwise = i
 
+{-# INLINE iiGetIVectorBounds #-}
 iiGetIVectorBounds
   :: (IsInt i, Num i, V.Unbox a) => IVector i a -> IndexInterval i
 iiGetIVectorBounds iv = IndexInterval (0, ivLength iv - 1)
 
+{-# INLINE iiBoundByIVector #-}
 iiBoundByIVector :: (IsInt i, V.Unbox a)
         => IVector i a -> IndexInterval i -> IndexInterval i
 iiBoundByIVector (IVector v) (IndexInterval (l, u)) =
   IndexInterval ( fromInt $ max 0 $ toInt l
                 , fromInt $ min (V.length v - 1) $ toInt u)
 
+{-# INLINE iiIsSingleton #-}
 iiIsSingleton :: Eq i => IndexInterval i -> Bool
 iiIsSingleton (IndexInterval (l, u)) = l == u
 
 -- Index conversions
 
+{-# INLINE iiDiff #-}
 iiDiff :: (IsInt i, IsInt (ISucc i), Enum i)
        => IndexInterval i -> IndexInterval (ISucc i)
 iiDiff (IndexInterval (l, u)) = IndexInterval ( fromInt $ toInt l
                                               , fromInt $ toInt $ pred u )
 
+{-# INLINE iiUndiff #-}
 iiUndiff :: (IsInt i, IsInt (ISucc i), Enum (ISucc i))
          => IndexInterval (ISucc i) -> IndexInterval i
 iiUndiff (IndexInterval (l, u)) = IndexInterval ( fromInt $ toInt l
                                                 , fromInt $ toInt $ succ u )
 
+{-# INLINE jumpEndpoints #-}
 jumpEndpoints :: Index1 -> IndexInterval Index0
 jumpEndpoints j = iiUndiff $ IndexInterval (j, j)
 
@@ -258,25 +282,31 @@ jumpEndpoints j = iiUndiff $ IndexInterval (j, j)
 newtype IVector i a = IVector { runIVector :: V.Vector a }
   deriving (Monoid)
 
+{-# INLINE ivector #-}
 ivector :: V.Vector a -> IVector i a
 ivector = IVector
 
+{-# INLINE unsafeRunIVector #-}
 unsafeRunIVector :: IVector i a -> V.Vector a
 unsafeRunIVector = runIVector
 
 -- Index conversions
 
+{-# INLINE ivDiff #-}
 ivDiff :: (Num a, V.Unbox a) => IVector i a -> (a, IVector (ISucc i) a)
 ivDiff (IVector v) = (V.head v, IVector $ V.zipWith (-) (V.tail v) v)
 
+{-# INLINE ivUndiff #-}
 ivUndiff :: (Num a, V.Unbox a) => (a, IVector (ISucc i) a) -> IVector i a
 ivUndiff (h, (IVector v)) = IVector $ V.scanl' (+) h v
 
 -- Indexing by typesafe indices
 
+{-# INLINE ivIndex #-}
 ivIndex :: (IsInt i, V.Unbox a) => IVector i a -> i -> a
 ivIndex (IVector v) i = v V.! toInt i
 
+{-# INLINE ivSlice #-}
 ivSlice :: (IsInt i, V.Unbox a) => IndexInterval i -> IVector i a -> IVector i a
 ivSlice (IndexInterval (i, j)) (IVector v) =
   let i' = toInt i; j' = toInt j
@@ -284,18 +314,21 @@ ivSlice (IndexInterval (i, j)) (IVector v) =
 
 -- Index-specific functions
 
+-- {-# INLINE ivExtend0 #-}
 -- ivExtend0 :: V.Unbox a => Int -> IVector Index0 a -> IVector Index0 a
 -- ivExtend0 r (IVector v) = IVector $ V.concat
 --   [ V.replicate r (V.head v)
 --   , v
 --   , V.replicate r (V.last v) ]
 
+{-# INLINE ivExtend1 #-}
 ivExtend1 :: (V.Unbox a, Num a) => Int -> IVector Index1 a -> IVector Index1 a
 ivExtend1 r (IVector dv) = IVector $ V.concat
   [ V.replicate r 0
   , dv
   , V.replicate r 0 ]
 
+{-# INLINE ivExtend2 #-}
 ivExtend2 :: (V.Unbox a, Num a) => Int -> IVector Index2 a -> IVector Index2 a
 ivExtend2 r (IVector ddv) = IVector $ V.concat
   [ V.replicate (r-1) 0
@@ -306,9 +339,11 @@ ivExtend2 r (IVector ddv) = IVector $ V.concat
 
 -- Special functions
 
+-- {-# INLINE ivAverage #-}
 -- ivAverage :: IVector i Double -> Double
 -- ivAverage (IVector v) = V.sum v / fromIntegral (V.length v)
 
+{-# INLINE ivMinMax #-}
 ivMinMax :: (V.Unbox a, Ord a) => IVector i a -> (a, a)
 ivMinMax (IVector v) =
   let z = V.head v in V.foldl' minMaxAcc (z, z) (V.tail v) where
@@ -319,10 +354,12 @@ ivMinMax (IVector v) =
         maxAcc' = max x maxAcc
     in  minAcc' `seq` maxAcc' `seq` (minAcc', maxAcc')
 
+{-# INLINE ivCount #-}
 ivCount :: V.Unbox a => (a -> Bool) -> IVector i a -> Int
 ivCount f (IVector v) = V.length $ V.filter f v
 
 -- Does not use internals
+{-# INLINE interpolationUpdates #-}
 interpolationUpdates
   :: IVector Index0 Double -> IndexInterval Index0 -> [(Index1, Double)]
 interpolationUpdates v interval@(IndexInterval (l, u)) =
@@ -337,20 +374,24 @@ interpolationUpdates v interval@(IndexInterval (l, u)) =
 
 -- Accessors
 
+{-# INLINE ivLength #-}
 ivLength :: (IsInt i, V.Unbox a) => IVector i a -> i
 ivLength = fromInt . V.length . coerce
 
 -- Construction
 
+{-# INLINE ivEnumFromN #-}
 ivEnumFromN :: (IsInt i, Num a, V.Unbox a) =>  a -> i -> IVector i a
 ivEnumFromN z i = IVector $ V.enumFromN z (toInt i)
 
 -- Modifying vectors
 
 -- * is just an arbitrary prefix, since 'iv' canont be used.
+{-# INLINE (*//) #-}
 (*//) :: V.Unbox a => IVector Index1 a -> [(Index1, a)] -> IVector Index1 a
 (*//) (IVector v) updates = IVector $ v V.// (coerce updates)
 
+{-# INLINE ivUpdate #-}
 ivUpdate :: V.Unbox a
          => IVector Index1 a -> IVector Index1 (Index1, a) -> IVector Index1 a
 ivUpdate (IVector v) (IVector updates) =
@@ -358,24 +399,30 @@ ivUpdate (IVector v) (IVector updates) =
 
 -- Elementwise operations
 
+{-# INLINE _ivIndices #-}
 _ivIndices :: (V.Unbox i, Num i, V.Unbox a) => IVector i a -> IVector i i
 _ivIndices (IVector v) = IVector $ V.enumFromN 0 (V.length v)
 
+-- {-# INLINE ivIndexed #-}
 -- ivIndexed :: (V.Unbox i, Num i, V.Unbox a) => IVector i a -> IVector i (i, a)
 -- ivIndexed iv = ivZip (_ivIndices iv) iv
 
+{-# INLINE ivMap #-}
 ivMap :: (V.Unbox a, V.Unbox b) => (a -> b) -> IVector i a -> IVector i b
 ivMap f (IVector v) = IVector $ V.map f v
 
+{-# INLINE ivZip #-}
 ivZip :: (V.Unbox a, V.Unbox b)
       => IVector i a -> IVector i b -> IVector i (a, b)
 ivZip (IVector v) (IVector w) = IVector $ V.zip v w
 
+{-# INLINE ivUnzip #-}
 ivUnzip :: (V.Unbox a, V.Unbox b)
       => IVector i (a, b) -> (IVector i a, IVector i b)
 ivUnzip (IVector v) = IVector *** IVector $ V.unzip v
 
 -- The type is specialized because I don't know how use coerce polymorphically.
+{-# INLINE ivFindIndices2 #-}
 ivFindIndices2 :: (V.Unbox a)
               => (a -> Bool) -> IVector Index2 a -> V.Vector Index2
 ivFindIndices2 f (IVector v) = coerce $ V.findIndices f v
@@ -387,37 +434,43 @@ ivFindIndices2 f (IVector v) = coerce $ V.findIndices f v
 newtype IIntSet i   = IIntSet { runIIntSet :: S.IntSet }
   deriving (Monoid)
 
+{-# INLINE iisOffset #-}
 iisOffset :: IsInt i => i -> IIntSet i -> IIntSet i
 iisOffset i (IIntSet s) =
   let i' = toInt i in IIntSet $ S.fromAscList $ map (+i') $ S.toAscList s
 
 -- The type is specialized because I don't know how use coerce polymorphically.
+{-# INLINE iisFromList1 #-}
 iisFromList1 :: [Index1] -> IIntSet Index1
 iisFromList1 = IIntSet . S.fromList . coerce
 
 -- The type is specialized because I don't know how use coerce polymorphically.
+{-# INLINE iisToList1 #-}
 iisToList1 :: IIntSet a -> [Index1]
 iisToList1 (IIntSet s) = coerce $ S.toList s
 
+{-# INLINE iisSize #-}
 iisSize :: IIntSet a -> Int
 iisSize (IIntSet s) = S.size s
 
+{-# INLINE iisFilter #-}
 iisFilter :: IsInt i => (i -> Bool) -> IIntSet i -> IIntSet i
 iisFilter f (IIntSet s) = IIntSet $ S.filter (f . fromInt) s
 
+{-# INLINE iisSplit #-}
 iisSplit :: IsInt i => i -> IIntSet i -> (IIntSet i, IIntSet i)
 iisSplit i (IIntSet s) = IIntSet *** IIntSet $ S.split (toInt i) s
 
-iisUnion :: IIntSet i -> IIntSet i -> IIntSet i
-iisUnion (IIntSet s) (IIntSet t) = IIntSet $ S.union s t
-
+{-# INLINE iisBound #-}
 iisBound :: IsInt i => IndexInterval i -> IIntSet i -> IIntSet i
 iisBound (IndexInterval (l, u)) (IIntSet s) =
   IIntSet $ fst $ S.split (succ $ toInt u) $ snd $ S.split (pred $ toInt l) s
 
+{-# INLINE iisMember #-}
 iisMember :: IsInt i => i -> IIntSet i -> Bool
 iisMember i (IIntSet s) = S.member (toInt i) s
 
+{-# INLINE iisFindNearestIndex #-}
 iisFindNearestIndex :: IsInt i => i -> IIntSet i -> Maybe i
 iisFindNearestIndex target (IIntSet s) =
   fmap fromInt $ nearest <|> lower <|> upper
@@ -432,6 +485,7 @@ iisFindNearestIndex target (IIntSet s) =
         then pure l else pure u
 
 -- The type is specialized because I don't know how use coerce polymorphically.
+{-# INLINE iisFindIntermediateIndices1 #-}
 iisFindIntermediateIndices1
   :: IndexInterval Index1 -> IIntSet Index1 -> Maybe [Index1]
 iisFindIntermediateIndices1 (IndexInterval (low, high)) s@(IIntSet s') = do
@@ -452,41 +506,53 @@ newtype IIntMap i a = IIntMap { runIIntMap :: M.IntMap a }
 -- iimFromList1 :: [(Index1, a)] -> IIntMap Index1 a
 -- iimFromList1 = IIntMap . M.fromList . coerce
 
+{-# INLINE iimFromSet #-}
 iimFromSet :: IsInt i => (i -> a) -> IIntSet i -> IIntMap i a
 iimFromSet f (IIntSet s) = IIntMap $ M.fromSet (f . fromInt) s
 
 -- The type is specialized because I don't know how use coerce polymorphically.
+{-# INLINE iimToList1 #-}
 iimToList1 :: IIntMap Index1 a -> [(Index1, a)]
 iimToList1 (IIntMap m) = coerce $ M.toList m
 
+-- {-# INLINE iimSize #-}
 -- iimSize :: IIntMap i a -> Int
 -- iimSize (IIntMap m) = M.size m
 
+-- {-# INLINE iimKeys1 #-}
 -- iimKeys1 :: IIntMap Index1 a -> [Index1]
 -- iimKeys1 (IIntMap m) = coerce $ M.keys m
 
+-- {-# INLINE iimMap #-}
 -- iimMap :: (a -> b) -> IIntMap i a -> IIntMap i b
 -- iimMap f (IIntMap m) = IIntMap $ M.map f m
 
+{-# INLINE iimMapWithKey #-}
 iimMapWithKey :: IsInt i => (i -> a -> b) -> IIntMap i a -> IIntMap i b
 iimMapWithKey f (IIntMap m) = IIntMap $ M.mapWithKey (f . fromInt) m
 
+-- {-# INLINE iimMember #-}
 -- iimMember :: IsInt i => i -> IIntMap i a -> Bool
 -- iimMember i (IIntMap m) = M.member (toInt i) m
 
+{-# INLINE iimLookup #-}
 iimLookup :: IsInt i => i -> IIntMap i a -> Maybe a
 iimLookup i (IIntMap m) = M.lookup (toInt i) m
 
+-- {-# INLINE iimUnionWith #-}
 -- iimUnionWith :: (a -> a -> a) -> IIntMap i a -> IIntMap i a -> IIntMap i a
 -- iimUnionWith f (IIntMap m1) (IIntMap m2) = IIntMap $ M.unionWith f m1 m2
 
+-- {-# INLINE iimSplit #-}
 -- iimSplit :: IsInt i => i -> IIntMap i a -> (IIntMap i a, IIntMap i a)
 -- iimSplit i (IIntMap m) = IIntMap *** IIntMap $ M.split (toInt i) m
 
+-- {-# INLINE iimBound #-}
 -- iimBound :: IsInt i => IndexInterval i -> IIntMap i a -> IIntMap i a
 -- iimBound (IndexInterval (l, u)) (IIntMap m) =
 --   IIntMap $ fst $ M.split (succ $ toInt u) $ snd $ M.split (pred $ toInt l) m
 
+-- {-# INLINE iimFindNearestIndex #-}
 -- iimFindNearestIndex :: IsInt i => i -> IIntMap i a -> Maybe i
 -- iimFindNearestIndex target (IIntMap m) =
 --   fmap fromInt $ nearest <|> lower <|> upper
@@ -500,7 +566,8 @@ iimLookup i (IIntMap m) = M.lookup (toInt i) m
 --       if abs (l - target') <= abs (u - target')
 --         then pure l else pure u
 
--- The type is specialized because I don't know how use coerce polymorphically.
+-- -- The type is specialized because I don't know how use coerce polymorphically.
+-- {-# INLINE iimFindIntermediateIndices1 #-}
 -- iimFindIntermediateIndices1
 --   :: IndexInterval Index1 -> IIntMap Index1 a -> Maybe [Index1]
 -- iimFindIntermediateIndices1 (IndexInterval (low, high)) m@(IIntMap m') = do

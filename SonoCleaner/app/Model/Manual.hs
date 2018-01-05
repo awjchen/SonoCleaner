@@ -104,7 +104,7 @@ matchGroup offset indices jumps traceState
   = let ds = snd $ traceState ^. diffSeries
         slopes = map (ivIndex ds) indices
         slopeEsts = map (estimateSlope ds noSlopeInfo samplingRadius) indices
-          where noSlopeInfo = iisUnion jumps $ traceState ^. modifiedJumps
+          where noSlopeInfo = mappend jumps $ traceState ^. modifiedJumps
         slopeErrors = zipWith (-) slopes slopeEsts
         totalError = sum slopeErrors
         newSlopes = slopeEsts
