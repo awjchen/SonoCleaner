@@ -14,7 +14,7 @@
 module Types.Indices
   ( Index0, index0, unsafeRunIndex0
   , Index1, index1
-  , Index2, index2
+  , Index2
 
   , IndexInterval (..)
   , _IndexInterval
@@ -23,9 +23,9 @@ module Types.Indices
   , iiMember
   , iiShrink
   , iiGrow
-  , iiToList
+  -- , iiToList
   , iiToVector
-  , iiToIVector
+  -- , iiToIVector
   , iiIndex
   , iiBound
   , iiGetIVectorBounds
@@ -46,11 +46,11 @@ module Types.Indices
   , ivIndex
   , ivSlice
 
-  , ivExtend0
+  -- , ivExtend0
   , ivExtend1
   , ivExtend2
 
-  , ivAverage
+  -- , ivAverage
   , ivMinMax
   , ivCount
   , interpolationUpdates
@@ -59,7 +59,7 @@ module Types.Indices
   , ivEnumFromN
   , (*//)
   , ivUpdate
-  , ivIndexed
+  -- , ivIndexed
   , ivMap
   , ivZip
   , ivUnzip
@@ -75,21 +75,26 @@ module Types.Indices
   , iisFilter
   , iisSplit
   , iisBound
+  , iisMember
+  , iisFindNearestIndex
+  , iisFindIntermediateIndices1
 
   , IIntMap
 
-  , iimFromList1
+  -- , iimFromList1
+  , iimFromSet
   , iimToList1
-  , iimSize
-  , iimKeys1
+  -- , iimSize
+  -- , iimKeys1
+  -- , iimMap
   , iimMapWithKey
-  , iimMember
+  -- , iimMember
   , iimLookup
-  , iimUnionWith
-  , iimSplit
-  , iimBound
-  , iimFindNearestIndex
-  , iimFindIntermediateIndices1
+  -- , iimUnionWith
+  -- , iimSplit
+  -- , iimBound
+  -- , iimFindNearestIndex
+  -- , iimFindIntermediateIndices1
   ) where
 
 import           Control.Applicative
@@ -278,11 +283,11 @@ ivSlice (IndexInterval (i, j)) (IVector v) =
 
 -- Index-specific functions
 
-ivExtend0 :: V.Unbox a => Int -> IVector Index0 a -> IVector Index0 a
-ivExtend0 r (IVector v) = IVector $ V.concat
-  [ V.replicate r (V.head v)
-  , v
-  , V.replicate r (V.last v) ]
+-- ivExtend0 :: V.Unbox a => Int -> IVector Index0 a -> IVector Index0 a
+-- ivExtend0 r (IVector v) = IVector $ V.concat
+--   [ V.replicate r (V.head v)
+--   , v
+--   , V.replicate r (V.last v) ]
 
 ivExtend1 :: (V.Unbox a, Num a) => Int -> IVector Index1 a -> IVector Index1 a
 ivExtend1 r (IVector dv) = IVector $ V.concat
@@ -300,8 +305,8 @@ ivExtend2 r (IVector ddv) = IVector $ V.concat
 
 -- Special functions
 
-ivAverage :: IVector i Double -> Double
-ivAverage (IVector v) = V.sum v / fromIntegral (V.length v)
+-- ivAverage :: IVector i Double -> Double
+-- ivAverage (IVector v) = V.sum v / fromIntegral (V.length v)
 
 ivMinMax :: (V.Unbox a, Ord a) => IVector i a -> (a, a)
 ivMinMax (IVector v) =
@@ -355,8 +360,8 @@ ivUpdate (IVector v) (IVector updates) =
 _ivIndices :: (V.Unbox i, Num i, V.Unbox a) => IVector i a -> IVector i i
 _ivIndices (IVector v) = IVector $ V.enumFromN 0 (V.length v)
 
-ivIndexed :: (V.Unbox i, Num i, V.Unbox a) => IVector i a -> IVector i (i, a)
-ivIndexed iv = ivZip (_ivIndices iv) iv
+-- ivIndexed :: (V.Unbox i, Num i, V.Unbox a) => IVector i a -> IVector i (i, a)
+-- ivIndexed iv = ivZip (_ivIndices iv) iv
 
 ivMap :: (V.Unbox a, V.Unbox b) => (a -> b) -> IVector i a -> IVector i b
 ivMap f (IVector v) = IVector $ V.map f v
@@ -406,53 +411,16 @@ iisBound :: IsInt i => IndexInterval i -> IIntSet i -> IIntSet i
 iisBound (IndexInterval (l, u)) (IIntSet s) =
   IIntSet $ fst $ S.split (succ $ toInt u) $ snd $ S.split (pred $ toInt l) s
 
---------------------------------------------------------------------------------
--- Indexed `IntMap`s
---------------------------------------------------------------------------------
+iisMember :: IsInt i => i -> IIntSet i -> Bool
+iisMember i (IIntSet s) = S.member (toInt i) s
 
-newtype IIntMap i a = IIntMap { runIIntMap :: M.IntMap a }
-  deriving (Monoid)
-
--- The type is specialized because I don't know how use coerce polymorphically.
-iimFromList1 :: [(Index1, a)] -> IIntMap Index1 a
-iimFromList1 = IIntMap . M.fromList . coerce
-
--- The type is specialized because I don't know how use coerce polymorphically.
-iimToList1 :: IIntMap Index1 a -> [(Index1, a)]
-iimToList1 (IIntMap m) = coerce $ M.toList m
-
-iimSize :: IIntMap i a -> Int
-iimSize (IIntMap m) = M.size m
-
-iimKeys1 :: IIntMap Index1 a -> [Index1]
-iimKeys1 (IIntMap m) = coerce $ M.keys m
-
-iimMapWithKey :: IsInt i => (i -> a -> b) -> IIntMap i a -> IIntMap i b
-iimMapWithKey f (IIntMap m) = IIntMap $ M.mapWithKey (f . fromInt) m
-
-iimMember :: IsInt i => i -> IIntMap i a -> Bool
-iimMember i (IIntMap m) = M.member (toInt i) m
-
-iimLookup :: IsInt i => i -> IIntMap i a -> Maybe a
-iimLookup i (IIntMap m) = M.lookup (toInt i) m
-
-iimUnionWith :: (a -> a -> a) -> IIntMap i a -> IIntMap i a -> IIntMap i a
-iimUnionWith f (IIntMap m1) (IIntMap m2) = IIntMap $ M.unionWith f m1 m2
-
-iimSplit :: IsInt i => i -> IIntMap i a -> (IIntMap i a, IIntMap i a)
-iimSplit i (IIntMap m) = IIntMap *** IIntMap $ M.split (toInt i) m
-
-iimBound :: IsInt i => IndexInterval i -> IIntMap i a -> IIntMap i a
-iimBound (IndexInterval (l, u)) (IIntMap m) =
-  IIntMap $ fst $ M.split (succ $ toInt u) $ snd $ M.split (pred $ toInt l) m
-
-iimFindNearestIndex :: IsInt i => i -> IIntMap i a -> Maybe i
-iimFindNearestIndex target (IIntMap m) =
+iisFindNearestIndex :: IsInt i => i -> IIntSet i -> Maybe i
+iisFindNearestIndex target (IIntSet s) =
   fmap fromInt $ nearest <|> lower <|> upper
   where
     target' = toInt target
-    lower = fst <$> M.lookupLE target' m
-    upper = fst <$> M.lookupGE target' m
+    lower = S.lookupLE target' s
+    upper = S.lookupGE target' s
     nearest = do
       l <- lower
       u <- upper
@@ -460,12 +428,81 @@ iimFindNearestIndex target (IIntMap m) =
         then pure l else pure u
 
 -- The type is specialized because I don't know how use coerce polymorphically.
-iimFindIntermediateIndices1
-  :: IndexInterval Index1 -> IIntMap Index1 a -> Maybe [Index1]
-iimFindIntermediateIndices1 (IndexInterval (low, high)) m@(IIntMap m') = do
+iisFindIntermediateIndices1
+  :: IndexInterval Index1 -> IIntSet Index1 -> Maybe [Index1]
+iisFindIntermediateIndices1 (IndexInterval (low, high)) s@(IIntSet s') = do
   let low' = toInt low; high' = toInt high
-  lowIndex  <- fst <$> M.lookupGE low'  m'
-  highIndex <- fst <$> M.lookupLE high' m'
+  lowIndex  <- S.lookupGE low'  s'
+  highIndex <- S.lookupLE high' s'
   guard (lowIndex <= highIndex)
   let interval = IndexInterval (fromInt lowIndex, fromInt highIndex)
-  pure $ map fst $ iimToList1 $ iimBound interval m
+  pure $ iisToList1 $ iisBound interval s
+
+--------------------------------------------------------------------------------
+-- Indexed `IntMap`s
+--------------------------------------------------------------------------------
+
+newtype IIntMap i a = IIntMap { runIIntMap :: M.IntMap a }
+
+-- The type is specialized because I don't know how use coerce polymorphically.
+-- iimFromList1 :: [(Index1, a)] -> IIntMap Index1 a
+-- iimFromList1 = IIntMap . M.fromList . coerce
+
+iimFromSet :: IsInt i => (i -> a) -> IIntSet i -> IIntMap i a
+iimFromSet f (IIntSet s) = IIntMap $ M.fromSet (f . fromInt) s
+
+-- The type is specialized because I don't know how use coerce polymorphically.
+iimToList1 :: IIntMap Index1 a -> [(Index1, a)]
+iimToList1 (IIntMap m) = coerce $ M.toList m
+
+-- iimSize :: IIntMap i a -> Int
+-- iimSize (IIntMap m) = M.size m
+
+-- iimKeys1 :: IIntMap Index1 a -> [Index1]
+-- iimKeys1 (IIntMap m) = coerce $ M.keys m
+
+-- iimMap :: (a -> b) -> IIntMap i a -> IIntMap i b
+-- iimMap f (IIntMap m) = IIntMap $ M.map f m
+
+iimMapWithKey :: IsInt i => (i -> a -> b) -> IIntMap i a -> IIntMap i b
+iimMapWithKey f (IIntMap m) = IIntMap $ M.mapWithKey (f . fromInt) m
+
+-- iimMember :: IsInt i => i -> IIntMap i a -> Bool
+-- iimMember i (IIntMap m) = M.member (toInt i) m
+
+iimLookup :: IsInt i => i -> IIntMap i a -> Maybe a
+iimLookup i (IIntMap m) = M.lookup (toInt i) m
+
+-- iimUnionWith :: (a -> a -> a) -> IIntMap i a -> IIntMap i a -> IIntMap i a
+-- iimUnionWith f (IIntMap m1) (IIntMap m2) = IIntMap $ M.unionWith f m1 m2
+
+-- iimSplit :: IsInt i => i -> IIntMap i a -> (IIntMap i a, IIntMap i a)
+-- iimSplit i (IIntMap m) = IIntMap *** IIntMap $ M.split (toInt i) m
+
+-- iimBound :: IsInt i => IndexInterval i -> IIntMap i a -> IIntMap i a
+-- iimBound (IndexInterval (l, u)) (IIntMap m) =
+--   IIntMap $ fst $ M.split (succ $ toInt u) $ snd $ M.split (pred $ toInt l) m
+
+-- iimFindNearestIndex :: IsInt i => i -> IIntMap i a -> Maybe i
+-- iimFindNearestIndex target (IIntMap m) =
+--   fmap fromInt $ nearest <|> lower <|> upper
+--   where
+--     target' = toInt target
+--     lower = fst <$> M.lookupLE target' m
+--     upper = fst <$> M.lookupGE target' m
+--     nearest = do
+--       l <- lower
+--       u <- upper
+--       if abs (l - target') <= abs (u - target')
+--         then pure l else pure u
+
+-- The type is specialized because I don't know how use coerce polymorphically.
+-- iimFindIntermediateIndices1
+--   :: IndexInterval Index1 -> IIntMap Index1 a -> Maybe [Index1]
+-- iimFindIntermediateIndices1 (IndexInterval (low, high)) m@(IIntMap m') = do
+--   let low' = toInt low; high' = toInt high
+--   lowIndex  <- fst <$> M.lookupGE low'  m'
+--   highIndex <- fst <$> M.lookupLE high' m'
+--   guard (lowIndex <= highIndex)
+--   let interval = IndexInterval (fromInt lowIndex, fromInt highIndex)
+--   pure $ map fst $ iimToList1 $ iimBound interval m

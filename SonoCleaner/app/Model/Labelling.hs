@@ -22,13 +22,12 @@ import           Model.TraceState
 maxNonJumps :: Int
 maxNonJumps = 4
 
-labelLevelShifts :: Double -> Double -> TraceState -> IIntMap Index1 Double
+labelLevelShifts :: Double -> Double -> TraceState -> IIntSet Index1
 labelLevelShifts maxNoise jumpTolerance traceState =
   let dv  = snd $ traceState ^. diffSeries
       ddv = snd $ snd $ traceState ^. diff2Series
-      jumps = V.map graph $ labelLevelShifts' maxNoise jumpTolerance (dv, ddv)
-        where graph i = (i, dv `ivIndex` i)
-  in  iimFromList1 $ V.toList jumps
+      levelShifts = labelLevelShifts' maxNoise jumpTolerance (dv, ddv)
+  in  iisFromList1 $ V.toList levelShifts
 
 labelLevelShifts'
   :: Double

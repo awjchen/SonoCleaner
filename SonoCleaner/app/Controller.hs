@@ -77,7 +77,7 @@ controllerMain = do
   -- Setup computation and rendering
   -------------------------------------------------------------------------------
 
-  (initializeInterpreter, getChart, getMatches, getJumps, getNewModel)
+  (initializeInterpreter, getChart, getMatches, getLevelShifts, getNewModel)
     <- setupInterpreter
 
   windowSetDefaultSize (controllerWindow guiElems) 1024 640
@@ -313,11 +313,11 @@ controllerMain = do
       Nothing -> return False
       Just mouseEvent1 -> do
         mouseEvent2 <- captureMouseEvent pickFnTVar
-        (model, guiState, jumps) <- liftIO $ atomically $ do
+        (model, guiState, levelShifts) <- liftIO $ atomically $ do
           model' <- readTVar modelTVar
           guiState' <- readTVar guiStateTVar
-          jumps' <- getJumps model' guiState'
-          return (model', guiState', jumps')
+          levelShifts' <- getLevelShifts model' guiState'
+          return (model', guiState', levelShifts')
 
         let nearestPoint' = nearestPoint model
             nearestSlope' = nearestSlope model
@@ -338,7 +338,7 @@ controllerMain = do
           Just (MouseClickRight pt) -> liftIO $ withUpdate $
             case guiState ^. currentPage of
               MainPage ->
-                case iimFindNearestIndex (nearestSlope' (p_x pt)) jumps of
+                case iisFindNearestIndex (nearestSlope' (p_x pt)) levelShifts of
                   Nothing -> return ()
                   Just j ->
                     let t = timeAtSlope' j
@@ -356,8 +356,8 @@ controllerMain = do
               MainPage ->  do
                 let lowerTarget = nearestSlope' xLeft
                     upperTarget = nearestSlope' xRight
-                case iimFindIntermediateIndices1
-                       (IndexInterval (lowerTarget, upperTarget)) jumps of
+                case iisFindIntermediateIndices1
+                       (IndexInterval (lowerTarget, upperTarget)) levelShifts of
                     Just (js@(_:_:_)) ->
                       let t = mid' $ over both timeAtSlope' $ (head &&& last) js
                       in  atomically $ modifyTVar' guiStateTVar $

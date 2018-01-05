@@ -28,7 +28,7 @@ samplingRadius = 4
 
 type ReplaceSingleLevelShift
   =  IVector Index1 Double
-  -> IIntMap Index1 Double
+  -> IIntSet Index1
   -> Index1
   -> Maybe Double
 
@@ -49,13 +49,13 @@ singleToTrace
   -> Hold
   -> Double
   -> Index1
-  -> IIntMap Index1 Double
+  -> IIntSet Index1
   -> TraceState
   -> TraceState
 singleToTrace replace hold offset i jumps traceState =
   fromMaybe traceState $ do
-    oldHeight <- iimLookup i jumps
     let ds = snd $ traceState ^. diffSeries
+        oldHeight = ivIndex ds i
     newHeight <- (+offset) <$> replace ds jumps i
     let updates = [(i, newHeight)]
         leftShift = case hold of
@@ -67,7 +67,7 @@ setZero, setMedianSlope
   :: Hold
   -> Double
   -> Index1
-  -> IIntMap Index1 Double
+  -> IIntSet Index1
   -> TraceState
   -> TraceState
 setZero        = singleToTrace setZero'
@@ -81,7 +81,7 @@ setMedianSlope = singleToTrace setMedianSlope'
 interpolateGroup ::
      Double
   -> [Index1]
-  -> IIntMap Index1 Double
+  -> IIntSet Index1
   -> TraceState
   -> TraceState
 interpolateGroup _ indices _ traceState =
@@ -96,19 +96,19 @@ interpolateGroup _ indices _ traceState =
 matchGroup
   :: Double
   -> [Index1]
-  -> IIntMap Index1 Double
+  -> IIntSet Index1
   -> TraceState
   -> TraceState
 matchGroup offset indices jumps traceState
   | (_:_:_) <- indices
-  , Just slopes <- traverse (`iimLookup` jumps) indices
   = let ds = snd $ traceState ^. diffSeries
+        slopes = map (ivIndex ds) indices
         slopeEsts = map (estimateSlope ds jumps samplingRadius) indices
         slopeErrors = zipWith (-) slopes slopeEsts
         totalError = sum slopeErrors
-        newSlopes = totalError + head slopeEsts : tail slopeEsts
+        newSlopes = slopeEsts
           & _last %~ subtract offset
-          & _head %~ (+offset)
+          & _head %~ (+(offset + totalError))
         updates = zip indices newSlopes
     in  updateDiffSeries 0 updates traceState
   | otherwise = traceState

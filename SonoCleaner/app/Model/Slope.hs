@@ -16,16 +16,16 @@ import           Types.Indices
 
 estimateSlope
   :: IVector Index1 Double
-  -> IIntMap Index1 Double
+  -> IIntSet Index1
   -> Index1
   -> Index1
   -> Double
-estimateSlope ds jumps radius i
+estimateSlope ds badSegments radius i
   | V.length nonZeroSlopes < 5 = 0 -- p < 0.10 impossible with l.t. 5 slopes
   | pValue' < 0.10             = median slopes
   | otherwise                  = 0
   where
-    slopes = V.fromList $ getSurroundingSlopes ds jumps radius i
+    slopes = V.fromList $ getSurroundingSlopes ds badSegments radius i
     nonZeroSlopes = V.filter (/= 0) slopes
     pairs = V.zip nonZeroSlopes (V.replicate (V.length nonZeroSlopes) 0)
     pValue' = pValue $ testSignificance
@@ -45,12 +45,12 @@ median v
 
 getSurroundingSlopes
   :: IVector Index1 Double
-  -> IIntMap Index1 Double
+  -> IIntSet Index1
   -> Index1
   -> Index1
   -> [Double]
-getSurroundingSlopes ds jumps radius i =
-  map (ivIndex ds) $ filter (not . flip iimMember jumps) [i0..i1]
+getSurroundingSlopes ds badSegments radius i =
+  map (ivIndex ds) $ filter (not . flip iisMember badSegments) [i0..i1]
   where
     i0 = max 0                 (i-radius)
     i1 = min (ivLength ds - 1) (i+radius)

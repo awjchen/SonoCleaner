@@ -152,7 +152,7 @@ data DisplayDependencies = DisplayDependencies
 data AnnotatedTraceState a = AnnotatedTraceState
   { atsDependencies      :: a
   , atsTraceState        :: TraceState
-  , atsJumps             :: IIntMap Index1 Double
+  , atsLevelShifts       :: IIntSet Index1
   , atsLevelShiftMatches :: LevelShiftMatches }
 
 -- D
@@ -175,15 +175,15 @@ readIdAnnotation dataParams model =
 
       dataVersion = getTraceDataVersion model
       idTraceState = getCurrentState model
-      idJumps = labelLevelShifts nt lst idTraceState
-      idMatches = matchLevelShifts nt idJumps idTraceState
+      idLevelShifts = labelLevelShifts nt lst idTraceState
+      idMatches = matchLevelShifts nt idLevelShifts idTraceState
 
   in  AnnotatedTraceState
         { atsDependencies      = IdDataDependencies
                                    { iddDataVersion = dataVersion
                                    , iddDataParams  = dataParams }
         , atsTraceState        = idTraceState
-        , atsJumps             = idJumps
+        , atsLevelShifts       = idLevelShifts
         , atsLevelShiftMatches = idMatches }
 
 
@@ -202,16 +202,18 @@ applyOperation traceOp ats =
   in  if isIdentityOp transform
       then ats{ atsDependencies = newDependencies }
       else  let newTraceState = getOp transform (atsTraceState ats)
-                newJumps = labelLevelShifts
-                            (dpNoiseThreshold dataParams)
-                            (dpLevelShiftThreshold dataParams)
-                            newTraceState
+                newLevelShifts = labelLevelShifts
+                                  (dpNoiseThreshold dataParams)
+                                  (dpLevelShiftThreshold dataParams)
+                                  newTraceState
                 newMatches = matchLevelShifts
-                          (dpNoiseThreshold dataParams) newJumps newTraceState
+                               (dpNoiseThreshold dataParams)
+                               newLevelShifts
+                               newTraceState
             in  AnnotatedTraceState
                   { atsDependencies      = newDependencies
                   , atsTraceState        = newTraceState
-                  , atsJumps             = newJumps
+                  , atsLevelShifts       = newLevelShifts
                   , atsLevelShiftMatches = newMatches }
 
 -- helper for 2
@@ -227,12 +229,12 @@ getTraceStateTransform traceOp ats = case traceOp of
     SingleIgnore   -> IdOperator
     SingleZero     -> apply setZeroOp
     SingleSlopeFit -> apply setMedianOp
-    where apply f = f (snd holdPair) offset index (atsJumps ats)
+    where apply f = f (snd holdPair) offset index (atsLevelShifts ats)
   ManualMultipleOp action indices offset -> case action of
     MultipleIgnore -> IdOperator
     MultipleLine   -> apply interpolateGroupOp
     MultipleCancel -> apply matchGroupOp
-    where apply f = f offset indices (atsJumps ats)
+    where apply f = f offset indices (atsLevelShifts ats)
   CropOp _ -> IdOperator
 
 -- 3
@@ -323,7 +325,7 @@ specifyChart model viewParams ats =
 
     newSeries = ats ^. to atsTraceState . series
 
-    newJumpIndices = atsJumps ats
+    newJumpIndices = atsLevelShifts ats
 
     newModifiedIndices = ats ^. to atsTraceState . modifiedJumps
 
@@ -380,7 +382,7 @@ specifyChart model viewParams ats =
 setupInterpreter :: IO ( Model -> GUIState -> STM ()
                        , Model -> GUIState -> STM ChartSpec
                        , Model -> GUIState -> STM LevelShiftMatches
-                       , Model -> GUIState -> STM (IIntMap Index1 Double)
+                       , Model -> GUIState -> STM (IIntSet Index1)
                        , Model -> GUIState -> STM Model )
 setupInterpreter = do
   idAnnotationTVar       <- newTVarIO undefined
@@ -445,10 +447,10 @@ setupInterpreter = do
         updateData model guiState
         atsLevelShiftMatches <$> readTVar idAnnotationTVar
 
-  let getJumps :: Model -> GUIState -> STM (IIntMap Index1 Double)
+  let getJumps :: Model -> GUIState -> STM (IIntSet Index1)
       getJumps model guiState = do
         updateData model guiState
-        atsJumps <$> readTVar idAnnotationTVar
+        atsLevelShifts <$> readTVar idAnnotationTVar
 
   let getNewModel :: Model -> GUIState -> STM Model
       getNewModel model guiState = do

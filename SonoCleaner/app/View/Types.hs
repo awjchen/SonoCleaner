@@ -13,7 +13,7 @@ data ChartSpec = ChartSpec
   { plotTitle            :: String
   , plotTitleColour      :: AlphaColour Double
   , plotSeries           :: IVector Index0 Double
-  , plotJumpIndices      :: IIntMap Index1 Double
+  , plotJumpIndices      :: IIntSet Index1
   , plotModifiedIndices  :: IIntSet Index1
   , plotOriginalSeries   :: Maybe (IVector Index0 Double)
   , plotTwinSeries       :: Maybe (IVector Index0 Double)

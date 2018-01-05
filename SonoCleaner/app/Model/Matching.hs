@@ -112,16 +112,17 @@ applyMatches matches progression = updateDiffSeries 0 updates
 
 matchLevelShifts
   :: Double
-  -> IIntMap Index1 Double
+  -> IIntSet Index1
   -> TraceState
   -> LevelShiftMatches
-matchLevelShifts noiseTh levelShiftsMap ts = levelShiftMatches corrections
+matchLevelShifts noiseTh levelShifts ts = levelShiftMatches corrections
   where
     (_, ds) = ts ^. diffSeries
-    levelShiftSlopesMap = iimMapWithKey estimateSlope' levelShiftsMap where
-      estimateSlope' k _ = estimateSlope ds levelShiftsMap radius k
+    levelShiftSlopesMap = iimFromSet estimateSlope' levelShifts where
+      estimateSlope' k = estimateSlope ds levelShifts radius k
         where radius = 4
-    levelShiftErrorsMap = iimUnionWith (-) levelShiftsMap levelShiftSlopesMap
+    levelShiftErrorsMap = iimMapWithKey f levelShiftSlopesMap
+      where f i slope = ivIndex ds i - slope
 
     matches = runST $
       case NE.nonEmpty (iimToList1 levelShiftErrorsMap) of

@@ -161,9 +161,9 @@ traces plotSpec xParams =
     interval = plotInterval xParams
     croppedTimes = ivSlice interval $ plotTimes plotSpec
 
-    cropIndexList :: IIntMap Index1 Double -> [Index1]
+    cropIndexList :: IIntSet Index1 -> [Index1]
     cropIndexList = map (subtract $ iiLeft interval')
-                  . iimKeys1 . iimBound interval'
+                  . iisToList1 . iisBound interval'
       where interval' = iiDiff interval
 
     simplifySeries' :: IVector Index0 (Double, Double) -> [(Double, Double)]
@@ -172,7 +172,7 @@ traces plotSpec xParams =
       else simplifySeries (compressibleTimeSteps xParams)
 
     makeMainTrace
-      :: IIntMap Index1 Double -> IVector Index0 Double -> [[(Double, Double)]]
+      :: IIntSet Index1 -> IVector Index0 Double -> [[(Double, Double)]]
     makeMainTrace splitIndices =
         map simplifySeries'
       . splitAtIndices (cropIndexList splitIndices)
@@ -223,12 +223,12 @@ jumps plotSpec xParams =
 
     openJumps = zipWith3 makeLine (repeat 2) openColours
               $ simplifyJumps'
-              $ iimKeys1 . iimBound interval'
+              $ iisToList1 . iisBound interval'
               $ openJumps'
       where openJumps' = plotJumpIndices plotSpec
             openColours = drop parity $ cycle [opaque magenta, opaque yellow]
-            parity = (`mod` 2) $ iimSize
-                   $ fst $ iimSplit (iiLeft interval') openJumps'
+            parity = (`mod` 2) $ iisSize
+                   $ fst $ iisSplit (iiLeft interval') openJumps'
 
     closedJumps = zipWith3 makeLine (repeat 2) closedColours
                 $ simplifyJumps'

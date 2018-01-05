@@ -48,19 +48,19 @@ interpolationBrushOp
 interpolationBrushOp = (fmap.fmap.fmap) TraceOperator interpolationBrush
 
 -- Manual correction: single
-setZeroOp :: Hold -> Double -> Index1 -> IIntMap Index1 Double -> TraceOperator
+setZeroOp :: Hold -> Double -> Index1 -> IIntSet Index1 -> TraceOperator
 setZeroOp = (fmap.fmap.fmap.fmap) TraceOperator setZero
 
 setMedianOp
-  :: Hold -> Double -> Index1 -> IIntMap Index1 Double -> TraceOperator
+  :: Hold -> Double -> Index1 -> IIntSet Index1 -> TraceOperator
 setMedianOp = (fmap.fmap.fmap.fmap) TraceOperator setMedianSlope
 
 -- Manual correction: multiple
 interpolateGroupOp
-  :: Double -> [Index1] -> IIntMap Index1 Double -> TraceOperator
+  :: Double -> [Index1] -> IIntSet Index1 -> TraceOperator
 interpolateGroupOp = (fmap.fmap.fmap) TraceOperator interpolateGroup
 
-matchGroupOp :: Double -> [Index1] -> IIntMap Index1 Double -> TraceOperator
+matchGroupOp :: Double -> [Index1] -> IIntSet Index1 -> TraceOperator
 matchGroupOp = (fmap.fmap.fmap) TraceOperator matchGroup
 
 -- Automated correction
