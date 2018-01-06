@@ -288,7 +288,7 @@ simplifySegments
   -> [[(Double, Double)]]
 simplifySegments v toTime bucketSize =
     concatMap (map plot' . evenConcat . map bounds')
-  . groupBy (\a b -> b `minus` a < bucketSize)
+  . groupBy (\a b -> b `iMinus` a < bucketSize)
   where
 
     bounds' :: Index1 -> SP Index1 Bounds

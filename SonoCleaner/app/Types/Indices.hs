@@ -16,8 +16,8 @@ module Types.Indices
   , Index1, index1
   , Index2
 
-  , minus
-  , translate
+  , iMinus
+  , iTranslate
 
   , IndexInterval (..)
   , _IndexInterval
@@ -175,13 +175,13 @@ type family ISucc i where
   ISucc Index0 = Index1
   ISucc Index1 = Index2
 
-{-# INLINE minus #-}
-minus :: IsInt i => i -> i -> Int
-minus i j = toInt i - toInt j
+{-# INLINE iMinus #-}
+iMinus :: IsInt i => i -> i -> Int
+iMinus i j = toInt i - toInt j
 
-{-# INLINE translate #-}
-translate :: IsInt i => Int -> i -> i
-translate i idx = fromInt $ i + toInt idx
+{-# INLINE iTranslate #-}
+iTranslate :: IsInt i => Int -> i -> i
+iTranslate i idx = fromInt $ i + toInt idx
 
 --------------------------------------------------------------------------------
 -- IndexInterval
@@ -229,7 +229,7 @@ iiGrow (IndexInterval (l, u)) = IndexInterval (pred l, succ u)
 
 {-# INLINE iiLength #-}
 iiLength :: IsInt i => IndexInterval i -> Int
-iiLength (IndexInterval (l, u)) = u `minus` l + 1
+iiLength (IndexInterval (l, u)) = u `iMinus` l + 1
 
 {-# INLINE iiToList #-}
 iiToList :: Enum i => IndexInterval i -> [i]

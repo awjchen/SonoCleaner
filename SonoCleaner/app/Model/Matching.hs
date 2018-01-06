@@ -156,7 +156,7 @@ redistribute levelShifts (Match _ err levelShiftPositions) =
 
 interpolate :: IVector Index0 Double -> Match -> [(Index1, Double)]
 interpolate v (Match groupSpan _ levelShiftPositions) =
-  interpolationUpdates v (iiUndiff $ IndexInterval (i, translate groupSpan i))
+  interpolationUpdates v (iiUndiff $ IndexInterval (i, iTranslate groupSpan i))
   where i = head levelShiftPositions
 
 -------------------------------------------------------------------------------
@@ -171,7 +171,7 @@ initMatchingEnv noiseTh neLevelShiftsList = do
   let levelShiftsList = NE.toList neLevelShiftsList
   chain <- IC.fromList levelShiftsList
   heap <- let positions = map fst levelShiftsList
-              distances = zipWith minus (tail positions) positions
+              distances = zipWith iMinus (tail positions) positions
               heapElems = zip distances [0..]
           in  newSTRef $ H.fromList heapElems
   pure MatchingEnv
@@ -228,7 +228,7 @@ searchZeroSum spanLimit startIdx = do
     Just (startPos, _) -> lift $
       foldChainFrom (searchZeroSumHelper errLim
                                          startPos
-                                         (translate spanLimit startPos))
+                                         (iTranslate spanLimit startPos))
                     (const NoSolution)
                     (0, 0, [])
                     startIdx
@@ -260,7 +260,7 @@ searchZeroSumHelper
               | otherwise ->
                   next
       | otherwise ->
-          pure $ Left $ NextSpan (pos `minus` startPos)
+          pure $ Left $ NextSpan (pos `iMinus` startPos)
 
 foldChainFrom :: (V.Unbox a)
   => (a -> b -> ST s (Either c b)) -- Combining function, returning Left to terminate and Right to continue

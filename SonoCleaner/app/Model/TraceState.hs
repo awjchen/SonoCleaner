@@ -58,7 +58,7 @@ uncropTraceState cropInterval ts = case ts ^. context of
   CroppedContext cts ->
     let start = unsafeRunIndex0 $ iiLeft cropInterval
         ds = snd $ ts ^. diffSeries
-        updates = ivMap (first (translate start)) $ ivIndexed1 ds
+        updates = ivMap (first (iTranslate start)) $ ivIndexed1 ds
         diffSeries' = fmap (`ivUpdate` updates) (cts ^. diffSeries)
         modifiedSegments' = iisTranslate start (ts ^. modifiedSegments)
     in  setDiffSeries diffSeries' cts

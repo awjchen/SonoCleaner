@@ -251,7 +251,7 @@ getCropBounds model =
   let (mostRecentCrop NE.:| previousCrops) = model ^. cropHistory
       offset = sum
              $ fmap (unsafeRunIndex0 . fst . runIndexInterval) previousCrops
-  in  over (_IndexInterval . both) (translate offset) mostRecentCrop
+  in  over (_IndexInterval . both) (iTranslate offset) mostRecentCrop
 
 -- Current trace information
 

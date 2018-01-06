@@ -37,7 +37,7 @@ labelLevelShifts'
 labelLevelShifts' maxNoise levelShiftTolerance =
   -- We extend the data to detect level-shifts at the trace edges
   dimap (ivExtend1 1 *** ivExtend2 1)
-        (V.map $ translate (-1))
+        (V.map $ iTranslate (-1))
         labelLevelShifts''
   where
     slopeLimit = levelShiftTolerance - maxNoise
