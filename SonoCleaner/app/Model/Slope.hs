@@ -17,7 +17,7 @@ import           Types.Indices
 estimateSlope
   :: IVector Index1 Double
   -> IIntSet Index1
-  -> Index1
+  -> Int
   -> Index1
   -> Double
 estimateSlope ds badSegments radius i
@@ -46,11 +46,11 @@ median v
 getSurroundingSlopes
   :: IVector Index1 Double
   -> IIntSet Index1
-  -> Index1
+  -> Int
   -> Index1
   -> [Double]
 getSurroundingSlopes ds badSegments radius i =
   map (ivIndex ds) $ filter (not . flip iisMember badSegments) [i0..i1]
   where
-    (i0, i1) = runIndexInterval
-             $ iiBoundByIVector ds $ IndexInterval (i-radius, i+radius)
+    (i0, i1) = runIndexInterval $ iiBoundByIVector ds
+             $ IndexInterval (translate (-radius) i, translate radius i)

@@ -29,8 +29,8 @@ labelGaps s replaceWhat xInterval (y0, y1) =
     (IndexInterval (i0, i1)) = iiBoundByIVector s xInterval
 
     cutLine :: Index0 -> Double
-    cutLine i = let dydx = (y1-y0) / fromIntegral (i1-i0)
-          in  y0 + fromIntegral (i-i0) * dydx
+    cutLine i = let dydx = (y1-y0) / fromIntegral (i1 `minus` i0)
+          in  y0 + fromIntegral (i `minus` i0) * dydx
 
     include :: Index0 -> Bool
     include i = ivIndex s i `cmp` cutLine i

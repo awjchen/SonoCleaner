@@ -43,9 +43,10 @@ cropTraceState :: IndexInterval Index0 -> TraceState -> TraceState
 cropTraceState cropInterval ts =
   let croppedSeries = unsafeIvSlice cropInterval (ts ^. series)
       context' = CroppedContext ts
-      modifiedSegments' = let diffInterval = iiDiff cropInterval in
-          iisOffset (negate $ iiLeft diffInterval)
-        $ iisFilter (`iiMember` diffInterval)
+      offset = unsafeRunIndex0 $ iiLeft cropInterval
+      modifiedSegments' =
+          iisTranslate (-offset)
+        $ iisFilter (`iiMember` iiDiff cropInterval)
         $ ts ^. modifiedSegments
   in  initTraceState croppedSeries
         & context .~ context'
@@ -55,11 +56,11 @@ uncropTraceState :: IndexInterval Index0 -> TraceState -> TraceState
 uncropTraceState cropInterval ts = case ts ^. context of
   RootContext -> ts
   CroppedContext cts ->
-    let start = iiLeft $ iiDiff cropInterval
+    let start = unsafeRunIndex0 $ iiLeft cropInterval
         ds = snd $ ts ^. diffSeries
-        updates = ivMap (first (+start)) $ ivIndexed ds
+        updates = ivMap (first (translate start)) $ ivIndexed1 ds
         diffSeries' = fmap (`ivUpdate` updates) (cts ^. diffSeries)
-        modifiedSegments' = iisOffset start (ts ^. modifiedSegments)
+        modifiedSegments' = iisTranslate start (ts ^. modifiedSegments)
     in  setDiffSeries diffSeries' cts
           & modifiedSegments %~ mappend modifiedSegments'
 

@@ -286,11 +286,10 @@ simplifySegments
   -> Int
   -> [Index1]
   -> [[(Double, Double)]]
-simplifySegments v toTime bucketSize' =
+simplifySegments v toTime bucketSize =
     concatMap (map plot' . evenConcat . map bounds')
-  . groupBy (\a b -> b - a < bucketSize)
+  . groupBy (\a b -> b `minus` a < bucketSize)
   where
-    bucketSize = index1 bucketSize'
 
     bounds' :: Index1 -> SP Index1 Bounds
     bounds' j = SP j (makeBounds (ivIndex v i0) (ivIndex v (succ i1)))

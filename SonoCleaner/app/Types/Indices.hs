@@ -16,6 +16,9 @@ module Types.Indices
   , Index1, index1
   , Index2
 
+  , minus
+  , translate
+
   , IndexInterval (..)
   , _IndexInterval
 
@@ -24,7 +27,7 @@ module Types.Indices
   , iiShrink
   , iiGrow
   -- , iiToList
-  , iiToVector
+  , iiToVector1
   -- , iiToIVector
   , iiIndex
   , iiBound
@@ -60,7 +63,7 @@ module Types.Indices
 
   , (*//)
   , ivUpdate
-  , ivIndexed
+  , ivIndexed1
   , ivMap
   , ivZip
   , ivUnzip
@@ -68,7 +71,7 @@ module Types.Indices
 
   , IIntSet
 
-  , iisOffset
+  , iisTranslate
 
   , iisFromList1
   , iisToList1
@@ -116,18 +119,14 @@ import           Data.Void
 -- `Index`s are newtypes of `Int` that may only be used to index into `IVector`s
 -- with a matching index type.
 
-class IsInt i where
-  toInt :: i -> Int
-  fromInt :: Int -> i
-
 newtype Index0 = Index0 { runIndex0 :: Int }
-  deriving (Eq, Ord, Enum, Num, Real, Integral)
+  deriving (Eq, Ord, Enum)
 
 newtype Index1 = Index1 { runIndex1 :: Int }
-  deriving (Eq, Ord, Enum, Num, Real, Integral)
+  deriving (Eq, Ord, Enum)
 
 newtype Index2 = Index2 { runIndex2 :: Int }
-  deriving (Eq, Ord, Enum, Num, Real, Integral)
+  deriving (Eq, Ord, Enum)
 
 {-# INLINE index0 #-}
 index0 :: Int -> Index0
@@ -144,6 +143,10 @@ index1 = coerce
 {-# INLINE index2 #-}
 index2 :: Int -> Index2
 index2 = coerce
+
+class IsInt i where
+  toInt :: i -> Int
+  fromInt :: Int -> i
 
 instance IsInt Index0 where
   {-# INLINE toInt #-}
@@ -170,6 +173,14 @@ derivingUnbox "Index2" [t| Index2 -> Int |] [| coerce |] [| coerce |]
 type family ISucc i where
   ISucc Index0 = Index1
   ISucc Index1 = Index2
+
+{-# INLINE minus #-}
+minus :: IsInt i => i -> i -> Int
+minus i j = toInt i - toInt j
+
+{-# INLINE translate #-}
+translate :: IsInt i => Int -> i -> i
+translate i idx = fromInt $ i + toInt idx
 
 --------------------------------------------------------------------------------
 -- IndexInterval
@@ -219,9 +230,10 @@ iiGrow (IndexInterval (l, u)) = IndexInterval (pred l, succ u)
 iiToList :: Enum i => IndexInterval i -> [i]
 iiToList (IndexInterval (l, u)) = [l..u]
 
-{-# INLINE iiToVector #-}
-iiToVector :: (IsInt i, V.Unbox i, Num i) => IndexInterval i -> V.Vector i
-iiToVector (IndexInterval (l, u)) = V.enumFromN l (toInt $ u-l+1)
+{-# INLINE iiToVector1 #-}
+iiToVector1 :: IndexInterval Index1 -> V.Vector Index1
+iiToVector1 (IndexInterval (l, u)) = coerce $ V.enumFromN l' (u'-l'+1)
+  where l' = toInt l; u' = toInt u
 
 {-# INLINE iiIndex #-}
 iiIndex :: (IsInt i, V.Unbox a) => IVector i a -> IndexInterval i -> (a, a)
@@ -236,8 +248,9 @@ iiBound (IndexInterval (l, u)) i
 
 {-# INLINE iiGetIVectorBounds #-}
 iiGetIVectorBounds
-  :: (IsInt i, Num i, V.Unbox a) => IVector i a -> IndexInterval i
-iiGetIVectorBounds (IVector v) = IndexInterval (0, fromInt $ V.length v - 1)
+  :: (IsInt i, V.Unbox a) => IVector i a -> IndexInterval i
+iiGetIVectorBounds (IVector v) =
+  IndexInterval (fromInt 0, fromInt $ V.length v - 1)
 
 {-# INLINE iiBoundByIVector #-}
 iiBoundByIVector :: (IsInt i, V.Unbox a)
@@ -370,12 +383,11 @@ minMax v = let z = V.head v in V.foldl' minMaxAcc (z, z) (V.tail v) where
 ivCount :: V.Unbox a => (a -> Bool) -> IVector i a -> Int
 ivCount f (IVector v) = V.length $ V.filter f v
 
--- Does not use internals
 {-# INLINE interpolationUpdates #-}
 interpolationUpdates
   :: IVector Index0 Double -> IndexInterval Index0 -> [(Index1, Double)]
 interpolationUpdates v interval@(IndexInterval (l, u)) =
-  let xSpan = u - l
+  let xSpan = toInt u - toInt l
       ySpan = ivIndex v u - ivIndex v l
       avgSlope = ySpan / fromIntegral xSpan
   in  zip (iiToList $ iiDiff interval) (repeat avgSlope)
@@ -399,13 +411,13 @@ ivUpdate (IVector v) (IVector updates) =
 
 -- Elementwise operations
 
-{-# INLINE _ivIndices #-}
-_ivIndices :: (V.Unbox i, Num i, V.Unbox a) => IVector i a -> IVector i i
-_ivIndices (IVector v) = IVector $ V.enumFromN 0 (V.length v)
+{-# INLINE _ivIndices1 #-}
+_ivIndices1 :: V.Unbox a => IVector Index1 a -> IVector Index1 Index1
+_ivIndices1 (IVector v) = IVector $ coerce $ V.enumFromN 0 (V.length v)
 
-{-# INLINE ivIndexed #-}
-ivIndexed :: (V.Unbox i, Num i, V.Unbox a) => IVector i a -> IVector i (i, a)
-ivIndexed iv = ivZip (_ivIndices iv) iv
+{-# INLINE ivIndexed1 #-}
+ivIndexed1 :: V.Unbox a => IVector Index1 a -> IVector Index1 (Index1, a)
+ivIndexed1 iv = ivZip (_ivIndices1 iv) iv
 
 {-# INLINE ivMap #-}
 ivMap :: (V.Unbox a, V.Unbox b) => (a -> b) -> IVector i a -> IVector i b
@@ -434,10 +446,9 @@ ivFindIndices2 f (IVector v) = coerce $ V.findIndices f v
 newtype IIntSet i   = IIntSet { runIIntSet :: S.IntSet }
   deriving (Monoid)
 
-{-# INLINE iisOffset #-}
-iisOffset :: IsInt i => i -> IIntSet i -> IIntSet i
-iisOffset i (IIntSet s) =
-  let i' = toInt i in IIntSet $ S.fromAscList $ map (+i') $ S.toAscList s
+{-# INLINE iisTranslate #-}
+iisTranslate :: IsInt i => Int -> IIntSet i -> IIntSet i
+iisTranslate i (IIntSet s) = IIntSet $ S.fromAscList $ map (+i) $ S.toAscList s
 
 -- The type is specialized because I don't know how use coerce polymorphically.
 {-# INLINE iisFromList1 #-}

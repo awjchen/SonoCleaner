@@ -50,7 +50,7 @@ instance Default LevelShiftMatches where
 -------------------------------------------------------------------------------
 
 type GroupCount = Int
-type GroupSpan  = Index1 -- span: difference of the indices of the first and last level-shifts
+type GroupSpan  = Int -- span: difference of the indices of the first and last level-shifts
 type GroupError = Double
 type LevelShiftPosition = Index1
 type LevelShiftError    = Double
@@ -99,7 +99,7 @@ searchGroupCountLimit = 2*groupCountLimit
 -- data points), at or below which the correction method applied will be linear
 -- interpolation rather than the usual method of "redistribution". For example,
 -- a single-point-outlier displaces one point.
-interpolationLimit :: Index1
+interpolationLimit :: Int
 interpolationLimit = 3
 
 -------------------------------------------------------------------------------
@@ -156,7 +156,7 @@ redistribute levelShifts (Match _ err levelShiftPositions) =
 
 interpolate :: IVector Index0 Double -> Match -> [(Index1, Double)]
 interpolate v (Match groupSpan _ levelShiftPositions) =
-  interpolationUpdates v (iiUndiff $ IndexInterval (i, i+groupSpan))
+  interpolationUpdates v (iiUndiff $ IndexInterval (i, translate groupSpan i))
   where i = head levelShiftPositions
 
 -------------------------------------------------------------------------------
@@ -171,7 +171,7 @@ initMatchingEnv noiseTh neLevelShiftsList = do
   let levelShiftsList = NE.toList neLevelShiftsList
   chain <- IC.fromList levelShiftsList
   heap <- let positions = map fst levelShiftsList
-              distances = zipWith (-) (tail positions) positions
+              distances = zipWith minus (tail positions) positions
               heapElems = zip distances [0..]
           in  newSTRef $ H.fromList heapElems
   pure MatchingEnv
@@ -226,7 +226,9 @@ searchZeroSum spanLimit startIdx = do
   case mbVal of
     Nothing -> pure (NoSolution, [])
     Just (startPos, _) -> lift $
-      foldChainFrom (searchZeroSumHelper errLim startPos (startPos+spanLimit))
+      foldChainFrom (searchZeroSumHelper errLim
+                                         startPos
+                                         (translate spanLimit startPos))
                     (const NoSolution)
                     (0, 0, [])
                     startIdx
@@ -258,7 +260,7 @@ searchZeroSumHelper
               | otherwise ->
                   next
       | otherwise ->
-          pure $ Left $ NextSpan (pos - startPos)
+          pure $ Left $ NextSpan (pos `minus` startPos)
 
 foldChainFrom :: (V.Unbox a)
   => (a -> b -> ST s (Either c b)) -- Combining function, returning Left to terminate and Right to continue

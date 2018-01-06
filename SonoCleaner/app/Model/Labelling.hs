@@ -36,7 +36,9 @@ labelLevelShifts'
   -> V.Vector Index1
 labelLevelShifts' maxNoise levelShiftTolerance =
   -- We extend the data to detect level-shifts at the trace edges
-  dimap (ivExtend1 1 *** ivExtend2 1) (V.map (subtract 1)) labelLevelShifts''
+  dimap (ivExtend1 1 *** ivExtend2 1)
+        (V.map $ translate (-1))
+        labelLevelShifts''
   where
     slopeLimit = levelShiftTolerance - maxNoise
     curveLimit = levelShiftTolerance - maxNoise
@@ -45,7 +47,7 @@ labelLevelShifts' maxNoise levelShiftTolerance =
     labelLevelShifts''
       :: (IVector Index1 Double, IVector Index2 Double) -> V.Vector Index1
     labelLevelShifts'' (dv, ddv) =
-        V.concatMap (iiToVector . innerInterval) -- label everything within the pairs
+        V.concatMap (iiToVector1 . innerInterval) -- label everything within the pairs
       $ V.unfoldr (matchSlopes matchLimit slopeLimit dv) -- match curvature points
       $ ivFindIndices2 ((> curveLimit) . abs) ddv -- find high curvature points
 

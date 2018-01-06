@@ -248,8 +248,9 @@ getFilePath = view filePath
 getCropBounds :: Model -> IndexInterval Index0
 getCropBounds model =
   let (mostRecentCrop NE.:| previousCrops) = model ^. cropHistory
-      offset = sum $ fmap (fst . runIndexInterval) previousCrops
-  in  over (_IndexInterval . both) (+offset) mostRecentCrop
+      offset = sum
+             $ fmap (unsafeRunIndex0 . fst . runIndexInterval) previousCrops
+  in  over (_IndexInterval . both) (translate offset) mostRecentCrop
 
 -- Current trace information
 
@@ -289,17 +290,17 @@ timeAtSlope model j = let mid (x, y) = 0.5*(x+y) in
 
 nearestPoint :: Model -> Double -> Index0
 nearestPoint model t =
-  let offset = iiLeft $ getCropBounds model
+  let offset = unsafeRunIndex0 $ iiLeft $ getCropBounds model
       dt = getTimeStep model
       bounds = iiGetIVectorBounds (getTimes model)
-  in  iiBound bounds $ subtract offset $ round $ t/dt
+  in  iiBound bounds $ index0 $ subtract offset $ round $ t/dt
 
 nearestSlope :: Model -> Double -> Index1
 nearestSlope model t =
-  let offset = iiLeft $ iiDiff $ getCropBounds model
+  let offset = unsafeRunIndex0 $ iiLeft $ getCropBounds model
       dt = getTimeStep model
       bounds = iiDiff $ iiGetIVectorBounds (getTimes model)
-  in  iiBound bounds $ subtract offset $ round $ t/dt - 0.5
+  in  iiBound bounds $ index1 $ subtract offset $ round $ t/dt - 0.5
 
 getQuality :: Model -> TraceQuality
 getQuality = view $ currentTrace . quality

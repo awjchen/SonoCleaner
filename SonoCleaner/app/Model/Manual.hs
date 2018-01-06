@@ -23,7 +23,7 @@ import           Model.TraceState
 -- Manually applied corrections on single level-shifts
 -------------------------------------------------------------------------------
 
-samplingRadius :: Index1
+samplingRadius :: Int
 samplingRadius = 4
 
 type ReplaceSingleLevelShift
