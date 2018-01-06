@@ -14,6 +14,7 @@ module Model.TraceState
   , updateDiffSeries
   ) where
 
+import           Control.Arrow (first)
 import           Control.Lens
 
 import           Types.Indices
@@ -40,7 +41,7 @@ makeLenses ''TraceState
 
 cropTraceState :: IndexInterval Index0 -> TraceState -> TraceState
 cropTraceState cropInterval ts =
-  let croppedSeries = ivSlice cropInterval (ts ^. series)
+  let croppedSeries = unsafeIvSlice cropInterval (ts ^. series)
       context' = CroppedContext ts
       modifiedSegments' = let diffInterval = iiDiff cropInterval in
           iisOffset (negate $ iiLeft diffInterval)
@@ -56,7 +57,7 @@ uncropTraceState cropInterval ts = case ts ^. context of
   CroppedContext cts ->
     let start = iiLeft $ iiDiff cropInterval
         ds = snd $ ts ^. diffSeries
-        updates = ivZip (ivEnumFromN start (ivLength ds)) ds
+        updates = ivMap (first (+start)) $ ivIndexed ds
         diffSeries' = fmap (`ivUpdate` updates) (cts ^. diffSeries)
         modifiedSegments' = iisOffset start (ts ^. modifiedSegments)
     in  setDiffSeries diffSeries' cts

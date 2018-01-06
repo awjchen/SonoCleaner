@@ -273,12 +273,12 @@ getTraceBounds model =
   let traceState = getCurrentState model
       s = traceState ^. series
       time = timeAtPoint model
-      boundsX = (time 0, time (ivLength s - 1))
+      boundsX = over both time $ runIndexInterval $ iiGetIVectorBounds s
       boundsY = traceState ^. seriesBounds
   in  ViewBounds boundsX boundsY
 
 getTimes :: Model -> IVector Index0 Double
-getTimes model = ivSlice (getCropBounds model) $ model ^. fakeTimes
+getTimes model = unsafeIvSlice (getCropBounds model) $ model ^. fakeTimes
 
 timeAtPoint :: Model -> Index0 -> Double
 timeAtPoint model i = getTimes model `ivIndex` i

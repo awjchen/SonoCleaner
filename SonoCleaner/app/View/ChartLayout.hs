@@ -18,6 +18,7 @@ import           Data.List                (groupBy)
 import           Data.Semigroup
 import           Data.Tuple               (swap)
 import qualified Data.Vector.Unboxed      as V
+import           Data.Void
 import           Graphics.Rendering.Chart
 
 import           Types.Indices
@@ -159,34 +160,21 @@ traces plotSpec xParams =
   , focusedTrace ]
   where
     interval = plotInterval xParams
-    croppedTimes = ivSlice interval $ plotTimes plotSpec
 
-    cropIndexList :: IIntSet Index1 -> [Index1]
-    cropIndexList = map (subtract $ iiLeft interval')
-                  . iisToList1 . iisBound interval'
-      where interval' = iiDiff interval
-
-    simplifySeries' :: IVector Index0 (Double, Double) -> [(Double, Double)]
+    simplifySeries' :: IVector Void (Double, Double) -> [(Double, Double)]
     simplifySeries' = if compressibleTimeSteps xParams < 2
       then V.toList . unsafeRunIVector
       else simplifySeries (compressibleTimeSteps xParams)
 
-    makeMainTrace
-      :: IIntSet Index1 -> IVector Index0 Double -> [[(Double, Double)]]
-    makeMainTrace splitIndices =
-        map simplifySeries'
-      . splitAtSegments (cropIndexList splitIndices)
-      . ivZip croppedTimes
-      . ivSlice interval
-
     makeOptionalTrace :: Maybe (IVector Index0 Double) -> [(Double, Double)]
-    makeOptionalTrace =
-        simplifySeries'
-      . maybe mempty (ivZip croppedTimes . ivSlice interval)
+    makeOptionalTrace = maybe []
+      (simplifySeries' . ivSlice interval . ivZip (plotTimes plotSpec))
 
     focusedTrace =
         makeLines 1 (opaque black)
-      $ makeMainTrace (plotLevelShifts plotSpec) (plotSeries plotSpec)
+      $ map simplifySeries'
+      $ splitAtSegments interval (plotLevelShifts plotSpec)
+      $ ivZip (plotTimes plotSpec) (plotSeries plotSpec)
 
     originalTrace =
         makeLine 1 (opaque (blend 0.38 grey black))
@@ -268,13 +256,13 @@ segmentAnnotation (Just (x, y, str)) =
 --------------------------------------------------------------------------------
 
 simplifySeries
-  :: V.Unbox a => Int -> IVector Index0 (a, Double) -> [(a, Double)]
-simplifySeries bucketSize' path
-  | ivLength path <= 2 = V.toList $ unsafeRunIVector path
-  | otherwise = concatMap (simplifySegment . (`ivSlice` path)) buckets
+  :: V.Unbox a => Int -> IVector Void (a, Double) -> [(a, Double)]
+simplifySeries bucketSize path
+  | V.length path' <= 2 = V.toList $ unsafeRunIVector path
+  | otherwise = concatMap (simplifySegment . (`iiSlice` path')) buckets
   where
-    bucketSize = index0 bucketSize'
-    len = ivLength path
+    path' = unsafeRunIVector path
+    len = V.length path'
     nDivisions = (pred len) `div` bucketSize -- pred beacuse the last two buckets are added later
     indices = fmap (*bucketSize) [0..nDivisions-1]
               ++ [ mid (nDivisions*bucketSize) len , len ]
@@ -282,17 +270,15 @@ simplifySeries bucketSize' path
     buckets = map IndexInterval $ zip indices (map pred $ tail indices)
 
     simplifySegment
-      :: V.Unbox a => IVector Index0 (a, Double) -> [(a, Double)]
+      :: V.Unbox a => V.Vector (a, Double) -> [(a, Double)]
     simplifySegment segment =
-      let (xs, ys) = ivUnzip segment
-          minAndMax = ivMinMax ys
-          xs' = unsafeRunIVector xs
-          ys' = unsafeRunIVector ys
+      let (xs, ys) = V.unzip segment
+          minAndMax = minMax ys
           -- for cosmetics
-          (y1', y2') = if V.head ys' < V.last ys'
+          (y1, y2) = if V.head ys < V.last ys
             then      minAndMax
             else swap minAndMax
-      in  [(V.head xs', y1'), (V.last xs', y2')]
+      in  [(V.head xs, y1), (V.last xs, y2)]
 
 simplifySegments
   :: IVector Index0 Double
@@ -349,12 +335,18 @@ makeLines strokeWidth color lineList =
       & plot_lines_style . line_width .~ strokeWidth
 
 splitAtSegments
-  :: V.Unbox a => [Index1] -> IVector Index0 a -> [IVector Index0 a]
-splitAtSegments segmentIndices v =
+  :: V.Unbox a
+  => IndexInterval Index0
+  -> IIntSet Index1
+  -> IVector Index0 a
+  -> [IVector Void a]
+splitAtSegments cropInterval cutSegments v =
   map (`ivSlice` v) $ filter (not . iiIsSingleton) intervals
   where
-    (firstCut, lastCut) =
-      runIndexInterval $ iiGrow $ iiDiff $ iiGetIVectorBounds v
+    diffCropInterval = iiDiff cropInterval
+    (firstCut, lastCut) = runIndexInterval $ iiGrow $ diffCropInterval
+    boundedCutSegments = iisToList1 $ iisBound diffCropInterval cutSegments
     intervals :: [IndexInterval Index0]
     intervals = map (iiShrink . iiUndiff . IndexInterval)
-              $ zip (firstCut : segmentIndices) (segmentIndices ++ [lastCut])
+              $ zip (firstCut : boundedCutSegments)
+                    (boundedCutSegments ++ [lastCut])

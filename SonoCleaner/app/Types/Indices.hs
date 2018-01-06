@@ -1,8 +1,8 @@
 -- Typesafe `Int`s for indexing into vectors.
 
 -- This module exists because most errors during the this program's development
--- were caused by the mixup of `Int`s indexing into a data vector `v` or its
--- "derivative" `zipWith (-) (tail v) v`.
+-- were caused by the mixup of `Int`s that could index into either a data vector
+-- `v` or its "derivative" `zipWith (-) (tail v) v`.
 
 {-# LANGUAGE FlexibleContexts           #-}
 {-# LANGUAGE FlexibleInstances          #-}
@@ -31,6 +31,7 @@ module Types.Indices
   , iiGetIVectorBounds
   , iiBoundByIVector
   , iiIsSingleton
+  , iiSlice
 
   , iiDiff
   , iiUndiff
@@ -45,21 +46,21 @@ module Types.Indices
 
   , ivIndex
   , ivSlice
+  , unsafeIvSlice
 
   -- , ivExtend0
   , ivExtend1
   , ivExtend2
 
   -- , ivAverage
+  , minMax
   , ivMinMax
   , ivCount
   , interpolationUpdates
 
-  , ivLength
-  , ivEnumFromN
   , (*//)
   , ivUpdate
-  -- , ivIndexed
+  , ivIndexed
   , ivMap
   , ivZip
   , ivUnzip
@@ -106,6 +107,7 @@ import qualified Data.IntMap                  as M
 import qualified Data.IntSet                  as S
 import qualified Data.Vector.Unboxed          as V
 import           Data.Vector.Unboxed.Deriving
+import           Data.Void
 
 --------------------------------------------------------------------------------
 -- Index
@@ -221,10 +223,6 @@ iiToList (IndexInterval (l, u)) = [l..u]
 iiToVector :: (IsInt i, V.Unbox i, Num i) => IndexInterval i -> V.Vector i
 iiToVector (IndexInterval (l, u)) = V.enumFromN l (toInt $ u-l+1)
 
-{-# INLINE iiToIVector #-}
-iiToIVector :: (IsInt i, V.Unbox i, Num i) => IndexInterval i -> IVector i i
-iiToIVector (IndexInterval (l, u)) = IVector $ V.enumFromN l (toInt $ u-l+1)
-
 {-# INLINE iiIndex #-}
 iiIndex :: (IsInt i, V.Unbox a) => IVector i a -> IndexInterval i -> (a, a)
 iiIndex (IVector v) (IndexInterval (l, u)) = (v V.! toInt l, v V.! toInt u)
@@ -239,7 +237,7 @@ iiBound (IndexInterval (l, u)) i
 {-# INLINE iiGetIVectorBounds #-}
 iiGetIVectorBounds
   :: (IsInt i, Num i, V.Unbox a) => IVector i a -> IndexInterval i
-iiGetIVectorBounds iv = IndexInterval (0, ivLength iv - 1)
+iiGetIVectorBounds (IVector v) = IndexInterval (0, fromInt $ V.length v - 1)
 
 {-# INLINE iiBoundByIVector #-}
 iiBoundByIVector :: (IsInt i, V.Unbox a)
@@ -251,6 +249,10 @@ iiBoundByIVector (IVector v) (IndexInterval (l, u)) =
 {-# INLINE iiIsSingleton #-}
 iiIsSingleton :: Eq i => IndexInterval i -> Bool
 iiIsSingleton (IndexInterval (l, u)) = l == u
+
+{-# INLINE iiSlice #-}
+iiSlice :: V.Unbox a => IndexInterval Int -> V.Vector a -> V.Vector a
+iiSlice (IndexInterval (l, u)) = V.slice l (u-l+1)
 
 -- Index conversions
 
@@ -277,10 +279,8 @@ levelShiftEndpoints j = iiUndiff $ IndexInterval (j, j)
 -- The individual elements of an `IVector i a` may only be accessed through the
 -- use of indices of type `i`. This precludes many functions from the regular
 -- Vector API, like folding, but also those which do not preserve indices, like
--- filtering. However, our notion of 'index-preserving' allows for "translation"
--- of the indices so that we can do slicing.
+-- filtering or slicing.
 newtype IVector i a = IVector { runIVector :: V.Vector a }
-  deriving (Monoid)
 
 {-# INLINE ivector #-}
 ivector :: V.Vector a -> IVector i a
@@ -306,9 +306,19 @@ ivUndiff (h, (IVector v)) = IVector $ V.scanl' (+) h v
 ivIndex :: (IsInt i, V.Unbox a) => IVector i a -> i -> a
 ivIndex (IVector v) i = v V.! toInt i
 
+-- Using Void disallows interaction with the indexing type so that the only
+-- possible fate of the IVector is to be consumed by one of the "reducing"
+-- functions in this module, such as `ivCount`, or simply extracted by
+-- `unsafeRunIVector`.
 {-# INLINE ivSlice #-}
-ivSlice :: (IsInt i, V.Unbox a) => IndexInterval i -> IVector i a -> IVector i a
-ivSlice (IndexInterval (i, j)) (IVector v) =
+ivSlice :: (IsInt i, V.Unbox a)
+        => IndexInterval i -> IVector i a -> IVector Void a
+ivSlice ii iv = coerce $ unsafeIvSlice ii iv
+
+{-# INLINE unsafeIvSlice #-}
+unsafeIvSlice :: (IsInt i, V.Unbox a)
+              => IndexInterval i -> IVector i a -> IVector i a
+unsafeIvSlice (IndexInterval (i, j)) (IVector v) =
   let i' = toInt i; j' = toInt j
   in  IVector $ V.slice i' (j'-i'+1) v
 
@@ -345,9 +355,11 @@ ivExtend2 r (IVector ddv) = IVector $ V.concat
 
 {-# INLINE ivMinMax #-}
 ivMinMax :: (V.Unbox a, Ord a) => IVector i a -> (a, a)
-ivMinMax (IVector v) =
-  let z = V.head v in V.foldl' minMaxAcc (z, z) (V.tail v) where
+ivMinMax (IVector v) = minMax v
 
+{-# INLINE minMax #-}
+minMax :: (V.Unbox a, Ord a) => V.Vector a -> (a, a)
+minMax v = let z = V.head v in V.foldl' minMaxAcc (z, z) (V.tail v) where
   minMaxAcc :: Ord a => (a, a) -> a -> (a, a)
   minMaxAcc (minAcc, maxAcc) x =
     let minAcc' = min x minAcc
@@ -372,18 +384,6 @@ interpolationUpdates v interval@(IndexInterval (l, u)) =
 -- Indexed `Vectors` -- Vector API
 --------------------------------------------------------------------------------
 
--- Accessors
-
-{-# INLINE ivLength #-}
-ivLength :: (IsInt i, V.Unbox a) => IVector i a -> i
-ivLength = fromInt . V.length . coerce
-
--- Construction
-
-{-# INLINE ivEnumFromN #-}
-ivEnumFromN :: (IsInt i, Num a, V.Unbox a) =>  a -> i -> IVector i a
-ivEnumFromN z i = IVector $ V.enumFromN z (toInt i)
-
 -- Modifying vectors
 
 -- * is just an arbitrary prefix, since 'iv' canont be used.
@@ -403,9 +403,9 @@ ivUpdate (IVector v) (IVector updates) =
 _ivIndices :: (V.Unbox i, Num i, V.Unbox a) => IVector i a -> IVector i i
 _ivIndices (IVector v) = IVector $ V.enumFromN 0 (V.length v)
 
--- {-# INLINE ivIndexed #-}
--- ivIndexed :: (V.Unbox i, Num i, V.Unbox a) => IVector i a -> IVector i (i, a)
--- ivIndexed iv = ivZip (_ivIndices iv) iv
+{-# INLINE ivIndexed #-}
+ivIndexed :: (V.Unbox i, Num i, V.Unbox a) => IVector i a -> IVector i (i, a)
+ivIndexed iv = ivZip (_ivIndices iv) iv
 
 {-# INLINE ivMap #-}
 ivMap :: (V.Unbox a, V.Unbox b) => (a -> b) -> IVector i a -> IVector i b

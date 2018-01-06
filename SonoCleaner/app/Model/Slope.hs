@@ -52,5 +52,5 @@ getSurroundingSlopes
 getSurroundingSlopes ds badSegments radius i =
   map (ivIndex ds) $ filter (not . flip iisMember badSegments) [i0..i1]
   where
-    i0 = max 0                 (i-radius)
-    i1 = min (ivLength ds - 1) (i+radius)
+    (i0, i1) = runIndexInterval
+             $ iiBoundByIVector ds $ IndexInterval (i-radius, i+radius)
