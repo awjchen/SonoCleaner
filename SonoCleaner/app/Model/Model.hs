@@ -65,8 +65,9 @@ module Model.Model
 import           Control.Applicative        ((<|>))
 import           Control.Exception
 import           Control.Lens
+import           Control.Monad              (when)
 import           Control.Monad              (mzero)
-import           Control.Monad.Trans.Except (ExceptT (..))
+import           Control.Monad.Trans.Except (ExceptT (..), throwE)
 import qualified Data.ByteString.Lazy       as BL
 import           Data.Csv
 import           Data.Foldable              (find, foldl')
@@ -377,6 +378,10 @@ loadSSAFile filePath' model = do
       traces' = Z.unsafeFromList
               $ map (readQuality . initTraceInfo)
               $ ssa ^. ssaDataTraces
+  when (dataLength < 3) $ throwE $ concat
+    [ "Unacceptable .ssa file '"
+    , filePath'
+    , "': traces must have at least 3 data points." ]
   return Model { _filePath  = filePath'
                , _ssaFile   = ssa
                , _fakeTimes = fakeTimes'

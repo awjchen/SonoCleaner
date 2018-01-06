@@ -26,6 +26,7 @@ module Types.Indices
   , iiMember
   , iiShrink
   , iiGrow
+  , iiLength
   -- , iiToList
   , iiToVector1
   -- , iiToIVector
@@ -225,6 +226,10 @@ iiShrink (IndexInterval (l, u)) = IndexInterval (succ l, pred u)
 {-# INLINE iiGrow #-}
 iiGrow :: Enum i => IndexInterval i -> IndexInterval i
 iiGrow (IndexInterval (l, u)) = IndexInterval (pred l, succ u)
+
+{-# INLINE iiLength #-}
+iiLength :: IsInt i => IndexInterval i -> Int
+iiLength (IndexInterval (l, u)) = u `minus` l + 1
 
 {-# INLINE iiToList #-}
 iiToList :: Enum i => IndexInterval i -> [i]

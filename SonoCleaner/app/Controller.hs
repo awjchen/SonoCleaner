@@ -366,13 +366,14 @@ controllerMain = do
                     _ -> return ()
               -- Selecting crop boundaries
               CropPage _ ->
-                let (l, u) = runIndexInterval $ iiBoundByIVector s
-                           $ IndexInterval $ over both nearestPoint'
-                           $ (xLeft, xRight)
+                let interval@(IndexInterval (l, u)) =
+                        iiBoundByIVector s $ IndexInterval
+                      $ over both nearestPoint' $ (xLeft, xRight)
                     t = mid' $ over both timeAtPoint' $ (l, u)
-                in  atomically $ modifyTVar' guiStateTVar $
-                        set currentPage (CropPage $ Just $ IndexInterval (l, u))
-                      . set (viewBounds . toViewPort . viewPortCenter . _1) t
+                in  if iiLength interval < 3 then return () else
+                      atomically $ modifyTVar' guiStateTVar $
+                          set currentPage (CropPage $ Just interval)
+                        . set (viewBounds . toViewPort . viewPortCenter . _1) t
               _ -> return ()
 
           -- Right-click-and-drag with a key modifier: interpolation brush
