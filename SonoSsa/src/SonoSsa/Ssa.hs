@@ -38,7 +38,7 @@ import           Control.Monad
 import           Control.Monad.ST
 import           Control.Monad.Trans.Class
 import           Control.Monad.Trans.Except
-import           Data.Char                   (digitToInt)
+import           Data.Char                   (isDigit, ord)
 import           Data.Double.Conversion.Text (toFixed)
 import           Data.Foldable
 import           Data.List                   (intercalate, intersperse,
@@ -216,26 +216,30 @@ float6Line = endBy float6 tab <* eol
 float6 :: ParserST s Double
 float6 = do
   sign <- optional (char '-')
-  d <- decimals
-  f <- fractional6
-  return $ maybe id (const negate) sign (d+f)
+  wholePart <- decimals
+  _ <- char '.'
+  fracPart <- decmial6
+  let unsigned = 1e-6 * (fromIntegral (wholePart * 1000000 + fracPart))
+  return $ maybe id (const negate) sign unsigned
 
-decimals :: ParserST s Double
-decimals = fromIntegral <$> go 0 where
+decimals :: ParserST s Int
+decimals = go 0 where
   go :: Int -> ParserST s Int
-  go acc =     ((+ 10*acc) . digitToInt <$> digitChar >>= go)
-           <|> pure acc
+  go acc = ((+ 10*acc) . digitToInt <$> digitChar >>= go)
+       <|> pure acc
 
-fractional6 :: ParserST s Double
-fractional6 = char '.' *> do
+decmial6 :: ParserST s Int
+decmial6 =  do
   i1 <- digitToInt <$> digitChar
   i2 <- digitToInt <$> digitChar
   i3 <- digitToInt <$> digitChar
   i4 <- digitToInt <$> digitChar
   i5 <- digitToInt <$> digitChar
   i6 <- digitToInt <$> digitChar
-  let i = i1*100000 + i2*10000 + i3*1000 + i4*100 + i5*10 + i6
-  return $ fromIntegral i * 1e-6
+  pure $ i1*100000 + i2*10000 + i3*1000 + i4*100 + i5*10 + i6
+
+digitToInt :: Char -> Int
+digitToInt c = ord c - ord '0'
 
 --------------------------------------------------------------------------------
 -- Printing .ssa files
