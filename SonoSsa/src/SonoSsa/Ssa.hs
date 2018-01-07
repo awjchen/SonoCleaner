@@ -46,6 +46,8 @@ import           Data.List                   (intercalate, intersperse,
 import qualified Data.List.NonEmpty          as NE
 import           Data.Monoid
 import qualified Data.Set                    as S
+import qualified Data.Text                   as T
+import qualified Data.Text.IO                as TIO
 import qualified Data.Text.Lazy              as TL
 import qualified Data.Text.Lazy.Builder      as B
 import qualified Data.Text.Lazy.IO           as TLIO
@@ -115,7 +117,7 @@ supportedSsaVersions = ["3.00", "3.10"]
 
 loadSSA :: FilePath -> ExceptT String IO SSA
 loadSSA filePath = do
-  ssaText <- ExceptT $ catch (Right <$> TLIO.readFile filePath)
+  ssaText <- ExceptT $ catch (Right <$> TIO.readFile filePath)
                              (\e -> Left <$> catchIOException e)
   withExceptT simplifyParseError
     $ ExceptT $ return $ parseSSA filePath ssaText
@@ -123,7 +125,7 @@ loadSSA filePath = do
 catchIOException :: IOException -> IO String
 catchIOException e = return $ show e
 
-parseSSA :: FilePath -> TL.Text -> Either (ParseError Char Void) SSA
+parseSSA :: FilePath -> T.Text -> Either (ParseError Char Void) SSA
 parseSSA filePath ssaText =
   runST $ runParserT (parseSSA' filePath) filePath ssaText
 
@@ -131,7 +133,7 @@ parseSSA filePath ssaText =
 -- .ssa parser
 --------------------------------------------------------------------------------
 
-type ParserST s a = ParsecT Void TL.Text (ST s) a
+type ParserST s a = ParsecT Void T.Text (ST s) a
 
 parseSSA' :: String -> ParserST s SSA
 parseSSA' filePath = do
@@ -185,16 +187,16 @@ makeTraces allLabels allUnits dataRows =
       dataTraces = zipWith3 Trace dataLabels dataUnits traceData
   in  (timeTrace, dataTraces)
 
-headerField :: TL.Text -> ParserST s a -> ParserST s a
+headerField :: T.Text -> ParserST s a -> ParserST s a
 headerField name p = string name *> tab *> p
 
-headerString :: TL.Text -> ParserST s String
+headerString :: T.Text -> ParserST s String
 headerString name = headerField name (manyTill anyChar eol)
 
-headerInteger :: TL.Text -> ParserST s Integer
+headerInteger :: T.Text -> ParserST s Integer
 headerInteger name = headerField name decimal <* eol
 
-headerFloat :: TL.Text -> ParserST s Double
+headerFloat :: T.Text -> ParserST s Double
 headerFloat name = headerField name float <* eol
 
 line :: ParserST s [String]
@@ -277,7 +279,7 @@ printSSA ssa =
         ]
 
       traceDataHeader =
-        [ B.fromLazyText beginDataLabel
+        [ B.fromText beginDataLabel
         , sepEndWith '\t' labels
         , sepEndWith '\t' units <> delineators
         ] where delineators = if version == "3.00"
@@ -288,7 +290,7 @@ printSSA ssa =
                       (transpose columnData)
 
       -- the extra mempty adds an extra newline
-      end = [B.fromLazyText endDataLabel, mempty]
+      end = [B.fromText endDataLabel, mempty]
 
       -- .ssa files are generated on windows so use "\r\n" for eol
       fileBuilder = mconcat $ intersperse (B.fromString "\r\n") $ concat
@@ -296,9 +298,9 @@ printSSA ssa =
 
   in  B.toLazyText fileBuilder
 
-singleField' :: TL.Text -> String -> B.Builder
+singleField' :: T.Text -> String -> B.Builder
 singleField' name content =
-  B.fromLazyText name <> B.singleton '\t' <> B.fromString content
+  B.fromText name <> B.singleton '\t' <> B.fromString content
 
 appendTab :: B.Builder -> B.Builder
 appendTab b = b <> B.singleton '\t'
