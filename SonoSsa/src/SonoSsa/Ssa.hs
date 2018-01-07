@@ -1,6 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes        #-}
 {-# LANGUAGE TemplateHaskell   #-}
+{-# LANGUAGE TypeApplications  #-}
 
 module SonoSsa.Ssa
   ( SSA
@@ -118,12 +119,9 @@ supportedSsaVersions = ["3.00", "3.10"]
 loadSSA :: FilePath -> ExceptT String IO SSA
 loadSSA filePath = do
   ssaText <- ExceptT $ catch (Right <$> TIO.readFile filePath)
-                             (\e -> Left <$> catchIOException e)
+                             (fmap Left . pure . show @IOException)
   withExceptT simplifyParseError
     $ ExceptT $ return $ parseSSA filePath ssaText
-
-catchIOException :: IOException -> IO String
-catchIOException e = return $ show e
 
 parseSSA :: FilePath -> T.Text -> Either (ParseError Char Void) SSA
 parseSSA filePath ssaText =
@@ -247,8 +245,10 @@ digitToInt c = ord c - ord '0'
 -- Printing .ssa files
 --------------------------------------------------------------------------------
 
-writeSSA :: FilePath -> SSA -> IO ()
-writeSSA filePath = TLIO.writeFile filePath . printSSA
+writeSSA :: FilePath -> SSA -> ExceptT String IO ()
+writeSSA filePath ssa = ExceptT $ catch
+  (fmap Right $ TLIO.writeFile filePath $ printSSA ssa)
+  (fmap Left . pure . show @IOException)
 
 printSSA :: SSA -> TL.Text
 printSSA ssa =

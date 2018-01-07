@@ -179,9 +179,10 @@ controllerMain = do
         mFilePath <- fileChooserGetFilename fileChooserSaveDialog
         case mFilePath of
           Nothing -> return ()
-          Just filePath -> atomically (readTVar modelTVar)
-                       >>= saveSSAFile filePath
-                       >>= messageDialog (controllerWindow guiElems)
+          Just filePath -> guiRunExceptT (controllerWindow guiElems) $ do
+            (liftIO $ atomically $ readTVar modelTVar)
+            >>= saveSSAFile filePath
+            >>= (liftIO . messageDialog (controllerWindow guiElems))
       _ -> return ()
 
   -- Reading files

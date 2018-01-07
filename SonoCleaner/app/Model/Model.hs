@@ -4,6 +4,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TemplateHaskell   #-}
 {-# LANGUAGE TupleSections     #-}
+{-# LANGUAGE TypeApplications  #-}
 
 module Model.Model
   -- Types
@@ -65,8 +66,8 @@ module Model.Model
 import           Control.Applicative        ((<|>))
 import           Control.Exception
 import           Control.Lens
-import           Control.Monad              (when)
-import           Control.Monad              (mzero)
+import           Control.Monad              (mzero, when)
+import           Control.Monad.IO.Class     (liftIO)
 import           Control.Monad.Trans.Except (ExceptT (..), throwE)
 import qualified Data.ByteString.Lazy       as BL
 import           Data.Csv
@@ -81,6 +82,7 @@ import qualified Data.Vector.Unboxed        as VU
 import           GHC.Generics               hiding (to)
 import           System.Directory           (createDirectoryIfMissing)
 import           System.FilePath            (splitFileName, (</>))
+import           System.IO.Error            (isDoesNotExistError)
 import           Text.Printf                (printf)
 
 import           SonoSsa.Ssa
@@ -402,10 +404,12 @@ initTraceInfo tr =
 readQualityFile :: FilePath -> ExceptT String IO [(String, TraceQuality)]
 readQualityFile ssaFilePath' =
   let qualityFilePath = ssaFilePath' ++ qualityFileSuffix
-      handler :: IOException -> IO (Either String [(String, TraceQuality)])
-      handler _ = return $ Right []
       reader :: IO (Either String [(String, TraceQuality)])
-      reader = fmap V.toList . decode NoHeader <$> BL.readFile qualityFilePath
+      reader = (fmap V.toList . decode NoHeader <$> BL.readFile qualityFilePath)
+      handler :: IOException -> IO (Either String [(String, TraceQuality)])
+      handler e
+        | isDoesNotExistError e = pure $ Right []
+        | otherwise = pure $ Left $ show e
   in  ExceptT $ catch reader handler
 
 -------------------------------------------------------------------------------
@@ -424,7 +428,7 @@ toSSA model =
                        & ssaIndexTrace . traceSeries %~
                            VU.slice offset traceLength
 
-saveSSAFile :: FilePath -> Model -> IO String
+saveSSAFile :: FilePath -> Model -> ExceptT String IO String
 saveSSAFile filePath' model =
   let sanitize = fmap (\x -> if x == '/' then '_' else x)
       (outputDir, fileName) = splitFileName filePath'
@@ -433,16 +437,17 @@ saveSSAFile filePath' model =
       outputQualityFilePath  = outputDir </> outputQualityFileName
       outputFileMessage = printf "Wrote file: %s." outputFileName
   in do
-    createDirectoryIfMissing True outputDir
+    liftIO $ createDirectoryIfMissing True outputDir
     writeSSA filePath' $ toSSA model
     qualityStatements <- writeQualityFile outputQualityFilePath model
     return $ unlines $ [outputFileMessage, ""] ++ qualityStatements
 
-writeQualityFile :: FilePath -> Model -> IO [String]
+writeQualityFile :: FilePath -> Model -> ExceptT String IO [String]
 writeQualityFile filePath' model = do
   let qualityOutput = zip (model ^.. traces . folded . label)
                           (model ^.. traces . folded . quality)
-  BL.writeFile filePath' $ encode qualityOutput
+  ExceptT $ catch (fmap Right $ BL.writeFile filePath' $ encode qualityOutput)
+                  (fmap Left . pure . show @IOException)
   return $ traceQualitySummary qualityOutput
 
 traceQualitySummary :: [(String, TraceQuality)] -> [String]
