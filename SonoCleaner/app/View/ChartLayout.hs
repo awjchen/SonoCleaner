@@ -4,8 +4,6 @@
 -- This is the final point before which we pass control of rendering to Chart.
 -- We apply here optimizations to reduce the cost of our rendering requests.
 
-{-# LANGUAGE RecordWildCards #-}
-
 module View.ChartLayout
   ( chartLayout
   ) where
@@ -73,7 +71,7 @@ xAxis
      , XAxisParameters )
 xAxis pixelsX plotSpec =
   ( axis . oppositeAxis
-  , XAxisParameters plotXBoundsIndices compressibleTimeSteps)
+  , XAxisParameters plotXBoundsIndices compressibleTimeSteps')
   where
     (lb, ub) = plotXRange plotSpec
     xScaledAxis = scaledAxis def (lb, ub)
@@ -101,7 +99,7 @@ xAxis pixelsX plotSpec =
       $ plotXBounds
       where toIndex = plotToIndex plotSpec
 
-    compressibleTimeSteps = floor $ timeStepsPerPixel / 2
+    compressibleTimeSteps' = floor $ timeStepsPerPixel / 2
       where
         timeStepsPerPixel = timeSteps / fromIntegral pixelsX
         timeSteps = uncurry subtract plotXBounds / plotTimeStep plotSpec
