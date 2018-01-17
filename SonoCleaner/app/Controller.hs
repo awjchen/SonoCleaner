@@ -293,11 +293,17 @@ controllerMain = do
               _          -> 1
         atomically $ modifyTVar' guiStateTVar $ case modifiers of
           [Control] ->
-            over (viewBounds . toViewPort . viewPortRadii . _2)
-                 (bound (snd radiiBounds) . (*scaleFactor))
-          _ ->
             over (viewBounds . toViewPort . viewPortRadii . _1)
                  (bound (fst radiiBounds) . (*scaleFactor))
+          [Shift] ->
+            over (viewBounds . toViewPort . viewPortRadii . _2)
+                 (bound (snd radiiBounds) . (*scaleFactor))
+          [] ->
+              over (viewBounds . toViewPort . viewPortRadii . _1)
+                  (bound (fst radiiBounds) . (*scaleFactor))
+            . over (viewBounds . toViewPort . viewPortRadii . _2)
+                  (bound (snd radiiBounds) . (*scaleFactor))
+          _ -> id
       _ -> return ()
     return False
 
