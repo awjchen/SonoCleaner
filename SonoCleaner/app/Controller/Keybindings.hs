@@ -163,6 +163,7 @@ registerKeyboardShortcuts guiElems guiStateMVar = do
               ViewPage       -> generalKeybindings ++ viewPageKeybindings
               CropPage     _ -> generalKeybindings ++ cropPageKeybindings
               QualityPage    -> generalKeybindings ++ qualityPageKeybindings
+              ScreenshotPage -> generalKeybindings
 
         case lookup keyCombination bindings of
           Just (GUIAction ref action) ->

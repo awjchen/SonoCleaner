@@ -11,12 +11,13 @@ module Controller.GenericCallbacks
   ) where
 
 import           Control.Concurrent.STM
-import           Control.Lens           hiding (index)
+import           Control.Lens                           hiding (index)
 import           Control.Monad
 import           Data.Default
-import qualified Data.Text              as T
-import           Graphics.UI.Gtk        hiding (set)
-import qualified Graphics.UI.Gtk        as Gtk (set)
+import qualified Data.Text                              as T
+import qualified Graphics.Rendering.Chart.Backend.Cairo as Chart
+import           Graphics.UI.Gtk                        hiding (set)
+import qualified Graphics.UI.Gtk                        as Gtk (set)
 
 import           Controller.GUIElements
 import           Controller.GUIState
@@ -38,10 +39,11 @@ buttons =
   , ButtonCB undoButton undo noop
   , ButtonCB redoButton redo noop
 
-  , ButtonCB labellingButton id (setNotebookPage LabelPage)
-  , ButtonCB viewButton      id (setNotebookPage ViewPage)
-  , ButtonCB cropButton      id (setNotebookPage (CropPage Nothing))
-  , ButtonCB qualityButton   id (setNotebookPage QualityPage)
+  , ButtonCB labellingButton  id (setNotebookPage LabelPage)
+  , ButtonCB viewButton       id (setNotebookPage ViewPage)
+  , ButtonCB cropButton       id (setNotebookPage (CropPage Nothing))
+  , ButtonCB qualityButton    id (setNotebookPage QualityPage)
+  , ButtonCB screenshotButton id (setNotebookPage ScreenshotPage)
 
   , ButtonCB mainFullViewButton  id (const setDefaultViewBounds)
   , ButtonCB mainFullViewXButton id (const setDefaultViewBoundsX)
@@ -74,6 +76,9 @@ buttons =
       resetGUIPreservingOptions'
 
   , ButtonCB qualityBackButton id resetGUIPreservingOptions'
+
+  -- Screenshot page
+  , ButtonCB screenshotBackButton id resetGUIPreservingOptions'
   ]
   where
     noop _ _ = id
@@ -115,9 +120,9 @@ checkButtons =
 radioButtons :: [RadioButtonGroup]
 radioButtons =
   [ RadioButtonGroup singleAction (\a -> case a of
-      SingleIgnore        -> singleIgnoreRadioButton
-      SingleZero          -> singleZeroRadioButton
-      SingleSlopeFit      -> singleSlopeFitRadioButton)
+      SingleIgnore   -> singleIgnoreRadioButton
+      SingleZero     -> singleZeroRadioButton
+      SingleSlopeFit -> singleSlopeFitRadioButton)
   , RadioButtonGroup multipleAction (\a -> case a of
       MultipleIgnore -> multipleIgnoreRadioButton
       MultipleLine   -> multipleLineRadioButton
@@ -126,13 +131,22 @@ radioButtons =
 
 comboBoxTexts :: [ComboBoxTextCB]
 comboBoxTexts =
-  [ ComboBoxTextCB singleHoldComboBox singleHold (\mt -> case mt of
-     Just "Left"  -> HoldLeft
-     Just "Right" -> HoldRight
-     _            -> HoldLeft)
-  , ComboBoxTextCB referenceTraceComboBoxText referenceTraceLabel (\mt -> case mt of
+  [ ComboBoxTextCB singleHoldComboBox singleHold $
+    \mt -> case mt of
+      Just "Left"  -> HoldLeft
+      Just "Right" -> HoldRight
+      _            -> HoldLeft
+  , ComboBoxTextCB referenceTraceComboBoxText referenceTraceLabel $
+    \mt -> case mt of
       Just "None" -> Nothing
-      m           -> m)
+      m           -> m
+  , ComboBoxTextCB screenshotFileFormatComboBoxText screenshotFileFormat $
+    \mt -> case mt of
+      Just "PNG" -> Chart.PNG
+      Just "SVG" -> Chart.SVG
+      Just "PS"  -> Chart.PS
+      Just "PDF" -> Chart.PDF
+      _          -> Chart.PNG
   ]
 
 --------------------------------------------------------------------------------

@@ -307,6 +307,7 @@ specifyChart model viewParams ats =
         ViewPage       -> "Selecting comparison traces -- "
         CropPage     _ -> "Cropping -- "
         QualityPage    -> "Setting trace quality -- "
+        ScreenshotPage -> "Taking a screenshot -- "
 
     titleColour = case vpCurrentPage viewParams of
       MainPage       -> opaque black
@@ -317,6 +318,7 @@ specifyChart model viewParams ats =
       ViewPage       -> opaque white
       CropPage     _ -> opaque orange
       QualityPage    -> opaque cyan
+      ScreenshotPage -> opaque beige
 
     bgColour = case getQuality model of
       Good     -> opaque grey

@@ -41,9 +41,10 @@ setGUISensitivity guiElems model guiState = case guiState ^. currentPage of
     widgetSetSensitive (autoButton guiElems)      True
     widgetSetSensitive (labellingButton guiElems) True
 
-    widgetSetSensitive (viewButton guiElems)    True
-    widgetSetSensitive (cropButton guiElems)    True
-    widgetSetSensitive (qualityButton guiElems) True
+    widgetSetSensitive (viewButton guiElems)       True
+    widgetSetSensitive (cropButton guiElems)       True
+    widgetSetSensitive (qualityButton guiElems)    True
+    widgetSetSensitive (screenshotButton guiElems) True
 
     widgetSetSensitive (mainFullViewButton guiElems)  True
     widgetSetSensitive (mainFullViewXButton guiElems) True
@@ -88,18 +89,19 @@ setGUISensitivity guiElems model guiState = case guiState ^. currentPage of
 
 insensitizeAll :: GUIElements -> IO ()
 insensitizeAll guiElems = do
-  widgetSetSensitive (openButton guiElems)      True
-  widgetSetSensitive (prevTraceButton guiElems) False
-  widgetSetSensitive (nextTraceButton guiElems) False
-  widgetSetSensitive (twinTraceButton guiElems) False
-  widgetSetSensitive (saveButton guiElems)      False
-  widgetSetSensitive (undoButton guiElems)      False
-  widgetSetSensitive (redoButton guiElems)      False
-  widgetSetSensitive (autoButton guiElems)      False
-  widgetSetSensitive (labellingButton guiElems) False
-  widgetSetSensitive (viewButton guiElems)      False
-  widgetSetSensitive (cropButton guiElems)      False
-  widgetSetSensitive (qualityButton guiElems)   False
+  widgetSetSensitive (openButton guiElems)       True
+  widgetSetSensitive (prevTraceButton guiElems)  False
+  widgetSetSensitive (nextTraceButton guiElems)  False
+  widgetSetSensitive (twinTraceButton guiElems)  False
+  widgetSetSensitive (saveButton guiElems)       False
+  widgetSetSensitive (undoButton guiElems)       False
+  widgetSetSensitive (redoButton guiElems)       False
+  widgetSetSensitive (autoButton guiElems)       False
+  widgetSetSensitive (labellingButton guiElems)  False
+  widgetSetSensitive (viewButton guiElems)       False
+  widgetSetSensitive (cropButton guiElems)       False
+  widgetSetSensitive (qualityButton guiElems)    False
+  widgetSetSensitive (screenshotButton guiElems) False
   widgetSetSensitive (mainFullViewButton guiElems)  False
   widgetSetSensitive (mainFullViewXButton guiElems) False
   widgetSetSensitive (mainFullViewYButton guiElems) False

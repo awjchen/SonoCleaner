@@ -14,88 +14,96 @@ import           Graphics.UI.Gtk hiding (set)
 
 data GUIElements = GUIElements
   -- Main window
-  { controllerWindow               :: Window
-  , image                          :: Image
-  , imageEventBox                  :: EventBox
-  , controllerWindowBox            :: Box
-  , notebook                       :: Notebook
+  { controllerWindow                 :: Window
+  , image                            :: Image
+  , imageEventBox                    :: EventBox
+  , controllerWindowBox              :: Box
+  , notebook                         :: Notebook
 
   -- Main page
-  , openButton                     :: Button
-  , saveButton                     :: Button
+  , openButton                       :: Button
+  , saveButton                       :: Button
 
-  , prevTraceButton                :: Button
-  , nextTraceButton                :: Button
-  , twinTraceButton                :: Button
+  , prevTraceButton                  :: Button
+  , nextTraceButton                  :: Button
+  , twinTraceButton                  :: Button
 
-  , undoButton                     :: Button
-  , redoButton                     :: Button
+  , undoButton                       :: Button
+  , redoButton                       :: Button
 
-  , autoButton                     :: Button
-  , labellingButton                :: Button
+  , autoButton                       :: Button
+  , labellingButton                  :: Button
 
-  , viewButton                     :: Button
-  , cropButton                     :: Button
-  , qualityButton                  :: Button
+  , viewButton                       :: Button
+  , cropButton                       :: Button
+  , qualityButton                    :: Button
 
-  , mainFullViewButton             :: Button
-  , mainFullViewXButton            :: Button
-  , mainFullViewYButton            :: Button
+  , screenshotButton                 :: Button
+
+  , mainFullViewButton               :: Button
+  , mainFullViewXButton              :: Button
+  , mainFullViewYButton              :: Button
 
   -- Auto page
-  , matchLevelSpinButton           :: SpinButton
+  , matchLevelSpinButton             :: SpinButton
 
-  , autoCancelButton               :: Button
-  , autoApplyButton                :: Button
+  , autoCancelButton                 :: Button
+  , autoApplyButton                  :: Button
 
   -- Single page
-  , singleHoldComboBox             :: ComboBox
-  , singleOffsetSpinButton         :: SpinButton
+  , singleHoldComboBox               :: ComboBox
+  , singleOffsetSpinButton           :: SpinButton
 
-  , singleIgnoreRadioButton        :: RadioButton
-  , singleZeroRadioButton          :: RadioButton
-  , singleSlopeFitRadioButton      :: RadioButton
+  , singleIgnoreRadioButton          :: RadioButton
+  , singleZeroRadioButton            :: RadioButton
+  , singleSlopeFitRadioButton        :: RadioButton
 
-  , singleCancelButton             :: Button
-  , singleApplyButton              :: Button
+  , singleCancelButton               :: Button
+  , singleApplyButton                :: Button
 
   -- Multiple page
-  , multipleOffsetSpinButton       :: SpinButton
+  , multipleOffsetSpinButton         :: SpinButton
 
-  , multipleIgnoreRadioButton      :: RadioButton
-  , multipleLineRadioButton        :: RadioButton
-  , multipleCancelRadioButton      :: RadioButton
+  , multipleIgnoreRadioButton        :: RadioButton
+  , multipleLineRadioButton          :: RadioButton
+  , multipleCancelRadioButton        :: RadioButton
 
-  , multipleCancelButton           :: Button
-  , multipleApplyButton            :: Button
+  , multipleCancelButton             :: Button
+  , multipleApplyButton              :: Button
 
     -- Label page
-  , levelShiftThresholdSpinButton  :: SpinButton
-  , noiseThresholdSpinButton       :: SpinButton
+  , levelShiftThresholdSpinButton    :: SpinButton
+  , noiseThresholdSpinButton         :: SpinButton
 
-  , defaultParametersButton        :: Button
+  , defaultParametersButton          :: Button
 
-  , labelBackButton                :: Button
+  , labelBackButton                  :: Button
 
     -- View page
-  , showReplicateTracesCheckButton :: CheckButton
+  , showReplicateTracesCheckButton   :: CheckButton
 
-  , referenceTraceComboBoxText     :: ComboBox
+  , referenceTraceComboBoxText       :: ComboBox
 
-  , viewBackButton                 :: Button
-
-    -- Crop page
-  , applyCropButton                :: Button
-  , applyUncropButton              :: Button
-
-  , cropBackButton                 :: Button
+  , viewBackButton                   :: Button
 
     -- Crop page
-  , qualityGoodButton              :: Button
-  , qualityModerateButton          :: Button
-  , qualityBadButton               :: Button
+  , applyCropButton                  :: Button
+  , applyUncropButton                :: Button
 
-  , qualityBackButton              :: Button
+  , cropBackButton                   :: Button
+
+    -- Quality page
+  , qualityGoodButton                :: Button
+  , qualityModerateButton            :: Button
+  , qualityBadButton                 :: Button
+
+  , qualityBackButton                :: Button
+
+    -- Screenshot page
+  , screenshotFileFormatComboBoxText :: ComboBox
+  , screenshotSaveButton             :: Button
+
+  , screenshotBackButton             :: Button
   }
 
 --------------------------------------------------------------------------------
@@ -117,7 +125,11 @@ importGUIElements builder = go where
     let shcb = singleHoldComboBox guiElems
     _ <- comboBoxSetModelText shcb
     _ <- comboBoxAppendText shcb (T.pack "Left")
-    comboBoxAppendText shcb (T.pack "Right")
+    _ <- comboBoxAppendText shcb (T.pack "Right")
+
+    let sffcb = screenshotFileFormatComboBoxText guiElems
+    _ <- comboBoxSetModelText sffcb
+    mapM_ (comboBoxAppendText sffcb . T.pack) ["PNG", "SVG", "PS", "PDF"]
 
 importGUIElements' :: Builder -> IO GUIElements
 importGUIElements' builder = do
@@ -125,6 +137,7 @@ importGUIElements' builder = do
       getSpinButton  = builderGetObject builder castToSpinButton
       getCheckButton = builderGetObject builder castToCheckButton
       getRadioButton = builderGetObject builder castToRadioButton
+      getComboBox    = builderGetObject builder castToComboBox
 
   -- Controller window
   controllerWindow <- builderGetObject builder castToWindow "controllerWindow"
@@ -151,6 +164,8 @@ importGUIElements' builder = do
   cropButton <- getButton "cropButton"
   qualityButton <- getButton "qualityButton"
 
+  screenshotButton <- getButton "screenshotButton"
+
   mainFullViewButton <- getButton "mainFullViewButton"
   mainFullViewXButton <- getButton "mainFullViewXButton"
   mainFullViewYButton <- getButton "mainFullViewYButton"
@@ -162,7 +177,7 @@ importGUIElements' builder = do
   autoApplyButton <- getButton "autoApplyButton"
 
   -- Single page
-  singleHoldComboBox <- builderGetObject builder castToComboBox "singleHoldComboBox"
+  singleHoldComboBox <- getComboBox "singleHoldComboBox"
   singleOffsetSpinButton <- getSpinButton "singleOffsetSpinButton"
 
   singleIgnoreRadioButton <- getRadioButton "singleIgnoreRadioButton"
@@ -193,7 +208,7 @@ importGUIElements' builder = do
   -- View page
   showReplicateTracesCheckButton <- getCheckButton "showReplicateTracesCheckButton"
 
-  referenceTraceComboBoxText <- builderGetObject builder castToComboBox "referenceTraceComboBoxText"
+  referenceTraceComboBoxText <- getComboBox "referenceTraceComboBoxText"
 
   viewBackButton <- getButton "viewBackButton"
 
@@ -209,5 +224,11 @@ importGUIElements' builder = do
   qualityBadButton <- getButton "qualityBadButton"
 
   qualityBackButton <- getButton "qualityBackButton"
+
+  -- Screenshot page
+  screenshotFileFormatComboBoxText <- getComboBox "screenshotFileFormatComboBoxText"
+  screenshotSaveButton <- getButton "screenshotSaveButton"
+
+  screenshotBackButton <- getButton "screenshotBackButton"
 
   pure GUIElements{..}
