@@ -16,7 +16,6 @@ import           Control.Lens           hiding (index, indices, transform)
 import           Control.Monad          (when)
 import           Data.Colour            (blend, opaque)
 import           Data.Colour.Names
-import           Data.Default
 import qualified Data.Text              as T
 import           Data.Text.Lens
 import           System.FilePath        (splitFileName)
@@ -263,86 +262,42 @@ specifyChart
   -> ViewParams
   -> AnnotatedTraceState OpDataDependencies
   -> ChartSpec
-specifyChart model viewParams ats =
-  ChartSpec
-    { plotTitle            = title
-    , plotTitleColour      = titleColour
-    , plotSeries           = newSeries
-    , plotLevelShifts      = newLevelShifts
-    , plotModifiedSegments = newModifiedSegments
-    , plotOriginalSeries   = originalSeries
-    , plotTwinSeries       = twinSeries
-    , plotCustomSeries     = customSeries
-    , plotHighlightRegion  = highlightRegion
-    , plotXRange           = viewParams ^. to vpViewBounds . viewBoundsX
-    , plotYRange           = viewParams ^. to vpViewBounds . viewBoundsY
-    , plotBackgroundColour = bgColour
-    , plotAnnotation       = annotation
-    , plotTimes            = getTimes model
-    , plotTimeStep         = getTimeStep model
-    , plotToTime           = toTime
-    , plotToIndex          = toIndex
-    }
-  where
-    toTime  = timeAtPoint model
-    toIndex = nearestPoint model
-
-    traceSet = if vpShowReplicateTraces viewParams
-      then TraceSet { showOriginal = True
-                    , showTwin     = True }
-      else def
-
-    ----------------------------------------------------------------------------
-    -- ChartSpec fields
-
-    title = prefix ++ fileName ++ " (" ++ label ++ ")" where
-      label = getLabel model
-      fileName = snd $ splitFileName $ getFilePath model
-      prefix = case vpCurrentPage viewParams of
-        MainPage       -> "Main view -- "
-        AutoPage       -> "Previewing automatic correction -- "
-        SinglePage   _ -> "Previewing manual correction (single) -- "
-        MultiplePage _ -> "Previewing manual correction (group) -- "
-        LabelPage      -> "Adjusting labelling settings -- "
-        ViewPage       -> "Selecting comparison traces -- "
-        CropPage     _ -> "Cropping -- "
-        QualityPage    -> "Setting trace quality -- "
-        ScreenshotPage -> "Taking a screenshot -- "
-
-    titleColour = case vpCurrentPage viewParams of
-      MainPage       -> opaque black
-      AutoPage       -> opaque greenyellow
-      SinglePage   _ -> opaque yellow
-      MultiplePage _ -> opaque magenta
-      LabelPage      -> opaque plum
-      ViewPage       -> opaque white
-      CropPage     _ -> opaque orange
-      QualityPage    -> opaque cyan
-      ScreenshotPage -> opaque beige
-
-    bgColour = case getQuality model of
-      -- darkgrey is lighter than grey ...
-      Good     -> opaque darkgrey
-      Moderate -> opaque (blend 0.85 darkgrey blue)
-      Bad      -> opaque (blend 0.85 darkgrey red)
-
-    newSeries = ats ^. to atsTraceState . series
-
-    newLevelShifts = atsLevelShifts ats
-
-    newModifiedSegments = ats ^. to atsTraceState . modifiedSegments
-
-    originalSeries =
-      if not $ showOriginal traceSet
-      then Nothing
-      else Just $ getInputState model ^. series
-
-    twinSeries =
-      if not $ showTwin traceSet
-      then Nothing
-      else fmap (view series) (getTwinTrace model)
-
-    customSeries =
+specifyChart model viewParams ats = ChartSpec
+  { plotTitle =
+      let label = getLabel model
+          fileName = snd $ splitFileName $ getFilePath model
+          prefix = case vpCurrentPage viewParams of
+            MainPage       -> "Main view -- "
+            AutoPage       -> "Previewing automatic correction -- "
+            SinglePage   _ -> "Previewing manual correction (single) -- "
+            MultiplePage _ -> "Previewing manual correction (group) -- "
+            LabelPage      -> "Adjusting labelling settings -- "
+            ViewPage       -> "Selecting comparison traces -- "
+            CropPage     _ -> "Cropping -- "
+            QualityPage    -> "Setting trace quality -- "
+            ScreenshotPage -> "Taking a screenshot -- "
+      in  prefix ++ fileName ++ " (" ++ label ++ ")"
+  , plotTitleColour =
+      case vpCurrentPage viewParams of
+        MainPage       -> opaque black
+        AutoPage       -> opaque greenyellow
+        SinglePage   _ -> opaque yellow
+        MultiplePage _ -> opaque magenta
+        LabelPage      -> opaque plum
+        ViewPage       -> opaque white
+        CropPage     _ -> opaque orange
+        QualityPage    -> opaque cyan
+        ScreenshotPage -> opaque beige
+  , plotSeries           = ats ^. to atsTraceState . series
+  , plotLevelShifts      = atsLevelShifts ats
+  , plotModifiedSegments = ats ^. to atsTraceState . modifiedSegments
+  , plotOriginalSeries   = if vpShowReplicateTraces viewParams
+                            then Just $ getInputState model ^. series
+                            else Nothing
+  , plotTwinSeries       = if vpShowReplicateTraces viewParams
+                            then fmap (view series) (getTwinTrace model)
+                            else Nothing
+  , plotCustomSeries =
       let mTraceState =
             viewParams ^? to vpReferenceTraceLabel . _2 . _Just . unpacked
             >>= findTraceByLabel model
@@ -356,27 +311,39 @@ specifyChart model viewParams ats =
                   c1 = (y1+y0)/2
                   r1 = (y1-y0)/2
               in  Just $ ivMap (\y -> (y-c1)*r2/r1 + c2) $ ts ^. series
-
-    highlightRegion = case nddOperation (atsDependencies ats) of
-      IdentityOp -> Nothing
-      AutoOp _ -> Nothing
-      ManualSingleOp _ j _ _ ->
-        Just $ over both toTime $ runIndexInterval $ levelShiftEndpoints j
-      ManualMultipleOp _ js _ ->
-        Just $ over both toTime $ runIndexInterval
-             $ iiUndiff $ IndexInterval $ (head &&& last) js
-      CropOp cropBounds ->
-        fmap (over both toTime . runIndexInterval) cropBounds
-
-    annotation = case nddOperation (atsDependencies ats) of
-      ManualSingleOp _ j _ _ ->
-        let idSeries = getCurrentState model ^. series
-            (i0, i1) = runIndexInterval $ levelShiftEndpoints j
-            x1 = toTime i1
-            y0 = ivIndex idSeries i0
-            y1 = ivIndex idSeries i1
-        in  Just (x1, (y0+y1)/2, printf "%.2f" (y1-y0))
-      _ -> Nothing
+  , plotHighlightRegion  =
+      case nddOperation (atsDependencies ats) of
+        IdentityOp -> Nothing
+        AutoOp _ -> Nothing
+        ManualSingleOp _ j _ _ ->
+          Just $ runIndexInterval $ levelShiftEndpoints j
+        ManualMultipleOp _ js _ ->
+          Just $ runIndexInterval
+              $ iiUndiff $ IndexInterval $ (head &&& last) js
+        CropOp cropBounds ->
+          fmap runIndexInterval cropBounds
+  , plotXRange           = viewParams ^. to vpViewBounds . viewBoundsX
+  , plotYRange           = viewParams ^. to vpViewBounds . viewBoundsY
+  , plotBackgroundColour =
+      case getQuality model of
+        -- darkgrey (169) is lighter than grey (128) ...
+        Good     -> opaque darkgrey
+        Moderate -> opaque (blend 0.85 darkgrey blue)
+        Bad      -> opaque (blend 0.85 darkgrey red)
+  , plotAnnotation =
+      case nddOperation (atsDependencies ats) of
+        ManualSingleOp _ j _ _ ->
+          let idSeries = getCurrentState model ^. series
+              (i0, i1) = runIndexInterval $ levelShiftEndpoints j
+              y0 = ivIndex idSeries i0
+              y1 = ivIndex idSeries i1
+          in  Just (i1, (y0+y1)/2, printf "%.2f" (y1-y0))
+        _ -> Nothing
+  , plotTimes            = getTimes model
+  , plotTimeStep         = getTimeStep model
+  , plotToTime           = timeAtPoint model
+  , plotToIndex          = nearestPoint model
+  }
 
 --------------------------------------------------------------------------------
 -- Initialization of the interpreter

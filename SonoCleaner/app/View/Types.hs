@@ -18,11 +18,11 @@ data ChartSpec = ChartSpec
   , plotOriginalSeries   :: Maybe (IVector Index0 Double)
   , plotTwinSeries       :: Maybe (IVector Index0 Double)
   , plotCustomSeries     :: Maybe (IVector Index0 Double)
-  , plotHighlightRegion  :: Maybe (Double, Double)
+  , plotHighlightRegion  :: Maybe (Index0, Index0)
   , plotXRange           :: (Double, Double)
   , plotYRange           :: (Double, Double)
   , plotBackgroundColour :: AlphaColour Double
-  , plotAnnotation       :: Maybe (Double, Double, String)
+  , plotAnnotation       :: Maybe (Index0, Double, String)
   , plotTimes            :: IVector Index0 Double
   , plotTimeStep         :: Double
   , plotToTime           :: Index0 -> Double

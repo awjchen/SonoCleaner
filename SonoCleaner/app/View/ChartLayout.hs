@@ -40,9 +40,11 @@ chartLayout layoutMode plotSpec (pixelsX, _) = layout where
   tracePlotLines = traces plotSpec xAxisParameters
   segmentsPlotLines = segments  plotSpec xAxisParameters
 
-  highlight = highlightInterval (plotHighlightRegion plotSpec)
+  highlight = highlightInterval $ over (_Just . both) (plotToTime plotSpec)
+            $ plotHighlightRegion plotSpec
 
-  annotation = segmentAnnotation (plotAnnotation plotSpec)
+  annotation = segmentAnnotation $ over (_Just . _1) (plotToTime plotSpec)
+             $ (plotAnnotation plotSpec)
 
   plots =
     -- Order matters: later items will draw over earlier items
