@@ -9,6 +9,7 @@
 
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes        #-}
+{-# LANGUAGE LambdaCase        #-}
 
 module Controller
   ( controllerMain
@@ -23,8 +24,9 @@ import           Control.Monad.Trans.Except
 import           Data.Default
 import qualified Data.Text                   as T
 import           Graphics.Rendering.Chart
+import qualified Graphics.Rendering.Chart.Backend.Cairo as Chart
 import           Graphics.UI.Gtk             hiding (set)
-import           System.FilePath             (splitFileName)
+import           System.FilePath             (dropExtension, splitFileName)
 
 import           Controller.GenericCallbacks
 import           Controller.Glade
@@ -82,7 +84,8 @@ controllerMain = do
 
   windowSetDefaultSize (controllerWindow guiElems) 1024 640
 
-  (pickFnTVar, requestDraw) <- setupRenderer (controllerWindow guiElems)
+  (pickFnTVar, requestDraw, requestScreenshot)
+    <- setupRenderer (controllerWindow guiElems)
                                              (image guiElems)
                                              (controllerWindowBox guiElems)
 
@@ -227,6 +230,50 @@ controllerMain = do
               forM_ labels $ comboBoxAppendText cb . T.pack
               comboBoxSetActive cb 0
 
+      _ -> return ()
+
+  -- Screenshots
+  fileChooserScreenshotDialog <-
+    fileChooserDialogNew (Just "Save a screenshot")
+                         (Just (controllerWindow guiElems))
+                         FileChooserActionSave
+                         [   ("Cancel" :: String, ResponseCancel)
+                           , ("Save"   :: String, ResponseAccept) ]
+
+  fileChooserSetSelectMultiple          fileChooserScreenshotDialog False
+  fileChooserSetDoOverwriteConfirmation fileChooserScreenshotDialog True
+
+  _ <- screenshotSaveButton guiElems `on` buttonActivated $ do
+    (model, guiState, chartSpec) <- atomically $ do
+      model <- readTVar modelTVar
+      guiState <- readTVar guiStateTVar
+      chartSpec <- getChart model guiState
+      pure (model, guiState, chartSpec)
+    let (originalDirectory, originalFileName) =
+          splitFileName $ getFilePath model
+        extension = guiState ^. screenshotFileFormat . _2
+        extensionString = case extension of
+          Chart.PNG -> "png"
+          Chart.SVG -> "svg"
+          Chart.PS  -> "ps"
+          Chart.PDF -> "pdf"
+    _ <- fileChooserSetCurrentFolder fileChooserScreenshotDialog
+                                     originalDirectory
+    fileChooserSetCurrentName fileChooserScreenshotDialog $ concat $
+      [ "screenshot_"
+      , dropExtension originalFileName
+      , "_"
+      , getLabel model
+      , "."
+      , extensionString
+      ]
+    responseID <- dialogRun fileChooserScreenshotDialog
+    widgetHide fileChooserScreenshotDialog
+    case responseID of
+      ResponseAccept -> 
+        fileChooserGetFilename fileChooserScreenshotDialog >>= \case
+          Just filePath -> requestScreenshot filePath extension chartSpec
+          Nothing -> return ()
       _ -> return ()
 
   -- Auto page

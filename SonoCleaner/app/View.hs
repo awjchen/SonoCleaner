@@ -12,14 +12,19 @@ module View
   , setupRenderer
   ) where
 
-import           Control.Concurrent       (forkIO)
+import           Control.Concurrent                     (forkIO)
 import           Control.Concurrent.STM
-import           Control.Monad            (void)
-import           Control.Monad.IO.Class   (liftIO)
-import qualified Graphics.Rendering.Cairo as Cairo
-import           Graphics.Rendering.Chart (PickFn, LayoutPick)
-import           Graphics.UI.Gtk          hiding (set)
+import           Control.Lens
+import           Control.Monad                          (void)
+import           Control.Monad.IO.Class                 (liftIO)
+import           Data.Default
+import qualified Graphics.Rendering.Cairo               as Cairo
+import           Graphics.Rendering.Chart               (LayoutPick, PickFn,
+                                                         layoutToRenderable)
+import qualified Graphics.Rendering.Chart.Backend.Cairo as Chart
+import           Graphics.UI.Gtk                        hiding (set)
 
+import           View.ChartLayout
 import           View.Rendering
 import           View.Types
 
@@ -32,7 +37,8 @@ setupRenderer ::
   -> Image
   -> Box
   -> IO ( TVar (PickFn (LayoutPick Double Double Double))
-        , ChartSpec -> STM () )
+        , ChartSpec -> STM ()
+        , FilePath -> Chart.FileFormat -> ChartSpec -> IO () )
 setupRenderer controllerWindow image controllerBox = do
   -- Define global rendering variables
   drawCommandTMVar <- newEmptyTMVarIO :: IO (TMVar DrawCommand)
@@ -47,10 +53,19 @@ setupRenderer controllerWindow image controllerBox = do
   -- Start renderer
   _ <- forkIO $ renderer image surfaceTVar drawCommandTMVar pickFnTVar
 
-  -- Define draw request function
   let requestDraw :: ChartSpec -> STM ()
       requestDraw chartSpec =
         fillTMVar drawCommandTMVar (DrawNew chartSpec)
+
+      requestScreenshot :: FilePath -> Chart.FileFormat -> ChartSpec -> IO ()
+      requestScreenshot filePath format chartSpec = do
+        surface <- atomically $ readTVar surfaceTVar
+        w <- Cairo.imageSurfaceGetWidth  surface
+        h <- Cairo.imageSurfaceGetHeight surface
+        let fileOptions = def & Chart.fo_size .~ (w, h)
+                              & Chart.fo_format .~ format
+        void $ Chart.renderableToFile fileOptions filePath
+          $ layoutToRenderable (chartLayout chartSpec (w, h))
 
   -- Register callback: resize surface and redraw on window resize
   _ <- controllerWindow `on` configureEvent $ do
@@ -64,7 +79,7 @@ setupRenderer controllerWindow image controllerBox = do
         fillTMVar drawCommandTMVar Redraw
     return False
 
-  return (pickFnTVar, requestDraw)
+  return (pickFnTVar, requestDraw, requestScreenshot)
 
 -------------------------------------------------------------------------------
 -- Misc.
