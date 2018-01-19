@@ -1,10 +1,8 @@
--- This module contains the logic that acts on the sonomicrometry trace data. It
--- gathers and combines trace data, operations on that data, and parameters for
--- those operations in order to compute and display (generating a ChartSpec) the
--- results of those operations. Intermediate results are cached in an attempt to
--- avoid recomputation.
+-- This module is where the data, parameters, and operators come together; where
+-- the actual computation takes place. The main result is a specification of
+-- what to display to the user (a `ChartSpec`). Intermediate steps are cached.
 
-{-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE LambdaCase #-}
 
 module Controller.Interpreter
   ( setupInterpreter
@@ -17,9 +15,9 @@ import           Control.Monad          (when)
 import           Data.Colour            (blend, opaque)
 import           Data.Colour.Names
 import qualified Data.Text              as T
-import           Data.Text.Lens
+import           Data.Text.Lens         (unpacked)
 import           System.FilePath        (splitFileName)
-import           Text.Printf
+import           Text.Printf            (printf)
 
 import           Controller.GUIState
 import           Model
@@ -32,19 +30,19 @@ import           View.Types
 -- Data flow
 --------------------------------------------------------------------------------
 
--- A. Model (raw data)
+-- A. Model (the "raw" data)
 --      |
---      | 1. readIdAnnotation (using DataParams)
+--      | 1. annotateRawData (parametrized by DataParams)
 --      v
--- B. AnnotatedTraceState IdDataDependencies (raw data, with precomputations)
+-- B. AnnotatedTraceState RawDataDependencies (the raw data, but with metadata)
 --      |
---      | 2. applyOperation (using TraceOperation)
+--      | 2. applyTraceOperation (parametrized by Command)
 --      v
--- C. AnnotatedTraceState OpDataDependencies (transformed data, with precomputations)
+-- C. AnnotatedTraceState NewDataDependencies (transformed data)
 --      |
---      | 3. makeAnnotatedChartSpec (using ViewParams)
+--      | 3. makeAnnotatedChartSpec (parametrized by ViewParams)
 --      v
--- D. AnnotatedChartSpec (specification of the display)
+-- D. AnnotatedChartSpec (specification of the display (the main result))
 
 --------------------------------------------------------------------------------
 -- The parameters which determine the transformation and display of a trace
@@ -57,15 +55,14 @@ data DataParams = DataParams
   } deriving (Eq)
 
 -- 2
-type LevelShiftIndex = Index1
 type MatchLevel = Int
 type Offset = Double
 
-data TraceOperation =
+data Command =
     IdentityOp
   | AutoOp MatchLevel
-  | ManualSingleOp   SingleAction   LevelShiftIndex   Offset (Int, Hold)
-  | ManualMultipleOp MultipleAction [LevelShiftIndex] Offset
+  | ManualSingleOp   SingleAction   Index1   Offset (Int, Hold)
+  | ManualMultipleOp MultipleAction [Index1] Offset
   | CropOp (Maybe (IndexInterval Index0))
   deriving (Eq)
 
@@ -89,8 +86,8 @@ readDataParams gst = DataParams
   }
 
 -- 2
-readTraceOperation :: GUIState -> TraceOperation
-readTraceOperation gst = case gst ^. currentPage of
+readCommand :: GUIState -> Command
+readCommand gst = case gst ^. currentPage of
   AutoPage ->
     AutoOp $ gst ^. matchLevel
   SinglePage levelShiftIndex ->
@@ -117,34 +114,34 @@ readViewParams gst = ViewParams
   }
 
 --------------------------------------------------------------------------------
--- Parameter dependencies for tracking the "freshness" of the cached
--- intermediate computations
+-- Parameter dependencies. Used to check whether the cached intermediate
+-- computations are still valid.
 --------------------------------------------------------------------------------
 
 -- B
-data IdDataDependencies = IdDataDependencies
+data RawDataDependencies = RawDataDependencies
   { iddDataVersion :: Integer
   , iddDataParams  :: DataParams
   } deriving (Eq)
 
 -- C
-data OpDataDependencies = OpDataDependencies
+data NewDataDependencies = NewDataDependencies
   { nddDataVersion :: Integer
   , nddDataParams  :: DataParams
-  , nddOperation   :: TraceOperation
+  , nddOperation   :: Command
   } deriving (Eq)
 
 -- D
 data DisplayDependencies = DisplayDependencies
   { ddDataVersion :: Integer
   , ddDataParams  :: DataParams
-  , ddOperation   :: TraceOperation
+  , ddOperation   :: Command
   , ddViewParams  :: ViewParams
   } deriving (Eq)
 
 --------------------------------------------------------------------------------
--- The 'objects' of the data flow (cached intermediate data annotated with
--- dependencies)
+-- The 'objects' of the data flow (cached intermediate data, annotated with
+-- their dependencies)
 --------------------------------------------------------------------------------
 
 -- B, C
@@ -164,11 +161,11 @@ data AnnotatedChartSpec = AnnotatedChartSpec
 --------------------------------------------------------------------------------
 
 -- 1
-readIdAnnotation
+annotateRawData
   :: DataParams
   -> Model
-  -> AnnotatedTraceState IdDataDependencies
-readIdAnnotation dataParams model =
+  -> AnnotatedTraceState RawDataDependencies
+annotateRawData dataParams model =
   let nt  = dpNoiseThreshold      dataParams
       lst = dpLevelShiftThreshold dataParams
 
@@ -178,7 +175,7 @@ readIdAnnotation dataParams model =
       idMatches = matchLevelShifts nt idLevelShifts idTraceState
 
   in  AnnotatedTraceState
-        { atsDependencies      = IdDataDependencies
+        { atsDependencies      = RawDataDependencies
                                    { iddDataVersion = dataVersion
                                    , iddDataParams  = dataParams }
         , atsTraceState        = idTraceState
@@ -187,14 +184,14 @@ readIdAnnotation dataParams model =
 
 
 -- 2
-applyOperation
-  :: TraceOperation
-  -> AnnotatedTraceState IdDataDependencies
-  -> AnnotatedTraceState OpDataDependencies
-applyOperation traceOp ats =
+applyTraceOperation
+  :: Command
+  -> AnnotatedTraceState RawDataDependencies
+  -> AnnotatedTraceState NewDataDependencies
+applyTraceOperation traceOp ats =
   let dataParams = iddDataParams (atsDependencies ats)
       transform = getTraceStateTransform traceOp ats
-      newDependencies = OpDataDependencies
+      newDependencies = NewDataDependencies
         { nddDataVersion = iddDataVersion (atsDependencies ats)
         , nddDataParams  = dataParams
         , nddOperation   = traceOp }
@@ -217,8 +214,8 @@ applyOperation traceOp ats =
 
 -- helper for 2
 getTraceStateTransform
-  :: TraceOperation
-  -> AnnotatedTraceState IdDataDependencies
+  :: Command
+  -> AnnotatedTraceState RawDataDependencies
   -> TraceOperator
 getTraceStateTransform traceOp ats = case traceOp of
   IdentityOp -> IdOperator
@@ -240,7 +237,7 @@ getTraceStateTransform traceOp ats = case traceOp of
 makeAnnotatedChartSpec
   :: Model
   -> ViewParams
-  -> AnnotatedTraceState OpDataDependencies
+  -> AnnotatedTraceState NewDataDependencies
   -> AnnotatedChartSpec
 makeAnnotatedChartSpec model viewParams ats =
   let atsDeps = atsDependencies ats
@@ -260,7 +257,7 @@ makeAnnotatedChartSpec model viewParams ats =
 specifyChart
   :: Model
   -> ViewParams
-  -> AnnotatedTraceState OpDataDependencies
+  -> AnnotatedTraceState NewDataDependencies
   -> ChartSpec
 specifyChart model viewParams ats = ChartSpec
   { plotTitle =
@@ -298,19 +295,20 @@ specifyChart model viewParams ats = ChartSpec
                             then fmap (view series) (getTwinTrace model)
                             else Nothing
   , plotCustomSeries =
-      let mTraceState =
-            viewParams ^? to vpReferenceTraceLabel . _2 . _Just . unpacked
-            >>= findTraceByLabel model
-      in  case mTraceState of
-            Nothing -> Nothing
-            Just ts ->
-              let vp = viewParams ^. to vpViewBounds . toViewPort
-                  c2 = vp ^. viewPortCenter . _2
-                  r2 = vp ^. viewPortRadii  . _2
-                  (y0, y1) = ts ^. seriesBounds
-                  c1 = (y1+y0)/2
-                  r1 = (y1-y0)/2
-              in  Just $ ivMap (\y -> (y-c1)*r2/r1 + c2) $ ts ^. series
+        viewParams
+      & preview (to vpReferenceTraceLabel . _2 . _Just . unpacked)
+      & (>>= findTraceByLabel model)
+      & \case
+          Nothing -> Nothing
+          Just ts -> Just $ ivMap rescale $ ts ^. series
+            where
+              vp = viewParams ^. to vpViewBounds . toViewPort
+              c2 = vp ^. viewPortCenter . _2
+              r2 = vp ^. viewPortRadii  . _2
+              (y0, y1) = ts ^. seriesBounds
+              c1 = (y1+y0)/2
+              r1 = (y1-y0)/2
+              rescale y = (y-c1)*r2/r1 + c2
   , plotHighlightRegion  =
       case nddOperation (atsDependencies ats) of
         IdentityOp -> Nothing
@@ -355,18 +353,19 @@ setupInterpreter :: IO ( Model -> GUIState -> STM ()
                        , Model -> GUIState -> STM (IIntSet Index1)
                        , Model -> GUIState -> STM Model )
 setupInterpreter = do
-  idAnnotationTVar       <- newTVarIO undefined
-  opAnnotationTVar       <- newTVarIO undefined
-  annotatedChartSpecTVar <- newTVarIO undefined
+  idAnnotationTVar       <- newTVarIO undefined -- B
+  opAnnotationTVar       <- newTVarIO undefined -- C
+  annotatedChartSpecTVar <- newTVarIO undefined -- D
 
+  -- Compute without using cached intermediate results
   let initializeInterpreter :: Model -> GUIState -> STM ()
       initializeInterpreter model guiState = do
         let dataParams = readDataParams guiState
-            traceOp    = readTraceOperation guiState
+            traceOp    = readCommand guiState
             viewParams = readViewParams guiState
 
-            idAnnotation = readIdAnnotation dataParams model
-            opAnnotation = applyOperation traceOp idAnnotation
+            idAnnotation = annotateRawData dataParams model
+            opAnnotation = applyTraceOperation traceOp idAnnotation
             annotatedChartSpec =
               makeAnnotatedChartSpec model viewParams opAnnotation
 
@@ -374,30 +373,31 @@ setupInterpreter = do
         writeTVar opAnnotationTVar opAnnotation
         writeTVar annotatedChartSpecTVar annotatedChartSpec
 
+  -- Compute using cached intermediate results when possible
   let updateData :: Model -> GUIState -> STM ()
       updateData model guiState = do
         let dataParams  = readDataParams guiState
-            traceOp     = readTraceOperation guiState
+            traceOp     = readCommand guiState
             viewParams  = readViewParams guiState
             dataVersion = getTraceDataVersion model
 
         idAnnotationOld <- readTVar idAnnotationTVar
         idAnnotationNew <- do
-          let newDeps = IdDataDependencies dataVersion dataParams
+          let newDeps = RawDataDependencies dataVersion dataParams
               oldDeps = atsDependencies idAnnotationOld
           if  newDeps == oldDeps
             then return idAnnotationOld
             else writeReturnTVar idAnnotationTVar
-                   $ readIdAnnotation dataParams model
+                   $ annotateRawData dataParams model
 
         opAnnotationOld <- readTVar opAnnotationTVar
         opAnnotationNew <- do
-          let newDeps = OpDataDependencies dataVersion dataParams traceOp
+          let newDeps = NewDataDependencies dataVersion dataParams traceOp
               oldDeps = atsDependencies opAnnotationOld
           if  newDeps == oldDeps
             then return opAnnotationOld
             else writeReturnTVar opAnnotationTVar
-                   $ applyOperation traceOp idAnnotationNew
+                   $ applyTraceOperation traceOp idAnnotationNew
 
         annotatedChartSpecOld <- readTVar annotatedChartSpecTVar
         let newDeps =
@@ -425,8 +425,10 @@ setupInterpreter = do
   let getNewModel :: Model -> GUIState -> STM Model
       getNewModel model guiState = do
         updateData model guiState
+        -- We must manually extract `TraceStateOperator` and use `applyToModel`,
+        -- since this is the only way to transform the Model.
         idAnnotation <- readTVar idAnnotationTVar
-        let traceOp  = readTraceOperation guiState
+        let traceOp  = readCommand guiState
             traceStateOp = getTraceStateTransform traceOp idAnnotation
             newModel = applyToModel traceStateOp model
         return newModel
