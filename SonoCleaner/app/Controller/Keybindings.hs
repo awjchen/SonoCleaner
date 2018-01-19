@@ -49,11 +49,12 @@ mainPageKeybindings =
   , (("z", [Control]),        GUIAction undoButton buttonClicked)
   , (("Z", [Shift, Control]), GUIAction redoButton buttonClicked)
 
-  , (("a", []), GUIAction autoButton      buttonClicked)
-  , (("b", []), GUIAction labellingButton buttonClicked)
-  , (("v", []), GUIAction viewButton      buttonClicked)
-  , (("c", []), GUIAction cropButton      buttonClicked)
-  , (("q", []), GUIAction qualityButton   buttonClicked)
+  , (("a", []), GUIAction autoButton       buttonClicked)
+  , (("b", []), GUIAction labellingButton  buttonClicked)
+  , (("v", []), GUIAction viewButton       buttonClicked)
+  , (("c", []), GUIAction cropButton       buttonClicked)
+  , (("q", []), GUIAction qualityButton    buttonClicked)
+  , (("s", []), GUIAction screenshotButton buttonClicked)
   ]
 
 autoPageKeybindings :: [Keybinding]
@@ -144,6 +145,13 @@ qualityPageKeybindings =
   , (("Escape",  []), GUIAction qualityBackButton buttonClicked)
   ]
 
+screenshotPageKeybindings :: [Keybinding]
+screenshotPageKeybindings =
+  [ (("s", []),       GUIAction screenshotSaveButton buttonClicked)
+
+  , (("Escape",  []), GUIAction screenshotBackButton buttonClicked)
+  ]
+
 registerKeyboardShortcuts ::
      GUIElements
   -> TVar GUIState
@@ -163,7 +171,7 @@ registerKeyboardShortcuts guiElems guiStateMVar = do
               ViewPage       -> generalKeybindings ++ viewPageKeybindings
               CropPage     _ -> generalKeybindings ++ cropPageKeybindings
               QualityPage    -> generalKeybindings ++ qualityPageKeybindings
-              ScreenshotPage -> generalKeybindings
+              ScreenshotPage -> generalKeybindings ++ screenshotPageKeybindings
 
         case lookup keyCombination bindings of
           Just (GUIAction ref action) ->
