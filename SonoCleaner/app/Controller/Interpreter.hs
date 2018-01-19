@@ -321,9 +321,10 @@ specifyChart model viewParams ats =
       ScreenshotPage -> opaque beige
 
     bgColour = case getQuality model of
-      Good     -> opaque grey
-      Moderate -> opaque (blend 0.85 grey blue)
-      Bad      -> opaque (blend 0.85 grey red)
+      -- darkgrey is lighter than grey ...
+      Good     -> opaque darkgrey
+      Moderate -> opaque (blend 0.85 darkgrey blue)
+      Bad      -> opaque (blend 0.85 darkgrey red)
 
     newSeries = ats ^. to atsTraceState . series
 
