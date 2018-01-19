@@ -65,7 +65,7 @@ setupRenderer controllerWindow image controllerBox = do
         let fileOptions = def & Chart.fo_size .~ (w, h)
                               & Chart.fo_format .~ format
         void $ Chart.renderableToFile fileOptions filePath
-          $ layoutToRenderable (chartLayout chartSpec (w, h))
+          $ layoutToRenderable (chartLayout ScreenshotMode chartSpec (w, h))
 
   -- Register callback: resize surface and redraw on window resize
   _ <- controllerWindow `on` configureEvent $ do

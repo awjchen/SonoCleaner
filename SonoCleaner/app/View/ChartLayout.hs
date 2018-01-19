@@ -5,7 +5,8 @@
 -- We apply here optimizations to reduce the cost of our rendering requests.
 
 module View.ChartLayout
-  ( chartLayout
+  ( LayoutMode (..)
+  , chartLayout
   ) where
 
 import           Control.Lens             hiding (indices)
@@ -26,8 +27,12 @@ import           View.Types
 -- The interpreter of the display specification
 --------------------------------------------------------------------------------
 
-chartLayout :: ChartSpec -> (Int, Int) -> Layout Double Double
-chartLayout plotSpec (pixelsX, _) = layout where
+data LayoutMode
+  = RegularMode
+  | ScreenshotMode
+
+chartLayout :: LayoutMode -> ChartSpec -> (Int, Int) -> Layout Double Double
+chartLayout layoutMode plotSpec (pixelsX, _) = layout where
 
   (addXAxis, xAxisParameters) = xAxis pixelsX plotSpec
   addYAxis                    = yAxis plotSpec
@@ -45,8 +50,12 @@ chartLayout plotSpec (pixelsX, _) = layout where
     ++ map toPlot segmentsPlotLines
     ++ [toPlot highlight, toPlot annotation]
 
+  title = case layoutMode of
+    RegularMode    -> plotTitle plotSpec
+    ScreenshotMode -> ""
+
   layout = def
-    & layout_title .~ plotTitle plotSpec
+    & layout_title .~ title
     & layout_title_style . font_color .~ plotTitleColour plotSpec
     & layout_background . fill_color .~ plotBackgroundColour plotSpec
     & layout_plots .~ plots

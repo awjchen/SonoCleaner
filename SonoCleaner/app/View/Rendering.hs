@@ -69,5 +69,5 @@ basicRender chartSpec dims = B.runBackend env backendProgram
     env = B.defaultEnv bitmapAlignmentFns
     backendProgram = render renderable rectSize
       where
-        renderable = layoutToRenderable (chartLayout chartSpec dims)
+        renderable = layoutToRenderable (chartLayout RegularMode chartSpec dims)
         rectSize = over both fromIntegral dims
