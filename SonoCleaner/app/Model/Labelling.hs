@@ -1,4 +1,23 @@
--- Automatic detection and elimination of level-shifts.
+-- A crude method for detecting level-shifts.
+
+-- Like other reported methods, we examine the "first and second derivatives".
+-- However, in order to handle poorer data where level-shifts occur at every
+-- data point in some time interval, we look for pairs of high-curvature points
+-- between which the total change in slope is below some user-defined threshold;
+-- we interpret this as a sign that the data has returned to "normal", assuming
+-- it started "normal". We then label as level-shifts all slope segments lying
+-- between pairs of high-curvature points.
+
+-- In order to prevent erroneous pairs between distant high-curvature points, we
+-- arbitrarily restrict the pairs to include a maximum number of segments of low
+-- slope (`maxNonLevelShifts`).
+
+-- We do not search intelligently for these pairs of high-curvature points: we
+-- simply start with the first high-curvature point and scan forward along the
+-- rest for a suitable partner; if a partner cannot be found for a
+-- high-curvature point, we just ignore it and move on. The result is that
+-- failures of this method are catastrophic and easy to detect, which is a good
+-- thing, all else equal.
 
 {-# LANGUAGE TupleSections #-}
 
@@ -15,9 +34,6 @@ import           Types.Indices
 import           Model.TraceState
 
 -------------------------------------------------------------------------------
--- Automatic labelling of level-shifts
--------------------------------------------------------------------------------
--- See the 'Procedural details' section of the user's guide.
 
 maxNonLevelShifts :: Int
 maxNonLevelShifts = 4
@@ -42,14 +58,16 @@ labelLevelShifts' maxNoise levelShiftTolerance =
   where
     slopeLimit = levelShiftTolerance - maxNoise
     curveLimit = levelShiftTolerance - maxNoise
+    -- noise may affect the second derivative twice as much as the first
     matchLimit = 2*maxNoise
 
     labelLevelShifts''
       :: (IVector Index1 Double, IVector Index2 Double) -> V.Vector Index1
     labelLevelShifts'' (dv, ddv) =
-        V.concatMap (iiToVector1 . innerInterval) -- label everything within the pairs
-      $ V.unfoldr (matchSlopes matchLimit slopeLimit dv) -- match curvature points
-      $ ivFindIndices2 ((> curveLimit) . abs) ddv -- find high curvature points
+        ddv
+      & ivFindIndices2 ((> curveLimit) . abs) -- 1. find high-curvature points
+      & V.unfoldr (matchSlopes matchLimit slopeLimit dv) -- 2. match pairs of high-curvature points
+      & V.concatMap (iiToVector1 . innerInterval) -- 3. label everything within the pairs
 
 matchSlopes
   :: Double

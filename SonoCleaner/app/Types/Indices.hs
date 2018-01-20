@@ -1,8 +1,26 @@
 -- Typesafe `Int`s for indexing into vectors.
 
 -- This module exists because most errors during the this program's development
--- were caused by the mixup of `Int`s that could index into either a data vector
--- `v` or its "derivative" `zipWith (-) (tail v) v`.
+-- were caused by the mixup of `Int`s that were intended to index into either a
+-- data vector `v` or its "derivative" `zipWith (-) (tail v) v`.
+
+-- We define newtypes for `Int`s, and then tediously wrap the API of
+-- Data.Vector, Data.IntSet, and Data.IntMap. For performance reasons, we have
+-- currently adopted the practice of inlining _all_ wrappers, since we do not
+-- know how to distinguish on a case-by-case basis whether inlining is
+-- appropriate.
+
+-- We also introduce an `IndexInterval` type, representing a contiguous interval
+-- of `Int`s, since another source of error was/is ambiguity as to whether the
+-- right endpoint is inclusive or exclusive.
+
+-- Furthermore, sometimes functions in this module are specialized to work on
+-- only a single type of Index. This is because I wanted to use `coerce` for
+-- maximal efficiency, but didn't know how to get it to work polymorphically.
+
+-- Also, many functions are commented out because they are were once used but
+-- are currently unneeded. My reasoning is "might as well keep them around as
+-- comments, for now".
 
 {-# LANGUAGE FlexibleContexts           #-}
 {-# LANGUAGE FlexibleInstances          #-}
@@ -27,9 +45,7 @@ module Types.Indices
   , iiShrink
   , iiGrow
   , iiLength
-  -- , iiToList
   , iiToVector1
-  -- , iiToIVector
   , iiIndex
   , iiBound
   , iiGetIVectorBounds
@@ -73,6 +89,8 @@ module Types.Indices
   , IIntSet
 
   , iisTranslate
+  , iisFindNearestIndex
+  , iisFindIntermediateIndices1
 
   , iisFromList1
   , iisToList1
@@ -81,10 +99,11 @@ module Types.Indices
   , iisSplit
   , iisBound
   , iisMember
-  , iisFindNearestIndex
-  , iisFindIntermediateIndices1
 
   , IIntMap
+
+  -- , iimFindNearestIndex
+  -- , iimFindIntermediateIndices1
 
   -- , iimFromList1
   , iimFromSet
@@ -98,8 +117,6 @@ module Types.Indices
   -- , iimUnionWith
   -- , iimSplit
   -- , iimBound
-  -- , iimFindNearestIndex
-  -- , iimFindIntermediateIndices1
   ) where
 
 import           Control.Applicative
@@ -116,9 +133,8 @@ import           Data.Void
 --------------------------------------------------------------------------------
 -- Index
 --------------------------------------------------------------------------------
-
--- `Index`s are newtypes of `Int` that may only be used to index into `IVector`s
--- with a matching index type.
+-- `Index`s are newtypes of `Int` that may only be used to index into vectors
+-- (`IVector`s) with a matching index type.
 
 newtype Index0 = Index0 { runIndex0 :: Int }
   deriving (Eq, Ord, Enum)
@@ -175,6 +191,8 @@ type family ISucc i where
   ISucc Index0 = Index1
   ISucc Index1 = Index2
 
+-- I intend for Index0, Index1, Index2 to be "affine with respect to Int"
+
 {-# INLINE iMinus #-}
 iMinus :: IsInt i => i -> i -> Int
 iMinus i j = toInt i - toInt j
@@ -186,7 +204,6 @@ iTranslate i idx = fromInt $ i + toInt idx
 --------------------------------------------------------------------------------
 -- IndexInterval
 --------------------------------------------------------------------------------
-
 -- `IndexInterval`s are pairs of `Index`s, and also may only be used to index
 -- into `IVector`s with a matching index type.
 
@@ -194,7 +211,7 @@ iTranslate i idx = fromInt $ i + toInt idx
 -- endpoint of an interval is inclusive or exclusive. `IndexInterval`s represent
 -- _closed_ intervals in `Int`s.
 
--- We assume that l <= u in `IndexInterval (l, u)`.
+-- We assume that l <= u in `IndexInterval (l, u)`, but this is not enforced.
 
 newtype IndexInterval i = IndexInterval { runIndexInterval :: (i, i) }
   deriving (Eq)
@@ -230,10 +247,6 @@ iiGrow (IndexInterval (l, u)) = IndexInterval (pred l, succ u)
 {-# INLINE iiLength #-}
 iiLength :: IsInt i => IndexInterval i -> Int
 iiLength (IndexInterval (l, u)) = u `iMinus` l + 1
-
-{-# INLINE iiToList #-}
-iiToList :: Enum i => IndexInterval i -> [i]
-iiToList (IndexInterval (l, u)) = [l..u]
 
 {-# INLINE iiToVector1 #-}
 iiToVector1 :: IndexInterval Index1 -> V.Vector Index1
@@ -275,29 +288,29 @@ iiSlice (IndexInterval (l, u)) = V.slice l (u-l+1)
 -- Index conversions
 
 {-# INLINE iiDiff #-}
-iiDiff :: (IsInt i, IsInt (ISucc i), Enum i)
+iiDiff :: (IsInt i, IsInt (ISucc i))
        => IndexInterval i -> IndexInterval (ISucc i)
 iiDiff (IndexInterval (l, u)) = IndexInterval ( fromInt $ toInt l
-                                              , fromInt $ toInt $ pred u )
+                                              , fromInt $ pred $ toInt u )
 
 {-# INLINE iiUndiff #-}
 iiUndiff :: (IsInt i, IsInt (ISucc i), Enum (ISucc i))
          => IndexInterval (ISucc i) -> IndexInterval i
 iiUndiff (IndexInterval (l, u)) = IndexInterval ( fromInt $ toInt l
-                                                , fromInt $ toInt $ succ u )
+                                                , fromInt $ succ $ toInt u )
 
 {-# INLINE levelShiftEndpoints #-}
 levelShiftEndpoints :: Index1 -> IndexInterval Index0
 levelShiftEndpoints j = iiUndiff $ IndexInterval (j, j)
 
 --------------------------------------------------------------------------------
--- Indexed vectors
+-- Indexed Vectors
 --------------------------------------------------------------------------------
+-- An "indexed vector" `IVector i a` is a newtype for `Vector a` that may only
+-- be indexed by elements of its phantom type. This precludes many functions
+-- from the regular Vector API that do not preserve indices, like folding,
+-- filtering, and slicing.
 
--- The individual elements of an `IVector i a` may only be accessed through the
--- use of indices of type `i`. This precludes many functions from the regular
--- Vector API, like folding, but also those which do not preserve indices, like
--- filtering or slicing.
 newtype IVector i a = IVector { runIVector :: V.Vector a }
 
 {-# INLINE ivector #-}
@@ -324,10 +337,10 @@ ivUndiff (h, (IVector v)) = IVector $ V.scanl' (+) h v
 ivIndex :: (IsInt i, V.Unbox a) => IVector i a -> i -> a
 ivIndex (IVector v) i = v V.! toInt i
 
--- Using Void disallows interaction with the indexing type so that the only
--- possible fate of the IVector is to be consumed by one of the "reducing"
--- functions in this module, such as `ivCount`, or simply extracted by
--- `unsafeRunIVector`.
+-- We use (i ~ Void) in `IVector i a` to disallow interaction with the indexing
+-- type so that the only possible fate of the IVector is to be consumed by one
+-- of the "reducing" functions in this module, such as `ivCount`, or simply
+-- extracted by `unsafeRunIVector`.
 {-# INLINE ivSlice #-}
 ivSlice :: (IsInt i, V.Unbox a)
         => IndexInterval i -> IVector i a -> IVector Void a
@@ -365,7 +378,7 @@ ivExtend2 r (IVector ddv) = IVector $ V.concat
   , V.singleton (negate $ V.last ddv)
   , V.replicate (r-1) 0 ]
 
--- Special functions
+-- "Approved" folds
 
 -- {-# INLINE ivAverage #-}
 -- ivAverage :: IVector i Double -> Double
@@ -388,6 +401,8 @@ minMax v = let z = V.head v in V.foldl' minMaxAcc (z, z) (V.tail v) where
 ivCount :: V.Unbox a => (a -> Bool) -> IVector i a -> Int
 ivCount f (IVector v) = V.length $ V.filter f v
 
+-- Functions requiring special-case index conversions
+
 {-# INLINE interpolationUpdates #-}
 interpolationUpdates
   :: IVector Index0 Double -> IndexInterval Index0 -> [(Index1, Double)]
@@ -395,10 +410,11 @@ interpolationUpdates v interval@(IndexInterval (l, u)) =
   let xSpan = toInt u - toInt l
       ySpan = ivIndex v u - ivIndex v l
       avgSlope = ySpan / fromIntegral xSpan
-  in  zip (iiToList $ iiDiff interval) (repeat avgSlope)
+  in  zip (uncurry enumFromTo $ runIndexInterval $ iiDiff interval)
+          (repeat avgSlope)
 
 --------------------------------------------------------------------------------
--- Indexed `Vectors` -- Vector API
+-- Data.Vector.Unboxed API wrappers
 --------------------------------------------------------------------------------
 
 -- Modifying vectors
@@ -438,15 +454,16 @@ ivUnzip :: (V.Unbox a, V.Unbox b)
       => IVector i (a, b) -> (IVector i a, IVector i b)
 ivUnzip (IVector v) = IVector *** IVector $ V.unzip v
 
--- The type is specialized because I don't know how use coerce polymorphically.
 {-# INLINE ivFindIndices2 #-}
 ivFindIndices2 :: (V.Unbox a)
               => (a -> Bool) -> IVector Index2 a -> V.Vector Index2
 ivFindIndices2 f (IVector v) = coerce $ V.findIndices f v
 
 --------------------------------------------------------------------------------
--- Indexed `IntSet`s
+-- Indexed IntSets
 --------------------------------------------------------------------------------
+-- An "indexed IntSet" `IIntSet i` is newtype for `IntSet` restricted to work
+-- only with the elements of its phantom type.
 
 newtype IIntSet i   = IIntSet { runIIntSet :: S.IntSet }
   deriving (Monoid)
@@ -455,12 +472,39 @@ newtype IIntSet i   = IIntSet { runIIntSet :: S.IntSet }
 iisTranslate :: IsInt i => Int -> IIntSet i -> IIntSet i
 iisTranslate i (IIntSet s) = IIntSet $ S.fromAscList $ map (+i) $ S.toAscList s
 
--- The type is specialized because I don't know how use coerce polymorphically.
+{-# INLINE iisFindNearestIndex #-}
+iisFindNearestIndex :: IsInt i => i -> IIntSet i -> Maybe i
+iisFindNearestIndex target (IIntSet s) =
+  fmap fromInt $ nearest <|> lower <|> upper
+  where
+    target' = toInt target
+    lower = S.lookupLE target' s
+    upper = S.lookupGE target' s
+    nearest = do
+      l <- lower
+      u <- upper
+      if abs (l - target') <= abs (u - target')
+        then pure l else pure u
+
+{-# INLINE iisFindIntermediateIndices1 #-}
+iisFindIntermediateIndices1
+  :: IndexInterval Index1 -> IIntSet Index1 -> Maybe [Index1]
+iisFindIntermediateIndices1 (IndexInterval (low, high)) s@(IIntSet s') = do
+  let low' = toInt low; high' = toInt high
+  lowIndex  <- S.lookupGE low'  s'
+  highIndex <- S.lookupLE high' s'
+  guard (lowIndex <= highIndex)
+  let interval = IndexInterval (fromInt lowIndex, fromInt highIndex)
+  pure $ iisToList1 $ iisBound interval s
+
+--------------------------------------------------------------------------------
+-- Data.IntSet API wrappers
+--------------------------------------------------------------------------------
+
 {-# INLINE iisFromList1 #-}
 iisFromList1 :: [Index1] -> IIntSet Index1
 iisFromList1 = IIntSet . S.fromList . coerce
 
--- The type is specialized because I don't know how use coerce polymorphically.
 {-# INLINE iisToList1 #-}
 iisToList1 :: IIntSet a -> [Index1]
 iisToList1 (IIntSet s) = coerce $ S.toList s
@@ -486,39 +530,44 @@ iisBound (IndexInterval (l, u)) (IIntSet s) =
 iisMember :: IsInt i => i -> IIntSet i -> Bool
 iisMember i (IIntSet s) = S.member (toInt i) s
 
-{-# INLINE iisFindNearestIndex #-}
-iisFindNearestIndex :: IsInt i => i -> IIntSet i -> Maybe i
-iisFindNearestIndex target (IIntSet s) =
-  fmap fromInt $ nearest <|> lower <|> upper
-  where
-    target' = toInt target
-    lower = S.lookupLE target' s
-    upper = S.lookupGE target' s
-    nearest = do
-      l <- lower
-      u <- upper
-      if abs (l - target') <= abs (u - target')
-        then pure l else pure u
-
--- The type is specialized because I don't know how use coerce polymorphically.
-{-# INLINE iisFindIntermediateIndices1 #-}
-iisFindIntermediateIndices1
-  :: IndexInterval Index1 -> IIntSet Index1 -> Maybe [Index1]
-iisFindIntermediateIndices1 (IndexInterval (low, high)) s@(IIntSet s') = do
-  let low' = toInt low; high' = toInt high
-  lowIndex  <- S.lookupGE low'  s'
-  highIndex <- S.lookupLE high' s'
-  guard (lowIndex <= highIndex)
-  let interval = IndexInterval (fromInt lowIndex, fromInt highIndex)
-  pure $ iisToList1 $ iisBound interval s
-
 --------------------------------------------------------------------------------
 -- Indexed `IntMap`s
 --------------------------------------------------------------------------------
+-- An "indexed IntMap" `IIntMap i a` is newtype for `IntMap a` restricted to
+-- work only with keys of its phantom type.
 
 newtype IIntMap i a = IIntMap { runIIntMap :: M.IntMap a }
 
--- The type is specialized because I don't know how use coerce polymorphically.
+-- {-# INLINE iimFindNearestIndex #-}
+-- iimFindNearestIndex :: IsInt i => i -> IIntMap i a -> Maybe i
+-- iimFindNearestIndex target (IIntMap m) =
+--   fmap fromInt $ nearest <|> lower <|> upper
+--   where
+--     target' = toInt target
+--     lower = fst <$> M.lookupLE target' m
+--     upper = fst <$> M.lookupGE target' m
+--     nearest = do
+--       l <- lower
+--       u <- upper
+--       if abs (l - target') <= abs (u - target')
+--         then pure l else pure u
+
+-- {-# INLINE iimFindIntermediateIndices1 #-}
+-- iimFindIntermediateIndices1
+--   :: IndexInterval Index1 -> IIntMap Index1 a -> Maybe [Index1]
+-- iimFindIntermediateIndices1 (IndexInterval (low, high)) m@(IIntMap m') = do
+--   let low' = toInt low; high' = toInt high
+--   lowIndex  <- fst <$> M.lookupGE low'  m'
+--   highIndex <- fst <$> M.lookupLE high' m'
+--   guard (lowIndex <= highIndex)
+--   let interval = IndexInterval (fromInt lowIndex, fromInt highIndex)
+--   pure $ map fst $ iimToList1 $ iimBound interval m
+
+--------------------------------------------------------------------------------
+-- Data.IntMap.Strict API wrappers
+--------------------------------------------------------------------------------
+
+-- {-# INLINE iimFromList1 #-}
 -- iimFromList1 :: [(Index1, a)] -> IIntMap Index1 a
 -- iimFromList1 = IIntMap . M.fromList . coerce
 
@@ -526,7 +575,6 @@ newtype IIntMap i a = IIntMap { runIIntMap :: M.IntMap a }
 iimFromSet :: IsInt i => (i -> a) -> IIntSet i -> IIntMap i a
 iimFromSet f (IIntSet s) = IIntMap $ M.fromSet (f . fromInt) s
 
--- The type is specialized because I don't know how use coerce polymorphically.
 {-# INLINE iimToList1 #-}
 iimToList1 :: IIntMap Index1 a -> [(Index1, a)]
 iimToList1 (IIntMap m) = coerce $ M.toList m
@@ -567,29 +615,3 @@ iimLookup i (IIntMap m) = M.lookup (toInt i) m
 -- iimBound :: IsInt i => IndexInterval i -> IIntMap i a -> IIntMap i a
 -- iimBound (IndexInterval (l, u)) (IIntMap m) =
 --   IIntMap $ fst $ M.split (succ $ toInt u) $ snd $ M.split (pred $ toInt l) m
-
--- {-# INLINE iimFindNearestIndex #-}
--- iimFindNearestIndex :: IsInt i => i -> IIntMap i a -> Maybe i
--- iimFindNearestIndex target (IIntMap m) =
---   fmap fromInt $ nearest <|> lower <|> upper
---   where
---     target' = toInt target
---     lower = fst <$> M.lookupLE target' m
---     upper = fst <$> M.lookupGE target' m
---     nearest = do
---       l <- lower
---       u <- upper
---       if abs (l - target') <= abs (u - target')
---         then pure l else pure u
-
--- -- The type is specialized because I don't know how use coerce polymorphically.
--- {-# INLINE iimFindIntermediateIndices1 #-}
--- iimFindIntermediateIndices1
---   :: IndexInterval Index1 -> IIntMap Index1 a -> Maybe [Index1]
--- iimFindIntermediateIndices1 (IndexInterval (low, high)) m@(IIntMap m') = do
---   let low' = toInt low; high' = toInt high
---   lowIndex  <- fst <$> M.lookupGE low'  m'
---   highIndex <- fst <$> M.lookupLE high' m'
---   guard (lowIndex <= highIndex)
---   let interval = IndexInterval (fromInt lowIndex, fromInt highIndex)
---   pure $ map fst $ iimToList1 $ iimBound interval m

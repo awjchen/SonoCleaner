@@ -1,5 +1,5 @@
--- Generic GUI actions (callbacks) are defined here in a uniformly, and in a
--- restricted context.
+-- Generic GUI actions (callbacks) are defined here in a uniform and restricted
+-- manner
 
 {-# LANGUAGE ExistentialQuantification #-}
 {-# LANGUAGE OverloadedStrings         #-}
@@ -150,7 +150,7 @@ comboBoxTexts =
   ]
 
 --------------------------------------------------------------------------------
--- Register callbacks
+-- Registering the callbacks
 --------------------------------------------------------------------------------
 
 registerCallbacks ::
@@ -179,7 +179,7 @@ registerCallbacks guiElems modelTVar guiStateTVar
     $ registerRadioButtonGroupCB guiElems guiStateTVar withPartialUpdate
 
 --------------------------------------------------------------------------------
--- Setting GUI state
+-- Synchronizing the Gtk+ 3 state with the `GUIState`
 --------------------------------------------------------------------------------
 
 setGUIParameters :: GUIElements -> GUIState -> IO ()

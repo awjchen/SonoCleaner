@@ -5,6 +5,10 @@
 -- includes providing accessors to and operators on the data, loading and
 -- initializing data from .ssa files, and writing that data back to .ssa files.
 
+-- This file defines the interface of the Model to the rest of the program.
+-- Modules outside of the Model should only access the Model by importing this
+-- module.
+
 module Model
   ( module M
   ) where

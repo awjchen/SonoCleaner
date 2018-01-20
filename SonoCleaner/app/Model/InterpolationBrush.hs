@@ -10,9 +10,7 @@ import           Types.Indices
 
 import           Model.TraceState
 
--------------------------------------------------------------------------------
--- Interpolation brush
--------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 
 data ReplaceDataAboveOrBelow = ReplaceLowerData | ReplaceUpperData
 

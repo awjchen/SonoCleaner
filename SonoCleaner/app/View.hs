@@ -1,10 +1,12 @@
 -- The 'View' of "Model, View, Controller"
 --
 -- In this program, the View is responsible for accepting a specification of a
--- chart (ChartSpec) and rendering it to the display, and for reporting the
--- user's interactions with the rendered chart.
+-- chart (ChartSpec) and rendering it to the display, and for helping to report
+-- the user's interactions with the rendered chart (through a `PickFn`).
 
 -- This file defines the interface of the View to the rest of the program.
+-- Modules outside of the View should only access the View by importing this
+-- module.
 
 module View
   ( TraceSet (..)

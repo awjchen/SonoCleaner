@@ -1,6 +1,6 @@
--- A linked-list implemented as an array. Elements can only be queried and
--- removed once the data structure is initialized, but we can index, remove, and
--- find the next element in O(1) (amortized) time.
+-- A linked list implemented in an array, where elements can only be queried and
+-- removed once the data structure is initialized. The point is to be able to
+-- quickly index, remove an element, and get the next element.
 
 module Model.IndexedChain
   ( IndexedChain
@@ -41,7 +41,7 @@ fromList xs =
       $ VM.unsafeModify chain (set _2 nullIndex) (n-1)
     return $ IndexedChain chain
 
--- Finds the least index greater than the provided index.
+-- Finds the least index greater than the provided index, if it exists.
 {-# INLINEABLE next #-}
 next
   :: (VM.Unbox a)

@@ -1,4 +1,4 @@
--- The "Controller" of "Model, View, Controller"
+-- The 'Controller' of "Model, View, Controller"
 --
 -- In this program, the Controller mediates all interaction with the user. It
 -- collects the user's inputs and transforms them into requests to the Model and

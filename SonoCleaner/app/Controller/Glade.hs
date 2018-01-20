@@ -4,15 +4,17 @@
 -- itself. I'd prefer not to do things this way, but I don't know how else to do
 -- this.
 
-{-# LANGUAGE QuasiQuotes #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE QuasiQuotes       #-}
 
 module Controller.Glade
   ( builderString
   ) where
 
-import Text.RawString.QQ (r)
+import qualified Data.Text         as T
+import           Text.RawString.QQ (r)
 
-builderString :: String
+builderString :: T.Text
 builderString = [r|
 <?xml version="1.0" encoding="UTF-8"?>
 <!-- Generated with glade 3.20.2 -->
@@ -1522,7 +1524,7 @@ The automated procedure will only match level-shifts if their difference is less
                             <property name="tooltip_text" translatable="yes">Cropping
 
 - Here one can select a time interval to which the trace should be restricted.
-- To select a time interval, click and drag with the right mouse button to select the desired region, then click the 'Crop to selection' button. 
+- To select a time interval, click and drag with the right mouse button to select the desired region, then click the 'Crop to selection' button.
 - Cropping can be undone with the 'Uncrop' button; no data is ever deleted by cropping.
 - Data points outside the cropping time interval will be excluded when saving the data to a file.</property>
                             <property name="stock">gtk-dialog-question</property>

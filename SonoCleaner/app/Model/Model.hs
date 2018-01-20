@@ -1,4 +1,6 @@
--- The type that holds all the data the program is intended to process
+-- `Model` is the type that represents all of the data the program is intended
+-- to process. Conceputally, the program should have at most one instance of
+-- this type at a time.
 
 {-# LANGUAGE DeriveGeneric     #-}
 {-# LANGUAGE OverloadedStrings #-}
@@ -93,8 +95,6 @@ import qualified Types.Zipper               as Z
 import           Model.TraceOperators
 import           Model.TraceState
 
--- TODO : Model initialization (default model?)
-
 -------------------------------------------------------------------------------
 -- Types
 -------------------------------------------------------------------------------
@@ -102,7 +102,7 @@ import           Model.TraceState
 data Model = Model
   { _filePath         :: FilePath
   , _ssaFile          :: SSA
-  -- We store the (fake) timestamps here merely to avoid their recomputation
+  -- We store the (simplified) timestamps here merely to avoid their recomputation
   , _fakeTimes        :: IVector Index0 Double
   , _traces           :: Z.Zipper TraceInfo
   , _timeStep         :: Double
@@ -117,7 +117,7 @@ initUndefinedModel = Model
   , _traces           = undefined
   , _timeStep         = undefined
   , _cropHistory      = undefined
-  , _traceDataVersion = 0
+  , _traceDataVersion = 0 -- this needs to be initialized even when there is no data
   }
 
 data TraceInfo = TraceInfo
@@ -161,15 +161,24 @@ currentTrace = traces . Z.extract
 incrementVersion :: Model -> Model
 incrementVersion = over traceDataVersion succ
 
--- Lifting a TraceOperator via 'applyToModel' is the only way to manipulate
--- the data contained in a 'Model' from outside the module (other than by
--- cropping, which only masks the data).
+-- Lifting a TraceOperator via `applyToModel` is the only way to manipulate the
+-- data contained in a `Model` from outside the module (other than by cropping,
+-- which doesn't count because it only masks the data).
+
 applyToModel :: TraceOperator -> Model -> Model
 applyToModel traceOp = incrementVersion
   . over (currentTrace . history)
       (\hist -> Z.clobberRight (getOp traceOp (hist ^. Z.extract)) hist)
 
 -- Cropping
+
+-- All functions relying on the Model should not need to care about whether or
+-- not the traced are cropped; that is, it is the Model's responsibility to
+-- handle cropping in a way that is invisible beyond its interface. For example,
+-- the model provides conversion functions between times and indices which
+-- depend on the cropping state of the data. Of course, these functions must
+-- only be applied to data from the Model which generated them, and so there is
+-- still room for error.
 
 allTraceStates :: Traversal' Model TraceState
 allTraceStates = traces . traverse . history . traverse
@@ -375,7 +384,7 @@ loadSSAFile filePath' model = do
       bounds = IndexInterval $ over both index0 $ (0, dataLength - 1)
       -- We assume that the data is a time series, allowing us to pretend that
       -- the measurements are evenly spaced in time. Using these fake timestamps
-      -- makes conversions between times and indices much simpler.
+      -- simplifies conversions between times and indices.
       fakeTimes' = ivector $ VU.generate dataLength ((*dt) . fromIntegral)
       traces' = Z.unsafeFromList
               $ map (readQuality . initTraceInfo)

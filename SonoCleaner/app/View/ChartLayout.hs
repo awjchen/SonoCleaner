@@ -1,8 +1,8 @@
--- Interface to the plotting library, Chart
---
--- Defines the appearance, but not the content, of the graphical display.
--- This is the final point before which we pass control of rendering to Chart.
--- We apply here optimizations to reduce the cost of our rendering requests.
+-- This module defines the appearance of the graphical display. It is an
+-- interface to the plotting library 'Chart'.
+
+-- This is the final point before which we pass control of rendering to Chart,
+-- so we now apply optimizations to reduce our rendering requests.
 
 module View.ChartLayout
   ( LayoutMode (..)
@@ -24,7 +24,7 @@ import           Types.Indices
 import           View.Types
 
 --------------------------------------------------------------------------------
--- The interpreter of the display specification
+-- The "interpreter" of the display specification
 --------------------------------------------------------------------------------
 
 data LayoutMode
@@ -66,7 +66,7 @@ chartLayout layoutMode plotSpec (pixelsX, _) = layout where
 
 
 --------------------------------------------------------------------------------
--- Component interpreters
+-- Component "interpreters"
 --------------------------------------------------------------------------------
 
 data XAxisParameters = XAxisParameters

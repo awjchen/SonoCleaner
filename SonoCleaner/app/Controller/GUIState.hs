@@ -1,13 +1,17 @@
 -- Definition of the information extracted from the controller window GUI
 --
--- This excludes the mouse inputs on the display window.
+-- This does not include the mouse inputs on the display window.
+--
+-- Values extracted from `ComboBoxText`s are paired with an `Int` to represent
+-- their index in the `ComboBoxText`. We require this because, to my knowledge,
+-- the only way to set the active element of a ComboBoxText is through these
+-- indices.
 
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TemplateHaskell   #-}
 
 module Controller.GUIState where
 
-import           Control.Arrow                          ((>>>))
 import           Control.Lens
 import           Data.Default
 import qualified Data.Text                              as T
@@ -18,8 +22,6 @@ import           Types.Bounds
 import           Types.Indices
 import           Types.LevelShifts
 
---------------------------------------------------------------------------------
--- GUI state
 --------------------------------------------------------------------------------
 
 data NotebookPage
@@ -113,7 +115,6 @@ resetGUIPreservingOptions guiState =
   def & viewBounds           .~ (guiState ^. viewBounds)
       & levelShiftThreshold  .~ (guiState ^. levelShiftThreshold)
       & noiseThreshold       .~ (guiState ^. noiseThreshold)
-      -- & singleHold           .~ (guiState ^. singleHold)
       & showReplicateTraces  .~ (guiState ^. showReplicateTraces)
       & referenceTraceLabel  .~ (guiState ^. referenceTraceLabel)
       & screenshotFileFormat .~ (guiState ^. screenshotFileFormat)
@@ -125,9 +126,9 @@ setDefaultViewBoundsX model =
 
 setDefaultViewBoundsY :: Model -> GUIState -> GUIState
 setDefaultViewBoundsY model =
-  let defaultBounds = getTraceBounds model in
-      set (viewBounds . viewBoundsY) (defaultBounds ^. viewBoundsY)
-  >>> over (viewBounds . viewBoundsY) (bimap pred succ)
+  let defaultBounds = getTraceBounds model
+  in  set (viewBounds . viewBoundsY)
+          (bimap pred succ $ defaultBounds ^. viewBoundsY)
 
 setDefaultViewBounds :: Model -> GUIState -> GUIState
 setDefaultViewBounds = (.) <$> setDefaultViewBoundsX

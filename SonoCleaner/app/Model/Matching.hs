@@ -1,6 +1,18 @@
--- Automatic matching and elimination of level-shifts
+-- Automatic matching and correction of level-shifts
 
--- For an explanation, see 'Procedural details' section of the user's guide.
+-- A level-shift is pair consisting of a time (`Index1`) and a displacement
+-- (`Double`). We match level-shifts into "zero-sum groups" where the total
+-- displacement of such a group of level-shifts is within a user-defined
+-- tolerance of zero. We greedily search for such groups, considering groups
+-- ordered firstly by their span, and secondly by time-order of their earilest
+-- level-shift. This ordering is maintained by a Heap.
+
+-- When a zero-sum group is found, it is corrected by linear interpolation if it
+-- has sufficiently short span. Otherwise, it is corrected by "redistribution",
+-- which transfers all displacement to the first level-shift. They key property
+-- of these corrections are that they do not affect portions of the data trace
+-- outside the span of the level-shift, which helps to reduce the accumulation
+-- of error.
 
 {-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE MultiWayIf   #-}
@@ -136,7 +148,7 @@ matchLevelShifts noiseTh levelShifts ts = levelShiftMatches corrections
                     (applyCorrection (ts ^. series) levelShiftSlopesMap) matches
 
 -------------------------------------------------------------------------------
--- Corrections on matches
+-- Corrections on matches (zero-sum groups)
 -------------------------------------------------------------------------------
 
 applyCorrection

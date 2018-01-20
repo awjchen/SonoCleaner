@@ -1,4 +1,4 @@
--- Controlling the sensitivity of GUI elements depending on the GUI state
+-- Controlling the sensitivity of GUI elements depending on the program state
 
 module Controller.Sensitivity
   ( setGUISensitivity
@@ -14,8 +14,6 @@ import           Controller.GUIState
 import           Model
 import           Types.LevelShifts
 
---------------------------------------------------------------------------------
--- GUI element sensitivity and visibility
 --------------------------------------------------------------------------------
 
 setGUISensitivity ::
@@ -83,10 +81,7 @@ setGUISensitivity guiElems model guiState = case guiState ^. currentPage of
 
   _ -> return ()
 
---------------------------------------------------------------------------------
--- Disable functions before a file is opened
---------------------------------------------------------------------------------
-
+-- for disabling GUI functions before a file is opened
 insensitizeAll :: GUIElements -> IO ()
 insensitizeAll guiElems = do
   widgetSetSensitive (openButton guiElems)       True

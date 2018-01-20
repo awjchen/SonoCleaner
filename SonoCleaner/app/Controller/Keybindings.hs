@@ -1,7 +1,9 @@
--- Definition of the keyboard shortcuts of the GUI
+-- Keyboard shortcuts for the GUI
 
 {-# LANGUAGE ExistentialQuantification #-}
+{-# LANGUAGE OverloadedStrings         #-}
 {-# LANGUAGE RankNTypes                #-}
+{-# LANGUAGE StandaloneDeriving        #-}
 
 module Controller.Keybindings
   ( registerKeyboardShortcuts
@@ -11,14 +13,13 @@ import           Control.Concurrent.STM
 import           Control.Lens
 import           Control.Monad
 import           Control.Monad.IO.Class (liftIO)
-import           Data.Text              (unpack)
+import qualified Data.Map.Strict        as M
+import qualified Data.Text              as T
 import           Graphics.UI.Gtk        hiding (set)
 
 import           Controller.GUIElements
 import           Controller.GUIState
 
--------------------------------------------------------------------------------
--- Keyboard shortcuts
 -------------------------------------------------------------------------------
 
 -- In order to maintain consistency between the behaviour keyboard shortcuts
@@ -28,17 +29,19 @@ import           Controller.GUIState
 data GUIAction =
   forall a. WidgetClass a => GUIAction (GUIElements -> a) (a -> IO ())
 
-type Keybinding = ((String, [Modifier]), GUIAction)
+type KeyPress = (T.Text, [Modifier])
 
-generalKeybindings :: [Keybinding]
-generalKeybindings =
+deriving instance Ord Modifier
+
+generalKeybindings :: M.Map KeyPress GUIAction
+generalKeybindings = M.fromList
   [ (("r", [Control]), GUIAction mainFullViewButton  buttonClicked)
   , (("x", [Control]), GUIAction mainFullViewXButton buttonClicked)
   , (("y", [Control]), GUIAction mainFullViewYButton buttonClicked)
   ]
 
-mainPageKeybindings :: [Keybinding]
-mainPageKeybindings =
+mainPageKeybindings :: M.Map KeyPress GUIAction
+mainPageKeybindings = generalKeybindings `M.union` M.fromList
   [ (("o", [Control]),        GUIAction openButton buttonClicked)
   , (("s", [Control]),        GUIAction saveButton     buttonClicked)
 
@@ -57,8 +60,8 @@ mainPageKeybindings =
   , (("s", []), GUIAction screenshotButton buttonClicked)
   ]
 
-autoPageKeybindings :: [Keybinding]
-autoPageKeybindings =
+autoPageKeybindings :: M.Map KeyPress GUIAction
+autoPageKeybindings = generalKeybindings `M.union` M.fromList
   [ (("g", []),      GUIAction matchLevelSpinButton $ spinButtonDo SpinHome)
   , (("G", [Shift]), GUIAction matchLevelSpinButton $ spinButtonDo SpinEnd)
   , (("f", []),      GUIAction matchLevelSpinButton $ spinButtonDo SpinStepForward)
@@ -70,8 +73,8 @@ autoPageKeybindings =
   , (("space",  []), GUIAction autoApplyButton buttonClicked)
   ]
 
-singlePageKeybindings :: [Keybinding]
-singlePageKeybindings =
+singlePageKeybindings :: M.Map KeyPress GUIAction
+singlePageKeybindings = generalKeybindings `M.union` M.fromList
   [ (("q", []), GUIAction singleHoldComboBox $ flip comboBoxSetActive 0)
   , (("w", []), GUIAction singleHoldComboBox $ flip comboBoxSetActive 1)
 
@@ -88,8 +91,8 @@ singlePageKeybindings =
   , (("space",  []), GUIAction singleApplyButton buttonClicked)
   ]
 
-multiplePageKeybindings :: [Keybinding]
-multiplePageKeybindings =
+multiplePageKeybindings :: M.Map KeyPress GUIAction
+multiplePageKeybindings = generalKeybindings `M.union` M.fromList
   [ (("b", []), GUIAction multipleOffsetSpinButton $ spinButtonDo SpinPageBackward)
   , (("f", []), GUIAction multipleOffsetSpinButton $ spinButtonDo SpinPageForward)
   , (("B", [Shift]), GUIAction multipleOffsetSpinButton $ spinButtonDo SpinStepBackward)
@@ -104,8 +107,8 @@ multiplePageKeybindings =
   , (("space",  []), GUIAction multipleApplyButton buttonClicked)
   ]
 
-labelPageKeybindings :: [Keybinding]
-labelPageKeybindings =
+labelPageKeybindings :: M.Map KeyPress GUIAction
+labelPageKeybindings = generalKeybindings `M.union` M.fromList
   [ (("Down" , [Shift]), GUIAction levelShiftThresholdSpinButton $ spinButtonDo SpinStepBackward)
   , (("Up"   , [Shift]), GUIAction levelShiftThresholdSpinButton $ spinButtonDo SpinStepForward)
   , (("J", [Shift]), GUIAction levelShiftThresholdSpinButton $ spinButtonDo SpinStepBackward)
@@ -121,23 +124,23 @@ labelPageKeybindings =
   , (("Escape",  []), GUIAction labelBackButton buttonClicked)
   ]
 
-viewPageKeybindings :: [Keybinding]
-viewPageKeybindings =
+viewPageKeybindings :: M.Map KeyPress GUIAction
+viewPageKeybindings = generalKeybindings `M.union` M.fromList
   [ (("r" , []), GUIAction showReplicateTracesCheckButton toggleToggleButton)
 
   , (("Escape",  []), GUIAction viewBackButton buttonClicked)
   ]
 
-cropPageKeybindings :: [Keybinding]
-cropPageKeybindings =
+cropPageKeybindings :: M.Map KeyPress GUIAction
+cropPageKeybindings = generalKeybindings `M.union` M.fromList
   [ (("c", []),       GUIAction applyCropButton   buttonClicked)
   , (("b", []),       GUIAction applyUncropButton buttonClicked)
 
   , (("Escape",  []), GUIAction cropBackButton    buttonClicked)
   ]
 
-qualityPageKeybindings :: [Keybinding]
-qualityPageKeybindings =
+qualityPageKeybindings :: M.Map KeyPress GUIAction
+qualityPageKeybindings = generalKeybindings `M.union` M.fromList
   [ (("g", []),       GUIAction qualityGoodButton     buttonClicked)
   , (("d", []),       GUIAction qualityModerateButton buttonClicked)
   , (("b", []),       GUIAction qualityBadButton      buttonClicked)
@@ -145,8 +148,8 @@ qualityPageKeybindings =
   , (("Escape",  []), GUIAction qualityBackButton buttonClicked)
   ]
 
-screenshotPageKeybindings :: [Keybinding]
-screenshotPageKeybindings =
+screenshotPageKeybindings :: M.Map KeyPress GUIAction
+screenshotPageKeybindings = generalKeybindings `M.union` M.fromList
   [ (("s", []),       GUIAction screenshotSaveButton buttonClicked)
 
   , (("Escape",  []), GUIAction screenshotBackButton buttonClicked)
@@ -160,20 +163,20 @@ registerKeyboardShortcuts guiElems guiStateMVar = do
   let interpretKeyPress :: EventM EKey Bool
       interpretKeyPress = do
         guiState <- liftIO $ readTVarIO guiStateMVar
-        keyCombination <- (,) <$> fmap unpack eventKeyName <*> eventModifier
+        keyCombination <- (,) <$> eventKeyName <*> eventModifier
 
         let bindings = case guiState ^. currentPage of
-              MainPage       -> generalKeybindings ++ mainPageKeybindings
-              AutoPage       -> generalKeybindings ++ autoPageKeybindings
-              SinglePage   _ -> generalKeybindings ++ singlePageKeybindings
-              MultiplePage _ -> generalKeybindings ++ multiplePageKeybindings
-              LabelPage      -> generalKeybindings ++ labelPageKeybindings
-              ViewPage       -> generalKeybindings ++ viewPageKeybindings
-              CropPage     _ -> generalKeybindings ++ cropPageKeybindings
-              QualityPage    -> generalKeybindings ++ qualityPageKeybindings
-              ScreenshotPage -> generalKeybindings ++ screenshotPageKeybindings
+              MainPage       -> mainPageKeybindings
+              AutoPage       -> autoPageKeybindings
+              SinglePage   _ -> singlePageKeybindings
+              MultiplePage _ -> multiplePageKeybindings
+              LabelPage      -> labelPageKeybindings
+              ViewPage       -> viewPageKeybindings
+              CropPage     _ -> cropPageKeybindings
+              QualityPage    -> qualityPageKeybindings
+              ScreenshotPage -> screenshotPageKeybindings
 
-        case lookup keyCombination bindings of
+        case M.lookup keyCombination bindings of
           Just (GUIAction ref action) ->
             let guiElement = ref guiElems
             in  liftIO $ do

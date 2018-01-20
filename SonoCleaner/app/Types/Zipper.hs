@@ -35,8 +35,6 @@ import           Data.List.NonEmpty (NonEmpty ((:|)))
 import           Data.Monoid
 
 --------------------------------------------------------------------------------
--- Zipper data type
---------------------------------------------------------------------------------
 
 data Zipper a = Zipper [a] a [a]
   deriving (Eq, Functor, Traversable)
@@ -45,10 +43,6 @@ instance Foldable Zipper where
   foldMap f (Zipper ls c rs) = foldMap f (reverse ls) <> f c <> foldMap f rs
 
 --------------------------------------------------------------------------------
--- Zipper manipulation
---------------------------------------------------------------------------------
-
--- We use simple lenses to preserve the element type.
 
 extract :: Lens' (Zipper a) a
 extract f (Zipper ls c rs) = flip (Zipper ls) rs <$> f c

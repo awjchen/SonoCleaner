@@ -9,8 +9,6 @@ import qualified Data.Text       as T
 import           Graphics.UI.Gtk hiding (set)
 
 --------------------------------------------------------------------------------
--- GUI elements
---------------------------------------------------------------------------------
 
 data GUIElements = GUIElements
   -- Main window

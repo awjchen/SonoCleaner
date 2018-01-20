@@ -132,7 +132,7 @@ consistentKeyModifiers event1 event2 =
         then Just pressMods
         else Nothing
 
--- Click versus click-and-drag
+-- As opposed to a click-and-drag
 isMouseClick :: MouseEvent -> MouseEvent -> Bool
 isMouseClick event1 event2 =
   let (px1, py1) = event1 ^. mouseEventPixel
