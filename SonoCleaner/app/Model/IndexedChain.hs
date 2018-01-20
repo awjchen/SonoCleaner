@@ -49,7 +49,7 @@ next
   -> ElemIndex
   -> ST s (Maybe (ElemIndex, a))
 next chain@(IndexedChain v) i = do
-  (_, nextIndex, _) <- VM.unsafeRead v i
+  (_, nextIndex, _) <- VM.read v i
   next' chain [] i nextIndex
 
 next'
@@ -71,10 +71,10 @@ next' chain@(IndexedChain v) badQueries i nextIndex =
 
 {-# INLINEABLE remove #-}
 remove :: (VM.Unbox a) => IndexedChain s a -> ElemIndex -> ST s ()
-remove (IndexedChain v) = VM.unsafeModify v (set _1 False)
+remove (IndexedChain v) = VM.modify v (set _1 False)
 
 {-# INLINEABLE query #-}
 query :: (VM.Unbox a) => IndexedChain s a -> ElemIndex -> ST s (Maybe a)
 query (IndexedChain v) i = do
-  (exists, _, val) <- VM.unsafeRead v i
+  (exists, _, val) <- VM.read v i
   return $ if exists then Just val else Nothing
