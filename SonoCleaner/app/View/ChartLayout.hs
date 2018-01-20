@@ -301,7 +301,7 @@ simplifySegments v toTime bucketSize =
   where
 
     bounds' :: Index1 -> SP Index1 Bounds
-    bounds' j = SP j (makeBounds (ivIndex v i0) (ivIndex v (succ i1)))
+    bounds' j = SP j (makeBounds (ivIndex v i0) (ivIndex v i1))
       where (i0, i1) = runIndexInterval $ levelShiftEndpoints j
 
     union' :: SP Index1 Bounds -> SP Index1 Bounds -> SP Index1 Bounds
@@ -312,7 +312,7 @@ simplifySegments v toTime bucketSize =
     evenConcat xs         = xs
 
     plot' :: SP Index1 Bounds -> [(Double, Double)]
-    plot' (SP j (Bounds l u)) = [(toTime i0, l), (toTime (succ i1), u)]
+    plot' (SP j (Bounds l u)) = [(toTime i0, l), (toTime i1, u)]
       where (i0, i1) = runIndexInterval $ levelShiftEndpoints j
 
 --------------------------------------------------------------------------------
