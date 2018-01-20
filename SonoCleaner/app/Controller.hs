@@ -1,32 +1,34 @@
--- The 'Controller' of "Model, View, Controller"
+-- The "Controller" of "Model, View, Controller"
 --
--- In this program, the Controller defines the GUI and mediates all interaction
--- with the user.
+-- In this program, the Controller mediates all interaction with the user. It
+-- collects the user's inputs and transforms them into requests to the Model and
+-- View. A part of this is achieved by maintaining synchronization between the
+-- state of GTK+ 3 widgets and an instance of a `GUIState` type.
 --
--- Additionally, since callbacks to GTK are defined by the controller,
--- the global state of the program is defined and initialized
--- by the controller to enable communication from within callbacks.
+-- This module deinfes `controllerMain`, which is basically the entry point of
+-- the program.
 
+{-# LANGUAGE LambdaCase        #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes        #-}
-{-# LANGUAGE LambdaCase        #-}
 
 module Controller
   ( controllerMain
   ) where
 
-import           Control.Arrow               ((&&&))
+import           Control.Arrow                          ((&&&))
 import           Control.Concurrent.STM
 import           Control.Lens
 import           Control.Monad
-import           Control.Monad.IO.Class      (liftIO)
+import           Control.Monad.IO.Class                 (liftIO)
 import           Control.Monad.Trans.Except
 import           Data.Default
-import qualified Data.Text                   as T
+import qualified Data.Text                              as T
 import           Graphics.Rendering.Chart
 import qualified Graphics.Rendering.Chart.Backend.Cairo as Chart
-import           Graphics.UI.Gtk             hiding (set)
-import           System.FilePath             (dropExtension, splitFileName)
+import           Graphics.UI.Gtk                        hiding (set)
+import           System.FilePath                        (dropExtension,
+                                                         splitFileName)
 
 import           Controller.GenericCallbacks
 import           Controller.Glade
@@ -42,31 +44,22 @@ import           Types.Bounds
 import           Types.Indices
 import           View
 
--------------------------------------------------------------------------------
--- Run gui
--------------------------------------------------------------------------------
-
 controllerMain :: IO ()
 controllerMain = do
 
-  -------------------------------------------------------------------------------
-  -- Global state
-  -------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
+-- Define mutable state
+--------------------------------------------------------------------------------
 
+  -- The single, global representation of the user's data.
+  -- Is defined proper when a .ssa data file is opened.
   modelTVar <- newTVarIO initUndefinedModel :: IO (TVar Model)
+
   guiStateTVar <- newTVarIO def :: IO (TVar GUIState)
 
-  -- Without this lock, GUI actions that both request rendering and trigger
-  -- other such GUI actions would redraw the same state multiple times.
-   -- see 'withUpdate'
-  updateLock <- atomically $ newTMVar () :: IO (TMVar ())
-
-  -- Mouse event handling variables
-  lastMousePressTMVar <- atomically newEmptyTMVar :: IO (TMVar MouseEvent)
-
-  -------------------------------------------------------------------------------
-  -- Import GUI from Glade
-  -------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
+-- Import GUI (from Glade)
+--------------------------------------------------------------------------------
 
   _ <- initGUI
 
@@ -75,78 +68,93 @@ controllerMain = do
 
   guiElems <- importGUIElements builder
 
-  -------------------------------------------------------------------------------
-  -- Setup computation and rendering
-  -------------------------------------------------------------------------------
+  windowSetDefaultSize (controllerWindow guiElems) 1024 640
 
+--------------------------------------------------------------------------------
+-- Setup "subprocesses"
+--------------------------------------------------------------------------------
+
+  -- for computations
   (initializeInterpreter, getChart, getMatches, getLevelShifts, getNewModel)
     <- setupInterpreter
 
-  windowSetDefaultSize (controllerWindow guiElems) 1024 640
-
+  -- for rendering
   (pickFnTVar, requestDraw, requestScreenshot)
-    <- setupRenderer (controllerWindow guiElems)
-                                             (image guiElems)
-                                             (controllerWindowBox guiElems)
+    <- setupRenderer (controllerWindow guiElems) (image guiElems)
+                     (controllerWindowBox guiElems)
 
-  -- I am not very famillair with GTK+3, but as far as I know, GTK+3 GUI actions
-  -- requiring updates to either the view or the GUI may trigger other such
-  -- actions, which can cause multiple redundant canvas redraws. We prevent this
-  -- by having the the first GUI action obtain a lock that prevents the actions
-  -- it triggers triggered actions from requesting canvas updates.
-  let withUpdate' :: Bool -> IO () -> IO ()
-      withUpdate' doUpdateGUIParameters action = do
-        maybeLock <- atomically $ tryTakeTMVar updateLock
-        action
-        case maybeLock of
-          Nothing -> return ()
-          Just () -> do
+--------------------------------------------------------------------------------
+-- Locking mechanism for display updates
+--------------------------------------------------------------------------------
+
+-- I am not very familliar with GTK+3, but as far as I know, Gtk+ 3 GUI actions
+-- requiring updates to either the view or the GUI may trigger other such
+-- actions, which can cause multiple redundant canvas redraws. We prevent this
+-- by wrapping every callback so that it obtains a lock that prevents the
+-- actions it triggers triggered actions from requesting canvas updates.
+
+-- Furthermore, keeping in mind that I don't know what I'm doing, it seems that
+-- setting the internal state of a GTK+3 GUI element can trigger its callback,
+-- which again writes to its internal state, forming an infinite loop. I have
+-- yet to figure out how to prevent this, so I use the following workaround,
+-- where callbacks originating from GUI elements holding internal state are not
+-- allowed to make changes to the interal state of any GUI elements.
+
+-- `withUpdate`: for use by GUI elements that _do not_ hold any state needing
+-- synchronization with the GUIState (e.g. buttons).
+
+-- `withPartialUpdate`: for use by GUI elements those that _do_ hold state
+-- needing syncrhonization with the GUI state (e.g. check buttons, radio
+-- buttons, spin buttons)
+
+  updateLock <- atomically $ newTMVar () :: IO (TMVar ())
+
+  let (withUpdate, withPartialUpdate) = (withUpdate' True, withUpdate' False)
+        where
+          withUpdate' :: Bool -> IO () -> IO ()
+          withUpdate' doUpdateGUIParameters action = do
+            maybeLock <- atomically $ tryTakeTMVar updateLock
+            action
+            case maybeLock of
+              Nothing -> return ()
+              Just () -> do
+                update doUpdateGUIParameters 
+                atomically $ putTMVar updateLock ()
+
+          update :: Bool -> IO ()
+          update doUpdateGUIParameters = do
             (model, guiState) <- atomically $
               (,) <$> readTVar modelTVar <*> readTVar guiStateTVar
 
-            -- We update the GUI before performing a canvas redraw
             when doUpdateGUIParameters $ setGUIParameters guiElems guiState
             setGUISensitivity guiElems model guiState
-
             atomically $ getChart model guiState >>= requestDraw
-            atomically $ putTMVar updateLock ()
 
-      -- Setting the internal state of a GTK+3 GUI element can trigger its
-      -- callback, which again writes to its internal state, forming an infinite
-      -- loop. I have yet to figure out how to prevent this, so we require the
-      -- following workaround, where callbacks originating from GUI elements
-      -- holding important internal state are not allowed to make changes to
-      -- other GUI elements.
-
-      -- For use by GUI elements that _do not_ hold any state needing
-      -- synchronization with the GUIState (e.g. buttons):
-      withUpdate = withUpdate' True
-      -- For use by GUI elements those that _do_ hold state needing
-      -- syncrhonization with the GUI state (e.g. check buttons, radio buttons,
-      -- spin buttons):
-      withPartialUpdate = withUpdate' False
-
-  -------------------------------------------------------------------------------
-  -- Keyboard shortcuts
-  -------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
+-- Keyboard shortcuts
+--------------------------------------------------------------------------------
 
   registerKeyboardShortcuts guiElems guiStateTVar
 
-  -------------------------------------------------------------------------------
-  -- Generic callbacks
-  -------------------------------------------------------------------------------
-  -- Callbacks using only basic functionality are defined within a more
-  -- restrictive environemnt.
+--------------------------------------------------------------------------------
+-- Generic callbacks
+--------------------------------------------------------------------------------
+-- Callbacks requiring only basic functionality are defined within a more
+-- structured and restrictive environemnt. If a callback updates a GUI parameter
+-- in `GUIState` that must be synchronized with the internal state of a Gtk+ 3
+-- widget, it is defined here.
 
   registerCallbacks
     guiElems modelTVar guiStateTVar withUpdate withPartialUpdate
 
-  -------------------------------------------------------------------------------
-  -- Special callbacks
-  -------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
+-- Special callbacks
+--------------------------------------------------------------------------------
+-- Callbacks requiring more than basic functionality are defined by hand.
 
-  -- Quit on closing either the display or controller window, but only after
-  -- confirming.
+  -- On attempting to close either the display or controller window, quit the
+  -- program, but only after asking for confirmation.
+
   let quitWithConfirmation :: EventM EAny Bool
       quitWithConfirmation = liftIO $ do
         isResponseConfirm <-
@@ -157,16 +165,19 @@ controllerMain = do
 
   _ <- controllerWindow guiElems `on` deleteEvent $ quitWithConfirmation
 
-  -- Writing files
-  fileChooserSaveDialog <-
-    fileChooserDialogNew (Just "Save an .ssa file")
-                         (Just (controllerWindow guiElems))
-                         FileChooserActionSave
-                         [   ("Cancel" :: String, ResponseCancel)
-                           , ("Save"   :: String, ResponseAccept) ]
+  -- Saving .ssa files
 
-  fileChooserSetSelectMultiple          fileChooserSaveDialog False
-  fileChooserSetDoOverwriteConfirmation fileChooserSaveDialog True
+  fileChooserSaveDialog <- do
+    fc <- fileChooserDialogNew (Just "Save an .ssa file")
+                               (Just (controllerWindow guiElems))
+                               FileChooserActionSave
+                               [   ("Cancel" :: String, ResponseCancel)
+                                 , ("Save"   :: String, ResponseAccept) ]
+
+    fileChooserSetSelectMultiple          fc False
+    fileChooserSetDoOverwriteConfirmation fc True
+
+    pure fc
 
   _ <- saveButton guiElems `on` buttonActivated $ do
     (originalDirectory, originalFileName) <-
@@ -174,38 +185,42 @@ controllerMain = do
     _ <- fileChooserSetCurrentFolder fileChooserSaveDialog originalDirectory
     fileChooserSetCurrentName fileChooserSaveDialog
       ("output_" ++ originalFileName)
+
     responseID <- dialogRun fileChooserSaveDialog
     widgetHide fileChooserSaveDialog
+
     case responseID of
       ResponseAccept -> do
-        -- Hey, where is the exception handling?
         mFilePath <- fileChooserGetFilename fileChooserSaveDialog
         case mFilePath of
           Nothing -> return ()
           Just filePath -> guiRunExceptT (controllerWindow guiElems) $ do
-            (liftIO $ atomically $ readTVar modelTVar)
+                (liftIO $ atomically $ readTVar modelTVar)
             >>= saveSSAFile filePath
             >>= (liftIO . messageDialog (controllerWindow guiElems))
       _ -> return ()
 
-  -- Reading files
+  -- Opening .ssa files
+
   fileChooserOpenDialog <- do
     fc <- fileChooserDialogNew (Just "Open an .ssa file")
                                (Just (controllerWindow guiElems))
                                FileChooserActionOpen
                                [   ("Cancel" :: String, ResponseCancel)
                                  , ("Open"   :: String, ResponseAccept) ]
+
     fileChooserSetSelectMultiple fc False
 
     fileFilter <- fileFilterNew
     fileFilterAddPattern fileFilter ("*.ssa" :: String)
     fileChooserSetFilter fc fileFilter
 
-    return fc
+    pure fc
 
   _ <- openButton guiElems `on` buttonActivated $ do
     responseID <- dialogRun fileChooserOpenDialog
     widgetHide fileChooserOpenDialog
+
     case responseID of
       ResponseAccept -> guiRunExceptT (controllerWindow guiElems) $ do
         mFilePath <- liftIO $ fileChooserGetFilename fileChooserOpenDialog
@@ -223,6 +238,7 @@ controllerMain = do
                 initializeInterpreter model guiState
               widgetShowAll (controllerWindow guiElems)
 
+              -- Set the new list of traces for the "reference trace" feature
               let labels = getLabels model
                   cb = referenceTraceComboBoxText guiElems
               _ <- comboBoxSetModelText cb
@@ -233,15 +249,18 @@ controllerMain = do
       _ -> return ()
 
   -- Screenshots
-  fileChooserScreenshotDialog <-
-    fileChooserDialogNew (Just "Save a screenshot")
-                         (Just (controllerWindow guiElems))
-                         FileChooserActionSave
-                         [   ("Cancel" :: String, ResponseCancel)
-                           , ("Save"   :: String, ResponseAccept) ]
 
-  fileChooserSetSelectMultiple          fileChooserScreenshotDialog False
-  fileChooserSetDoOverwriteConfirmation fileChooserScreenshotDialog True
+  fileChooserScreenshotDialog <- do
+    fc <- fileChooserDialogNew (Just "Save a screenshot")
+                               (Just (controllerWindow guiElems))
+                               FileChooserActionSave
+                               [   ("Cancel" :: String, ResponseCancel)
+                                 , ("Save"   :: String, ResponseAccept) ]
+
+    fileChooserSetSelectMultiple          fc False
+    fileChooserSetDoOverwriteConfirmation fc True
+
+    pure fc
 
   _ <- screenshotSaveButton guiElems `on` buttonActivated $ do
     (model, guiState, chartSpec) <- atomically $ do
@@ -257,8 +276,8 @@ controllerMain = do
           Chart.SVG -> "svg"
           Chart.PS  -> "ps"
           Chart.PDF -> "pdf"
-    _ <- fileChooserSetCurrentFolder fileChooserScreenshotDialog
-                                     originalDirectory
+    _ <- fileChooserSetCurrentFolder
+           fileChooserScreenshotDialog originalDirectory
     fileChooserSetCurrentName fileChooserScreenshotDialog $ concat $
       [ "screenshot_"
       , dropExtension originalFileName
@@ -267,16 +286,19 @@ controllerMain = do
       , "."
       , extensionString
       ]
+
     responseID <- dialogRun fileChooserScreenshotDialog
     widgetHide fileChooserScreenshotDialog
+
     case responseID of
-      ResponseAccept -> 
+      ResponseAccept ->
         fileChooserGetFilename fileChooserScreenshotDialog >>= \case
           Just filePath -> requestScreenshot filePath extension chartSpec
           Nothing -> return ()
       _ -> return ()
 
-  -- Auto page
+  -- Run the automated procedure when switching to the 'Auto' page
+
   _ <- autoButton guiElems `on` buttonActivated $ withUpdate $ do
     matchLevels' <- atomically $ do
       model <- readTVar modelTVar
@@ -286,15 +308,17 @@ controllerMain = do
       modifyTVar' guiStateTVar ( set currentPage AutoPage
                                . set levelShiftMatches matches )
 
-      return $ matchLevels matches
+      pure $ matchLevels matches
 
-    -- Adjust parameters of the match level spin button
+    -- Increase the step size of the match level spin button with the number of
+    -- match levels
     let lvls = fromIntegral matchLevels'
         sqrtLvls = fromIntegral (floor $ sqrt lvls :: Integer)
     adjustment <- adjustmentNew 0 0 lvls 1 sqrtLvls 0
     spinButtonSetAdjustment (matchLevelSpinButton guiElems) adjustment
 
-  -- Applying cropping
+  -- Cropping of traces
+
   _ <- applyCropButton guiElems `on` buttonActivated
     $ withUpdate $ atomically $ do
       guiState <- readTVar guiStateTVar
@@ -306,7 +330,8 @@ controllerMain = do
           modifyTVar' guiStateTVar resetGUIPreservingOptions
         _ -> return ()
 
-  -- Applying transforms
+  -- Applying transforms to the data
+
   let apply = withUpdate $ atomically $ do
         model <- readTVar modelTVar
         guiState <- readTVar guiStateTVar
@@ -318,26 +343,31 @@ controllerMain = do
   _ <- singleApplyButton guiElems   `on` buttonActivated $ apply
   _ <- multipleApplyButton guiElems `on` buttonActivated $ apply
 
-  -------------------------------------------------------------------------------
-  -- Mouse callbacks
-  -------------------------------------------------------------------------------
-  -- See Controller.Mouse for the definition of mouse gestures
+--------------------------------------------------------------------------------
+-- Mouse actions
+--------------------------------------------------------------------------------
+-- See Controller.Mouse for the definition of mouse gestures
 
   -- Zooming
+
   _ <- imageEventBox guiElems `on` scrollEvent $ do
     pickFn <- liftIO $ readTVarIO pickFnTVar
     scrollDirection <- eventScrollDirection
     modifiers <- eventModifier
     layoutPick <- (pickFn . uncurry Point) <$> eventCoordinates
+
     case layoutPick of
       Just LayoutPick_PlotArea{} -> liftIO $ withUpdate $ do
         model <- atomically (readTVar modelTVar)
         let (rx, ry) = getTraceBounds model ^. toViewPort . viewPortRadii
+            -- hardcoded lower bounds:
+            -- may need to change them depending on data resolution
             radiiBounds = ((0.02, 2*rx), (0.1, max 200 (2*ry)))
             scaleFactor = case scrollDirection of
               ScrollUp   -> recip $ sqrt 2
               ScrollDown ->         sqrt 2
               _          -> 1
+
         atomically $ modifyTVar' guiStateTVar $ case modifiers of
           [Control] ->
             over (viewBounds . toViewPort . viewPortRadii . _1)
@@ -351,16 +381,21 @@ controllerMain = do
             . over (viewBounds . toViewPort . viewPortRadii . _2)
                   (bound (snd radiiBounds) . (*scaleFactor))
           _ -> id
+
       _ -> return ()
     return False
 
   -- Capturing mouse button presses
+
+  lastMousePressTMVar <- atomically newEmptyTMVar :: IO (TMVar MouseEvent)
+
   _ <- imageEventBox guiElems `on` buttonPressEvent $ do
     mouseEvent <- captureMouseEvent pickFnTVar
     liftIO $ atomically $ fillTMVar lastMousePressTMVar mouseEvent
     return False
 
   -- Capturing mouse button releases
+
   _ <- imageEventBox guiElems `on` buttonReleaseEvent $ do
     maybeMouseEvent1 <- liftIO $ atomically $ tryReadTMVar lastMousePressTMVar
     case maybeMouseEvent1 of
@@ -373,6 +408,7 @@ controllerMain = do
           levelShifts' <- getLevelShifts model' guiState'
           return (model', guiState', levelShifts')
 
+        -- helper functions and variables
         let nearestPoint' = nearestPoint model
             nearestSlope' = nearestSlope model
             timeAtPoint' = timeAtPoint model
@@ -403,10 +439,10 @@ controllerMain = do
                           . set (viewBounds.toViewPort.viewPortCenter) (t, h)
               _ -> return ()
 
-          -- Right-click-and-drag: ...
+          -- Right-click-and-drag: selecting a time interval for something
           Just (MouseDragRightX (xLeft, xRight)) -> liftIO $ withUpdate $
             case guiState ^. currentPage of
-              -- Selecting multiple level-shifts in a time interval
+              -- Selecting the level-shifts within a time interval
               MainPage ->  do
                 let lowerTarget = nearestSlope' xLeft
                     upperTarget = nearestSlope' xRight
@@ -418,6 +454,7 @@ controllerMain = do
                               set currentPage (MultiplePage js)
                             . set (viewBounds.toViewPort.viewPortCenter._1) t
                     _ -> return ()
+
               -- Selecting crop boundaries
               CropPage _ ->
                 let interval@(IndexInterval (l, u)) =
@@ -448,16 +485,15 @@ controllerMain = do
           _ -> return ()
         return False
 
-  --------------------------------------------------------------------------------
-  -- Go
-  --------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
+-- Start the GUI
+--------------------------------------------------------------------------------
 
   widgetShowAll (controllerWindow guiElems)
   widgetHide (image guiElems)
 
-  -- We use `insensitizeAll` to limit GUI functionality before any files have
-  -- been opened, since otherwise the program as is will try to operate on an
-  -- undefined value for the Model.
+  -- Since we initialize the Model undefined, we use `insensitizeAll` to prevent
+  -- the use of GUI functionality requiring an actual model before we have one.
   insensitizeAll guiElems
 
   mainGUI
