@@ -154,22 +154,20 @@ registerCallbacks ::
   -> TVar Model
   -> TVar GUIState
   -> (IO () -> IO ())
-  -> (IO () -> IO ())
   -> IO ()
-registerCallbacks guiElems modelTVar guiStateTVar
-                  withUpdate withPartialUpdate = do
+registerCallbacks guiElems modelTVar guiStateTVar withUpdate = do
   forM_ buttons
     $ registerButtonCB guiElems modelTVar guiStateTVar withUpdate
   forM_ intSpinButtons
-    $ registerSpinButtonIntCB guiElems guiStateTVar withPartialUpdate
+    $ registerSpinButtonIntCB guiElems guiStateTVar withUpdate
   forM_ spinButtons
-    $ registerSpinButtonCB guiElems guiStateTVar withPartialUpdate
+    $ registerSpinButtonCB guiElems guiStateTVar withUpdate
   forM_ checkButtons
-    $ registerCheckButtonCB guiElems guiStateTVar withPartialUpdate
+    $ registerCheckButtonCB guiElems guiStateTVar withUpdate
   forM_ comboBoxTexts
-    $ registerComboBoxTextCB guiElems guiStateTVar withPartialUpdate
+    $ registerComboBoxTextCB guiElems guiStateTVar withUpdate
   forM_ radioButtons
-    $ registerRadioButtonGroupCB guiElems guiStateTVar withPartialUpdate
+    $ registerRadioButtonGroupCB guiElems guiStateTVar withUpdate
 
 --------------------------------------------------------------------------------
 -- Synchronizing the Gtk+ 3 state with the `GUIState`
@@ -227,9 +225,9 @@ registerSpinButtonIntCB ::
   -> (IO () -> IO ())
   -> SpinButtonCB Int
   -> IO ()
-registerSpinButtonIntCB guiElems guiStateTVar withPartialUpdate callback =
+registerSpinButtonIntCB guiElems guiStateTVar withUpdate callback =
   let spinButton = spinButtonRef callback guiElems
-  in  void $ afterValueSpinned spinButton $ withPartialUpdate $ do
+  in  void $ afterValueSpinned spinButton $ withUpdate $ do
         val <- spinButtonGetValueAsInt spinButton
         atomically $ modifyTVar' guiStateTVar
                    $ set (spinButtonTarget callback) val
@@ -240,9 +238,9 @@ registerSpinButtonCB ::
   -> (IO () -> IO ())
   -> SpinButtonCB Double
   -> IO ()
-registerSpinButtonCB guiElems guiStateTVar withPartialUpdate callback =
+registerSpinButtonCB guiElems guiStateTVar withUpdate callback =
   let spinButton = spinButtonRef callback guiElems
-  in  void $ afterValueSpinned spinButton $ withPartialUpdate $ do
+  in  void $ afterValueSpinned spinButton $ withUpdate $ do
         val <- spinButtonGetValue spinButton
         atomically $ modifyTVar' guiStateTVar
                    $ set (spinButtonTarget callback) val
@@ -276,9 +274,9 @@ registerCheckButtonCB ::
   -> (IO () -> IO ())
   -> CheckButtonCB
   -> IO ()
-registerCheckButtonCB guiElems guiStateTVar withPartialUpdate callback =
+registerCheckButtonCB guiElems guiStateTVar withUpdate callback =
   let checkButton = (checkButtonRef callback) guiElems
-  in  void $ on checkButton buttonActivated $ withPartialUpdate $ do
+  in  void $ on checkButton buttonActivated $ withUpdate $ do
         active <- toggleButtonGetActive checkButton
         atomically $ modifyTVar' guiStateTVar
                    $ set (checkButtonTarget callback) active
@@ -305,10 +303,10 @@ registerComboBoxTextCB ::
   -> (IO () -> IO ())
   -> ComboBoxTextCB
   -> IO ()
-registerComboBoxTextCB guiElems guiStateTVar withPartialUpdate
+registerComboBoxTextCB guiElems guiStateTVar withUpdate
   (ComboBoxTextCB ref target reader) =
   let comboBox = ref guiElems
-  in  void $ on comboBox changed $ withPartialUpdate $ do
+  in  void $ on comboBox changed $ withUpdate $ do
     index <- comboBoxGetActive comboBox
     listStore <- comboBoxGetModelText comboBox
     txt <- listStoreSafeGetValue listStore index
@@ -340,12 +338,12 @@ registerRadioButtonCB ::
   -> (IO () -> IO ())
   -> RadioButtonCB
   -> IO ()
-registerRadioButtonCB guiElems guiStateTVar withPartialUpdate
+registerRadioButtonCB guiElems guiStateTVar withUpdate
   (RadioButtonCB ref target value) =
   let radioButton = ref guiElems
   in  void $ on radioButton buttonActivated $ do
         active <- toggleButtonGetActive radioButton
-        when active $ withPartialUpdate $
+        when active $ withUpdate $
           atomically $ modifyTVar' guiStateTVar $ set target value
 
 registerRadioButtonGroupCB ::
@@ -354,9 +352,9 @@ registerRadioButtonGroupCB ::
   -> (IO () -> IO ())
   -> RadioButtonGroup
   -> IO ()
-registerRadioButtonGroupCB guiElems guiStateTVar withPartialUpdate
+registerRadioButtonGroupCB guiElems guiStateTVar withUpdate
   (RadioButtonGroup target grouping) =
-  let register = registerRadioButtonCB guiElems guiStateTVar withPartialUpdate
+  let register = registerRadioButtonCB guiElems guiStateTVar withUpdate
   in  forM_ listAll $ \val -> register
          $ RadioButtonCB (grouping val) target val
 

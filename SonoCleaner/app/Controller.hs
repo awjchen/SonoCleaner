@@ -8,9 +8,7 @@
 -- This module deinfes `controllerMain`, which is basically the entry point of
 -- the program.
 
-{-# LANGUAGE LambdaCase        #-}
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE RankNTypes        #-}
+{-# LANGUAGE LambdaCase #-}
 
 module Controller
   ( controllerMain
@@ -51,8 +49,8 @@ controllerMain = do
 -- Define mutable state
 --------------------------------------------------------------------------------
 
-  -- The single, global representation of the user's data.
-  -- Is defined proper when a .ssa data file is opened.
+  -- `modelTVar` is the single, global representation of the user's data.
+  -- Is is filled with a proper value when a .ssa data file is opened.
   modelTVar <- newTVarIO initUndefinedModel :: IO (TVar Model)
 
   guiStateTVar <- newTVarIO def :: IO (TVar GUIState)
@@ -84,51 +82,42 @@ controllerMain = do
                      (controllerWindowBox guiElems)
 
 --------------------------------------------------------------------------------
--- Locking mechanism for display updates
+-- Locking mechanism for GUI state synchronization and canvas updates
 --------------------------------------------------------------------------------
 
--- I am not very familliar with GTK+3, but as far as I know, Gtk+ 3 GUI actions
--- requiring updates to either the view or the GUI may trigger other such
--- actions, which can cause multiple redundant canvas redraws. We prevent this
--- by wrapping every callback so that it obtains a lock that prevents the
--- actions it triggers triggered actions from requesting canvas updates.
+-- Disclaimer: I am not very familliar with Gtk+ 3, and I don't know what I'm
+-- doing.
 
--- Furthermore, keeping in mind that I don't know what I'm doing, it seems that
--- setting the internal state of a GTK+3 GUI element can trigger its callback,
--- which again writes to its internal state, forming an infinite loop. I have
--- yet to figure out how to prevent this, so I use the following workaround,
--- where callbacks originating from GUI elements holding internal state are not
--- allowed to make changes to the interal state of any GUI elements.
+-- For some reason, the triggering of one widget is often accompanied by the
+-- triggering of other widgets, sometimes by design in Gtk+ 3 and sometimes
+-- because of our synchronization of the Gtk+3 widget states with our `GUIState`
+-- (or so I suspect). In any case, it would be expensive and redundant if each
+-- of the widgets were to demand a canvas redraw. We prevent this by wrapping
+-- every callback with a function `withUpdate`, which obtains a lock that
+-- prevents both GUI state synchronization and canvas updates until all of the
+-- callbacks have finished executing.
 
--- `withUpdate`: for use by GUI elements that _do not_ hold any state needing
--- synchronization with the GUIState (e.g. buttons).
+  withUpdate <- do
+    updateLock <- atomically $ newTMVar () :: IO (TMVar ())
 
--- `withPartialUpdate`: for use by GUI elements those that _do_ hold state
--- needing syncrhonization with the GUI state (e.g. check buttons, radio
--- buttons, spin buttons)
+    let withUpdate :: IO () -> IO ()
+        withUpdate action = do
+          maybeLock <- atomically $ tryTakeTMVar updateLock
+          action
+          case maybeLock of
+            Nothing -> return ()
+            Just () -> update >> atomically (putTMVar updateLock ())
+          where
+            update :: IO ()
+            update = do
+              (model, guiState) <- atomically $
+                (,) <$> readTVar modelTVar <*> readTVar guiStateTVar
 
-  updateLock <- atomically $ newTMVar () :: IO (TMVar ())
+              setGUIParameters guiElems guiState
+              setGUISensitivity guiElems model guiState
+              atomically $ getChart model guiState >>= requestDraw
 
-  let (withUpdate, withPartialUpdate) = (withUpdate' True, withUpdate' False)
-        where
-          withUpdate' :: Bool -> IO () -> IO ()
-          withUpdate' doUpdateGUIParameters action = do
-            maybeLock <- atomically $ tryTakeTMVar updateLock
-            action
-            case maybeLock of
-              Nothing -> return ()
-              Just () -> do
-                update doUpdateGUIParameters 
-                atomically $ putTMVar updateLock ()
-
-          update :: Bool -> IO ()
-          update doUpdateGUIParameters = do
-            (model, guiState) <- atomically $
-              (,) <$> readTVar modelTVar <*> readTVar guiStateTVar
-
-            when doUpdateGUIParameters $ setGUIParameters guiElems guiState
-            setGUISensitivity guiElems model guiState
-            atomically $ getChart model guiState >>= requestDraw
+    pure withUpdate
 
 --------------------------------------------------------------------------------
 -- Keyboard shortcuts
@@ -140,12 +129,10 @@ controllerMain = do
 -- Generic callbacks
 --------------------------------------------------------------------------------
 -- Callbacks requiring only basic functionality are defined within a more
--- structured and restrictive environemnt. If a callback updates a GUI parameter
--- in `GUIState` that must be synchronized with the internal state of a Gtk+ 3
--- widget, it is defined here.
+-- structured and restrictive environemnt. In particular, all callbacks that
+-- update parameters in `GUIState` are defined here in `registerCallbacks`.
 
-  registerCallbacks
-    guiElems modelTVar guiStateTVar withUpdate withPartialUpdate
+  registerCallbacks guiElems modelTVar guiStateTVar withUpdate
 
 --------------------------------------------------------------------------------
 -- Special callbacks
