@@ -343,9 +343,10 @@ registerRadioButtonCB ::
 registerRadioButtonCB guiElems guiStateTVar withPartialUpdate
   (RadioButtonCB ref target value) =
   let radioButton = ref guiElems
-  in  void $ on radioButton buttonActivated $ withPartialUpdate $ do
+  in  void $ on radioButton buttonActivated $ do
         active <- toggleButtonGetActive radioButton
-        when active $ atomically $ modifyTVar' guiStateTVar $ set target value
+        when active $ withPartialUpdate $
+          atomically $ modifyTVar' guiStateTVar $ set target value
 
 registerRadioButtonGroupCB ::
      GUIElements
