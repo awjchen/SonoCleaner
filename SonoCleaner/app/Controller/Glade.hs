@@ -20,18 +20,24 @@ builderString = [r|
 <!-- Generated with glade 3.20.2 -->
 <interface>
   <requires lib="gtk+" version="3.10"/>
-  <object class="GtkAdjustment" id="jumpOffsetAdjustment">
-    <property name="lower">-1</property>
-    <property name="upper">1</property>
-    <property name="step_increment">0.01</property>
-    <property name="page_increment">0.050000000000000003</property>
-  </object>
   <object class="GtkAdjustment" id="jumpToleranceAdjustment">
     <property name="lower">0.029999999999999999</property>
     <property name="upper">0.98999999999999999</property>
     <property name="value">0.71999999999999997</property>
     <property name="step_increment">0.029999999999999999</property>
     <property name="page_increment">0.14999999999999999</property>
+  </object>
+  <object class="GtkAdjustment" id="multipleOffsetAdjustment">
+    <property name="lower">-1</property>
+    <property name="upper">1</property>
+    <property name="step_increment">0.01</property>
+    <property name="page_increment">0.050000000000000003</property>
+  </object>
+  <object class="GtkAdjustment" id="singleOffsetAdjustment">
+    <property name="lower">-1</property>
+    <property name="upper">1</property>
+    <property name="step_increment">0.01</property>
+    <property name="page_increment">0.050000000000000003</property>
   </object>
   <object class="GtkAdjustment" id="thresholdAdjustment">
     <property name="lower">0.01</property>
@@ -720,7 +726,7 @@ adjustment</property>
 
 [f, b, Shift + f, Shift + b]</property>
                             <property name="input_purpose">number</property>
-                            <property name="adjustment">jumpOffsetAdjustment</property>
+                            <property name="adjustment">singleOffsetAdjustment</property>
                             <property name="digits">2</property>
                             <property name="numeric">True</property>
                             <property name="update_policy">if-valid</property>
@@ -926,8 +932,8 @@ adjustment</property>
                             <property name="tooltip_text" translatable="yes">Add a distance offset to the portion of the trace spanned by the group of level-shifts.
 
 [f, b, Shift + f, Shift + b]</property>
-                            <property name="adjustment">jumpOffsetAdjustment</property>
-                            <property name="climb_rate">0.0099999997764825821</property>
+                            <property name="input_purpose">number</property>
+                            <property name="adjustment">multipleOffsetAdjustment</property>
                             <property name="digits">2</property>
                             <property name="numeric">True</property>
                             <property name="update_policy">if-valid</property>
@@ -1119,7 +1125,6 @@ adjustment</property>
 The automated procedure will only match level-shifts if their difference is less than the noise threshold. The labelling procedure depends similarly on the noise threshold.
 
 [Up, Down; or j, k]</property>
-                            <property name="text" translatable="yes">0.02</property>
                             <property name="input_purpose">number</property>
                             <property name="adjustment">thresholdAdjustment</property>
                             <property name="digits">2</property>
@@ -1173,7 +1178,6 @@ The automated procedure will only match level-shifts if their difference is less
                             <property name="tooltip_text" translatable="yes">The threshold above which a change in distance over a single time step is considered as a level-shift.
 
 [Shift+Up, Shift+Down; or Shift +j, Shift + k]</property>
-                            <property name="text" translatable="yes">0.02</property>
                             <property name="input_purpose">number</property>
                             <property name="adjustment">jumpToleranceAdjustment</property>
                             <property name="digits">2</property>
@@ -1524,7 +1528,7 @@ The automated procedure will only match level-shifts if their difference is less
                             <property name="tooltip_text" translatable="yes">Cropping
 
 - Here one can select a time interval to which the trace should be restricted.
-- To select a time interval, click and drag with the right mouse button to select the desired region, then click the 'Crop to selection' button.
+- To select a time interval, click and drag with the right mouse button to select the desired region, then click the 'Crop to selection' button. 
 - Cropping can be undone with the 'Uncrop' button; no data is ever deleted by cropping.
 - Data points outside the cropping time interval will be excluded when saving the data to a file.</property>
                             <property name="stock">gtk-dialog-question</property>
