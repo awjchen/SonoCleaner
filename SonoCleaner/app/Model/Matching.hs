@@ -28,7 +28,6 @@ import           Control.Monad.Loops        (whileJust)
 import           Control.Monad.ST
 import           Control.Monad.Trans.Class
 import           Control.Monad.Trans.Reader
-import           Data.Default
 import           Data.Function
 import qualified Data.Heap                  as H
 import           Data.List                  (groupBy)
@@ -53,9 +52,6 @@ data LevelShiftMatches = LevelShiftMatches
 
 levelShiftMatches :: [[(Index1, Double)]] -> LevelShiftMatches
 levelShiftMatches matches = LevelShiftMatches (length matches) matches
-
-instance Default LevelShiftMatches where
-  def = levelShiftMatches []
 
 -------------------------------------------------------------------------------
 -- Internal types

@@ -305,8 +305,7 @@ controllerMain = do
       guiState <- readTVar guiStateTVar
       matches <- getMatches model guiState
 
-      modifyTVar' guiStateTVar ( set currentPage AutoPage
-                               . set levelShiftMatches matches )
+      modifyTVar' guiStateTVar (set currentPage AutoPage)
 
       pure $ matchLevels matches
 

@@ -58,9 +58,6 @@ data GUIState = GUIState
   , _matchLevel           :: Int
   , _levelShiftThreshold  :: Double
   , _noiseThreshold       :: Double
-  , _levelShiftMatches    :: LevelShiftMatches
-
-  , _showAdvancedOptions  :: Bool
 
   -- Single options
   , _singleHold           :: (Int, Hold)
@@ -89,9 +86,6 @@ instance Default GUIState where
     , _matchLevel           = 0
     , _levelShiftThreshold  = 0.72
     , _noiseThreshold       = 0.12
-    , _levelShiftMatches    = def
-
-    , _showAdvancedOptions  = False
 
     -- Single options
     , _singleHold           = (0, HoldLeft)
