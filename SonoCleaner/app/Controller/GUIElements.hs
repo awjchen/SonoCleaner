@@ -2,7 +2,10 @@
 
 {-# LANGUAGE RecordWildCards #-}
 
-module Controller.GUIElements where
+module Controller.GUIElements
+  ( GUIElements (..)
+  , importGUIElements
+  ) where
 
 import           Control.Monad   (void)
 import qualified Data.Text       as T
@@ -112,22 +115,21 @@ importGUIElements :: Builder -> IO GUIElements
 importGUIElements builder = go where
   go = do
     guiElems <- importGUIElements' builder
-    finalize guiElems
+    setupComboBoxTexts guiElems
     return guiElems
 
-  finalize :: GUIElements -> IO ()
-  finalize guiElems = void $ do
-    -- Set model of ComboBoxes to Text
-    _ <- comboBoxSetModelText (referenceTraceComboBoxText guiElems)
+setupComboBoxTexts :: GUIElements -> IO ()
+setupComboBoxTexts guiElems = void $ do
+  _ <- comboBoxSetModelText (referenceTraceComboBoxText guiElems)
 
-    let shcb = singleHoldComboBox guiElems
-    _ <- comboBoxSetModelText shcb
-    _ <- comboBoxAppendText shcb (T.pack "Left")
-    _ <- comboBoxAppendText shcb (T.pack "Right")
+  let shcb = singleHoldComboBox guiElems
+  _ <- comboBoxSetModelText shcb
+  _ <- comboBoxAppendText shcb (T.pack "Left")
+  _ <- comboBoxAppendText shcb (T.pack "Right")
 
-    let sffcb = screenshotFileFormatComboBoxText guiElems
-    _ <- comboBoxSetModelText sffcb
-    mapM_ (comboBoxAppendText sffcb . T.pack) ["PNG", "SVG", "PS", "PDF"]
+  let sffcb = screenshotFileFormatComboBoxText guiElems
+  _ <- comboBoxSetModelText sffcb
+  mapM_ (comboBoxAppendText sffcb . T.pack) ["PNG", "SVG", "PS", "PDF"]
 
 importGUIElements' :: Builder -> IO GUIElements
 importGUIElements' builder = do
