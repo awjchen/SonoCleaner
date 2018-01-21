@@ -96,19 +96,15 @@ spinButtons =
   [ SpinButtonCB singleOffsetSpinButton   singleOffset
   -- Multiple page
   , SpinButtonCB multipleOffsetSpinButton multipleOffset
+  -- Auto page
+  , SpinButtonCB noiseThresholdSpinButton      noiseThreshold
+  , SpinButtonCB levelShiftThresholdSpinButton levelShiftThreshold
   ]
 
 intSpinButtons :: [SpinButtonCB Int]
 intSpinButtons =
   -- Auto page
   [ SpinButtonCB matchLevelSpinButton matchLevel
-  ]
-
-labelParameterSpinButtons :: [SpinButtonCB Double]
-labelParameterSpinButtons =
-  -- Auto page
-  [ SpinButtonCB noiseThresholdSpinButton      noiseThreshold
-  , SpinButtonCB levelShiftThresholdSpinButton levelShiftThreshold
   ]
 
 checkButtons :: [CheckButtonCB]
@@ -168,9 +164,6 @@ registerCallbacks guiElems modelTVar guiStateTVar
     $ registerSpinButtonIntCB guiElems guiStateTVar withPartialUpdate
   forM_ spinButtons
     $ registerSpinButtonCB guiElems guiStateTVar withPartialUpdate
-  forM_ labelParameterSpinButtons
-    $ registerLabelParameterSpinButton
-        guiElems guiStateTVar withPartialUpdate
   forM_ checkButtons
     $ registerCheckButtonCB guiElems guiStateTVar withPartialUpdate
   forM_ comboBoxTexts
@@ -187,12 +180,11 @@ setGUIParameters guiElems guiState = do
   Gtk.set (notebook guiElems)
     [ notebookPage := pageNumber (guiState ^. currentPage) ]
 
-  forM_ spinButtons               $ setSpinButton       guiElems guiState
-  forM_ intSpinButtons            $ setIntSpinButton    guiElems guiState
-  forM_ labelParameterSpinButtons $ setSpinButton       guiElems guiState
-  forM_ checkButtons              $ setCheckButton      guiElems guiState
-  forM_ comboBoxTexts             $ setComboBoxText     guiElems guiState
-  forM_ radioButtons              $ setRadioButtonGroup guiElems guiState
+  forM_ spinButtons    $ setSpinButton       guiElems guiState
+  forM_ intSpinButtons $ setIntSpinButton    guiElems guiState
+  forM_ checkButtons   $ setCheckButton      guiElems guiState
+  forM_ comboBoxTexts  $ setComboBoxText     guiElems guiState
+  forM_ radioButtons   $ setRadioButtonGroup guiElems guiState
 
 --------------------------------------------------------------------------------
 -- Buttons
@@ -254,22 +246,6 @@ registerSpinButtonCB guiElems guiStateTVar withPartialUpdate callback =
         val <- spinButtonGetValue spinButton
         atomically $ modifyTVar' guiStateTVar
                    $ set (spinButtonTarget callback) val
-
-registerLabelParameterSpinButton ::
-     GUIElements
-  -> TVar GUIState
-  -> (IO () -> IO ())
-  -> SpinButtonCB Double
-  -> IO ()
-registerLabelParameterSpinButton guiElems
-  guiStateTVar withPartialUpdate callback =
-  let spinButton = spinButtonRef callback guiElems
-  in  void $ afterValueSpinned spinButton $ withPartialUpdate $ do
-      val <- spinButtonGetValue spinButton
-      atomically $ do -- edit
-        guiState <- readTVar guiStateTVar
-        writeTVar guiStateTVar
-          $ guiState & set (spinButtonTarget callback) val
 
 setSpinButton :: GUIElements -> GUIState -> SpinButtonCB Double -> IO ()
 setSpinButton guiElems guiState spinButtonSpec =
