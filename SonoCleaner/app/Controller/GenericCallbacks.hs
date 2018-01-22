@@ -2,6 +2,7 @@
 -- manner
 
 {-# LANGUAGE ExistentialQuantification #-}
+{-# LANGUAGE LambdaCase                #-}
 {-# LANGUAGE OverloadedStrings         #-}
 {-# LANGUAGE RankNTypes                #-}
 
@@ -115,29 +116,26 @@ checkButtons =
 
 radioButtons :: [RadioButtonGroup]
 radioButtons =
-  [ RadioButtonGroup singleAction (\a -> case a of
+  [ RadioButtonGroup singleAction $ \case
       SingleIgnore   -> singleIgnoreRadioButton
       SingleZero     -> singleZeroRadioButton
-      SingleSlopeFit -> singleSlopeFitRadioButton)
-  , RadioButtonGroup multipleAction (\a -> case a of
+      SingleSlopeFit -> singleSlopeFitRadioButton
+  , RadioButtonGroup multipleAction $ \case
       MultipleIgnore -> multipleIgnoreRadioButton
       MultipleLine   -> multipleLineRadioButton
-      MultipleCancel -> multipleCancelRadioButton)
+      MultipleCancel -> multipleCancelRadioButton
   ]
 
 comboBoxTexts :: [ComboBoxTextCB]
 comboBoxTexts =
-  [ ComboBoxTextCB singleHoldComboBox singleHold $
-    \mt -> case mt of
+  [ ComboBoxTextCB singleHoldComboBox singleHold $ \case
       Just "Left"  -> HoldLeft
       Just "Right" -> HoldRight
       _            -> HoldLeft
-  , ComboBoxTextCB referenceTraceComboBoxText referenceTraceLabel $
-    \mt -> case mt of
+  , ComboBoxTextCB referenceTraceComboBoxText referenceTraceLabel $ \case
       Just "None" -> Nothing
       m           -> m
-  , ComboBoxTextCB screenshotFileFormatComboBoxText screenshotFileFormat $
-    \mt -> case mt of
+  , ComboBoxTextCB screenshotFileFormatComboBoxText screenshotFileFormat $ \case
       Just "PNG" -> Chart.PNG
       Just "SVG" -> Chart.SVG
       Just "PS"  -> Chart.PS
