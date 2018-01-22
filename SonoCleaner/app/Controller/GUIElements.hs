@@ -5,9 +5,9 @@
 module Controller.GUIElements
   ( GUIElements (..)
   , importGUIElements
+  , setComboBoxTextLabels
   ) where
 
-import           Control.Monad   (void)
 import qualified Data.Text       as T
 import           Graphics.UI.Gtk hiding (set)
 
@@ -108,31 +108,21 @@ data GUIElements = GUIElements
   }
 
 --------------------------------------------------------------------------------
--- Import GUI elements from Glade
---------------------------------------------------------------------------------
+
+setComboBoxTextLabels :: [String] -> ComboBox -> IO ()
+setComboBoxTextLabels labels comboBox = do
+  _ <- comboBoxSetModelText comboBox
+  mapM_ (comboBoxAppendText comboBox . T.pack) labels
+  comboBoxSetActive comboBox 0
+
+(<>>=) :: Monad m => m a -> (a -> m b) -> m a
+(<>>=) ma mf = do
+  a <- ma
+  _ <- mf a
+  pure a
 
 importGUIElements :: Builder -> IO GUIElements
-importGUIElements builder = go where
-  go = do
-    guiElems <- importGUIElements' builder
-    setupComboBoxTexts guiElems
-    return guiElems
-
-setupComboBoxTexts :: GUIElements -> IO ()
-setupComboBoxTexts guiElems = void $ do
-  _ <- comboBoxSetModelText (referenceTraceComboBoxText guiElems)
-
-  let shcb = singleHoldComboBox guiElems
-  _ <- comboBoxSetModelText shcb
-  _ <- comboBoxAppendText shcb (T.pack "Left")
-  _ <- comboBoxAppendText shcb (T.pack "Right")
-
-  let sffcb = screenshotFileFormatComboBoxText guiElems
-  _ <- comboBoxSetModelText sffcb
-  mapM_ (comboBoxAppendText sffcb . T.pack) ["PNG", "SVG", "PS", "PDF"]
-
-importGUIElements' :: Builder -> IO GUIElements
-importGUIElements' builder = do
+importGUIElements builder = do
   let getButton      = builderGetObject builder castToButton
       getSpinButton  = builderGetObject builder castToSpinButton
       getCheckButton = builderGetObject builder castToCheckButton
@@ -178,6 +168,8 @@ importGUIElements' builder = do
 
   -- Single page
   singleHoldComboBox <- getComboBox "singleHoldComboBox"
+                   <>>= setComboBoxTextLabels ["Left", "Right"]
+
   singleOffsetSpinButton <- getSpinButton "singleOffsetSpinButton"
 
   singleIgnoreRadioButton <- getRadioButton "singleIgnoreRadioButton"
@@ -226,7 +218,9 @@ importGUIElements' builder = do
   qualityBackButton <- getButton "qualityBackButton"
 
   -- Screenshot page
-  screenshotFileFormatComboBoxText <- getComboBox "screenshotFileFormatComboBoxText"
+  screenshotFileFormatComboBoxText <-
+         getComboBox "screenshotFileFormatComboBoxText"
+    <>>= setComboBoxTextLabels ["PNG", "SVG", "PS", "PDF"]
   screenshotSaveButton <- getButton "screenshotSaveButton"
 
   screenshotBackButton <- getButton "screenshotBackButton"

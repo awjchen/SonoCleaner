@@ -17,11 +17,9 @@ module Controller
 import           Control.Arrow                          ((&&&))
 import           Control.Concurrent.STM
 import           Control.Lens
-import           Control.Monad
 import           Control.Monad.IO.Class                 (liftIO)
 import           Control.Monad.Trans.Except
 import           Data.Default
-import qualified Data.Text                              as T
 import           Graphics.Rendering.Chart
 import qualified Graphics.Rendering.Chart.Backend.Cairo as Chart
 import           Graphics.UI.Gtk                        hiding (set)
@@ -223,15 +221,11 @@ controllerMain = do
                 writeTVar guiStateTVar $ guiState &
                   setDefaultViewBounds model
                 initializeInterpreter model guiState
-              widgetShowAll (controllerWindow guiElems)
 
-              -- Set the new list of traces for the "reference trace" feature
-              let labels = getLabels model
-                  cb = referenceTraceComboBoxText guiElems
-              _ <- comboBoxSetModelText cb
-              _ <- comboBoxAppendText cb (T.pack "None")
-              forM_ labels $ comboBoxAppendText cb . T.pack
-              comboBoxSetActive cb 0
+              setComboBoxTextLabels ("None" : getLabels model)
+                                    (referenceTraceComboBoxText guiElems)
+
+              widgetShowAll (controllerWindow guiElems)
 
       _ -> return ()
 
