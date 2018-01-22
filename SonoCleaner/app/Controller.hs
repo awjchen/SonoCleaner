@@ -299,19 +299,6 @@ controllerMain = do
     adjustment <- adjustmentNew 0 0 lvls 1 sqrtLvls 0
     spinButtonSetAdjustment (matchLevelSpinButton guiElems) adjustment
 
-  -- Cropping of traces
-
-  _ <- applyCropButton guiElems `on` buttonActivated
-    $ withUpdate $ atomically $ do
-      guiState <- readTVar guiStateTVar
-      case guiState ^. currentPage of
-        (CropPage (Just indexInterval)) -> do
-          model <- readTVar modelTVar
-          let newModel = crop indexInterval model
-          writeTVar modelTVar newModel
-          modifyTVar' guiStateTVar resetGUIPreservingOptions
-        _ -> return ()
-
   -- Applying transforms to the data
 
   let apply = withUpdate $ atomically $ do

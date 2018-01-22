@@ -5,81 +5,120 @@ module Controller.GenericCallbacks
   ) where
 
 import           Control.Concurrent.STM
-import           Control.Lens                           hiding (index)
+import           Control.Lens           hiding (index)
 import           Control.Monad
 import           Data.Default
-import           Graphics.UI.Gtk                        hiding (set)
+import           Graphics.UI.Gtk        hiding (set)
+
+import           Model
 
 import           Controller.GUIElements
 import           Controller.GUIState
-import           Model
 
 --------------------------------------------------------------------------------
 
-buttons :: [ButtonCB]
-buttons =
+type PureAction = Model -> GUIState -> (Model, GUIState)
+
+data PureCallback = PureCallback (GUIElements -> Button) PureAction
+
+m_ :: (Model -> Model) -> PureAction
+m_ f = \model guiState -> (f model, guiState)
+
+_g :: (GUIState -> GUIState) -> PureAction
+_g f = \model guiState -> (model, f guiState)
+
+_mg :: (Model -> GUIState -> GUIState) -> PureAction
+_mg f = \model guiState -> (model, f model guiState)
+
+m_g :: (Model -> Model) -> (GUIState -> GUIState) -> PureAction
+m_g f g = \model guiState -> (f model, g guiState)
+
+-- Use new model in the GUIState function
+m_mg :: (Model -> Model) -> (Model -> GUIState -> GUIState) -> PureAction
+m_mg f g = \model guiState ->
+  let model' = f model in (model', g model' guiState)
+
+--------------------------------------------------------------------------------
+
+pureCallbacks :: [PureCallback]
+pureCallbacks =
   -- Main page
-  [ ButtonCB prevTraceButton gotoPrevTrace resetGUIForNewTrace
-  , ButtonCB nextTraceButton gotoNextTrace resetGUIForNewTrace
-  , ButtonCB twinTraceButton gotoTwinTrace resetGUIPreservingOptions'
+  [ PureCallback prevTraceButton $ m_mg
+      gotoPrevTrace
+      (\model -> setDefaultViewBounds model . resetGUIPreservingOptions)
+  , PureCallback nextTraceButton $ m_mg
+      gotoNextTrace
+      (\model -> setDefaultViewBounds model . resetGUIPreservingOptions)
+  , PureCallback twinTraceButton
+      $ m_g gotoTwinTrace resetGUIPreservingOptions
 
-  , ButtonCB undoButton undo noop
-  , ButtonCB redoButton redo noop
+  , PureCallback undoButton $ m_ undo
+  , PureCallback redoButton $ m_ redo
 
-  , ButtonCB labellingButton  id (setNotebookPage LabelPage)
-  , ButtonCB viewButton       id (setNotebookPage ViewPage)
-  , ButtonCB cropButton       id (setNotebookPage (CropPage Nothing))
-  , ButtonCB qualityButton    id (setNotebookPage QualityPage)
-  , ButtonCB screenshotButton id (setNotebookPage ScreenshotPage)
+  , PureCallback labellingButton  $ _g (set currentPage LabelPage)
+  , PureCallback viewButton       $ _g (set currentPage ViewPage)
+  , PureCallback cropButton       $ _g (set currentPage (CropPage Nothing))
+  , PureCallback qualityButton    $ _g (set currentPage QualityPage)
+  , PureCallback screenshotButton $ _g (set currentPage ScreenshotPage)
 
-  , ButtonCB mainFullViewButton  id (const setDefaultViewBounds)
-  , ButtonCB mainFullViewXButton id (const setDefaultViewBoundsX)
-  , ButtonCB mainFullViewYButton id (const setDefaultViewBoundsY)
+  , PureCallback mainFullViewButton  $ _mg setDefaultViewBounds
+  , PureCallback mainFullViewXButton $ _mg setDefaultViewBoundsX
+  , PureCallback mainFullViewYButton $ _mg setDefaultViewBoundsY
 
-  , ButtonCB autoCancelButton     id resetGUIPreservingOptions'
-  , ButtonCB singleCancelButton   id resetGUIPreservingOptions'
-  , ButtonCB multipleCancelButton id resetGUIPreservingOptions'
+  , PureCallback autoCancelButton     $ _g resetGUIPreservingOptions
+  , PureCallback singleCancelButton   $ _g resetGUIPreservingOptions
+  , PureCallback multipleCancelButton $ _g resetGUIPreservingOptions
 
   -- Label page
-  , ButtonCB defaultParametersButton id
-      (\_ _ -> set levelShiftThreshold (view levelShiftThreshold def)
-             . set noiseThreshold      (view noiseThreshold def))
-  , ButtonCB labelBackButton id resetGUIPreservingOptions'
+  , PureCallback defaultParametersButton
+      $ _g $ set levelShiftThreshold (view levelShiftThreshold def)
+            . set noiseThreshold      (view noiseThreshold def)
+  , PureCallback labelBackButton $ _g resetGUIPreservingOptions
 
   -- View page
-  , ButtonCB viewBackButton id resetGUIPreservingOptions'
+  , PureCallback viewBackButton $ _g resetGUIPreservingOptions
 
   -- Crop page
-  , ButtonCB applyUncropButton uncrop resetGUIPreservingOptions'
+  , PureCallback applyCropButton $ \model guiState ->
+      case guiState ^. currentPage of
+        (CropPage (Just indexInterval)) ->
+          (crop indexInterval model, resetGUIPreservingOptions guiState)
+        _ -> (model, guiState)
+  , PureCallback applyUncropButton $ m_g uncrop resetGUIPreservingOptions
 
-  , ButtonCB cropBackButton id resetGUIPreservingOptions'
+  , PureCallback cropBackButton $ _g resetGUIPreservingOptions
 
   -- Quality page
-  , ButtonCB qualityGoodButton     (setQuality Good)
-      resetGUIPreservingOptions'
-  , ButtonCB qualityModerateButton (setQuality Moderate)
-      resetGUIPreservingOptions'
-  , ButtonCB qualityBadButton      (setQuality Bad)
-      resetGUIPreservingOptions'
+  , PureCallback qualityGoodButton
+      $ m_g (setQuality Good) resetGUIPreservingOptions
+  , PureCallback qualityModerateButton
+      $ m_g (setQuality Moderate) resetGUIPreservingOptions
+  , PureCallback qualityBadButton
+      $ m_g (setQuality Bad) resetGUIPreservingOptions
 
-  , ButtonCB qualityBackButton id resetGUIPreservingOptions'
+  , PureCallback qualityBackButton $ _g resetGUIPreservingOptions
 
   -- Screenshot page
-  , ButtonCB screenshotBackButton id resetGUIPreservingOptions'
+  , PureCallback screenshotBackButton $ _g resetGUIPreservingOptions
   ]
-  where
-    noop _ _ = id
-    resetGUIPreservingOptions' _ _ = resetGUIPreservingOptions
-    resetGUIForNewTrace _ model =
-      setDefaultViewBounds model . resetGUIPreservingOptions
-
-    setNotebookPage ::
-      NotebookPage -> GUIElements -> Model -> GUIState -> GUIState
-    setNotebookPage nbPage _ _ = set currentPage nbPage
 
 --------------------------------------------------------------------------------
--- Registering the callbacks
---------------------------------------------------------------------------------
+
+registerPureCallback
+  :: GUIElements
+  -> TVar Model
+  -> TVar GUIState
+  -> (IO () -> IO ())
+  -> PureCallback
+  -> IO ()
+registerPureCallback guiElems modelTVar guiStateTVar withUpdate
+  (PureCallback buttonRef action) =
+  let button = buttonRef guiElems
+  in  void $ on button buttonActivated $ withUpdate $ atomically $ do
+    (model, guiState) <- (,) <$> readTVar modelTVar <*> readTVar guiStateTVar
+    let (model', guiState') = action model guiState
+    writeTVar modelTVar model'
+    writeTVar guiStateTVar guiState'
 
 registerCallbacks ::
      GUIElements
@@ -88,31 +127,6 @@ registerCallbacks ::
   -> (IO () -> IO ())
   -> IO ()
 registerCallbacks guiElems modelTVar guiStateTVar withUpdate =
-  forM_ buttons
-    $ registerButtonCB guiElems modelTVar guiStateTVar withUpdate
+  forM_ pureCallbacks
+    $ registerPureCallback guiElems modelTVar guiStateTVar withUpdate
 
---------------------------------------------------------------------------------
--- Buttons
---------------------------------------------------------------------------------
-
-data ButtonCB = ButtonCB
-  { buttonRef            :: GUIElements -> Button
-  , buttonModelAction    :: Model -> Model
-  , buttonGUIStateAction :: GUIElements -> Model -> GUIState -> GUIState
-  }
-
-registerButtonCB ::
-     GUIElements
-  -> TVar Model
-  -> TVar GUIState
-  -> (IO () -> IO ())
-  -> ButtonCB
-  -> IO ()
-registerButtonCB guiElems modelTVar
-  guiStateTVar withUpdate callback =
-  let button = buttonRef callback guiElems
-  in  void $ on button buttonActivated $ withUpdate $ atomically $ do
-    model <- readTVar modelTVar
-    let newModel = buttonModelAction callback model
-    writeTVar modelTVar newModel
-    modifyTVar' guiStateTVar (buttonGUIStateAction callback guiElems newModel)
