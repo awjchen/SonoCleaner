@@ -30,6 +30,7 @@ import           Controller.GenericCallbacks
 import           Controller.Glade
 import           Controller.GUIElements
 import           Controller.GUIState
+import           Controller.GUIStateWidgets
 import           Controller.Interpreter
 import           Controller.Keybindings
 import           Controller.Mouse
@@ -111,7 +112,7 @@ controllerMain = do
               (model, guiState) <- atomically $
                 (,) <$> readTVar modelTVar <*> readTVar guiStateTVar
 
-              setGUIParameters guiElems guiState
+              updateGUIStateWidgets guiElems guiState
               setGUISensitivity guiElems model guiState
               atomically $ getChart model guiState >>= requestDraw
 
@@ -128,8 +129,9 @@ controllerMain = do
 --------------------------------------------------------------------------------
 -- Callbacks requiring only basic functionality are defined within a more
 -- structured and restrictive environemnt. In particular, all callbacks that
--- update parameters in `GUIState` are defined here in `registerCallbacks`.
+-- update parameters in `GUIState` are here in `registerGUIStateWidgets`.
 
+  registerGUIStateWidgets guiElems guiStateTVar withUpdate
   registerCallbacks guiElems modelTVar guiStateTVar withUpdate
 
 --------------------------------------------------------------------------------

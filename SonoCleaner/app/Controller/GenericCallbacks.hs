@@ -1,33 +1,19 @@
--- Generic GUI actions (callbacks) are defined here in a uniform and restricted
--- manner
-
-{-# LANGUAGE ExistentialQuantification #-}
-{-# LANGUAGE LambdaCase                #-}
-{-# LANGUAGE OverloadedStrings         #-}
-{-# LANGUAGE RankNTypes                #-}
+-- TODO: summary
 
 module Controller.GenericCallbacks
   ( registerCallbacks
-  , setGUIParameters
   ) where
 
 import           Control.Concurrent.STM
 import           Control.Lens                           hiding (index)
 import           Control.Monad
 import           Data.Default
-import qualified Data.Text                              as T
-import qualified Graphics.Rendering.Chart.Backend.Cairo as Chart
 import           Graphics.UI.Gtk                        hiding (set)
-import qualified Graphics.UI.Gtk                        as Gtk (set)
 
 import           Controller.GUIElements
 import           Controller.GUIState
-import           Controller.Util
 import           Model
-import           Types.LevelShifts
 
---------------------------------------------------------------------------------
--- Callback specifications (see below for type definitions)
 --------------------------------------------------------------------------------
 
 buttons :: [ButtonCB]
@@ -91,58 +77,6 @@ buttons =
       NotebookPage -> GUIElements -> Model -> GUIState -> GUIState
     setNotebookPage nbPage _ _ = set currentPage nbPage
 
-spinButtons :: [SpinButtonCB Double]
-spinButtons =
-  -- Single page
-  [ SpinButtonCB singleOffsetSpinButton   singleOffset
-  -- Multiple page
-  , SpinButtonCB multipleOffsetSpinButton multipleOffset
-  -- Auto page
-  , SpinButtonCB noiseThresholdSpinButton      noiseThreshold
-  , SpinButtonCB levelShiftThresholdSpinButton levelShiftThreshold
-  ]
-
-intSpinButtons :: [SpinButtonCB Int]
-intSpinButtons =
-  -- Auto page
-  [ SpinButtonCB matchLevelSpinButton matchLevel
-  ]
-
-checkButtons :: [CheckButtonCB]
-checkButtons =
-  -- View page
-  [ CheckButtonCB showReplicateTracesCheckButton  showReplicateTraces
-  ]
-
-radioButtons :: [RadioButtonGroup]
-radioButtons =
-  [ RadioButtonGroup singleAction $ \case
-      SingleIgnore   -> singleIgnoreRadioButton
-      SingleZero     -> singleZeroRadioButton
-      SingleSlopeFit -> singleSlopeFitRadioButton
-  , RadioButtonGroup multipleAction $ \case
-      MultipleIgnore -> multipleIgnoreRadioButton
-      MultipleLine   -> multipleLineRadioButton
-      MultipleCancel -> multipleCancelRadioButton
-  ]
-
-comboBoxTexts :: [ComboBoxTextCB]
-comboBoxTexts =
-  [ ComboBoxTextCB singleHoldComboBox singleHold $ \case
-      Just "Left"  -> HoldLeft
-      Just "Right" -> HoldRight
-      _            -> HoldLeft
-  , ComboBoxTextCB referenceTraceComboBoxText referenceTraceLabel $ \case
-      Just "None" -> Nothing
-      m           -> m
-  , ComboBoxTextCB screenshotFileFormatComboBoxText screenshotFileFormat $ \case
-      Just "PNG" -> Chart.PNG
-      Just "SVG" -> Chart.SVG
-      Just "PS"  -> Chart.PS
-      Just "PDF" -> Chart.PDF
-      _          -> Chart.PNG
-  ]
-
 --------------------------------------------------------------------------------
 -- Registering the callbacks
 --------------------------------------------------------------------------------
@@ -153,34 +87,9 @@ registerCallbacks ::
   -> TVar GUIState
   -> (IO () -> IO ())
   -> IO ()
-registerCallbacks guiElems modelTVar guiStateTVar withUpdate = do
+registerCallbacks guiElems modelTVar guiStateTVar withUpdate =
   forM_ buttons
     $ registerButtonCB guiElems modelTVar guiStateTVar withUpdate
-  forM_ intSpinButtons
-    $ registerSpinButtonIntCB guiElems guiStateTVar withUpdate
-  forM_ spinButtons
-    $ registerSpinButtonCB guiElems guiStateTVar withUpdate
-  forM_ checkButtons
-    $ registerCheckButtonCB guiElems guiStateTVar withUpdate
-  forM_ comboBoxTexts
-    $ registerComboBoxTextCB guiElems guiStateTVar withUpdate
-  forM_ radioButtons
-    $ registerRadioButtonGroupCB guiElems guiStateTVar withUpdate
-
---------------------------------------------------------------------------------
--- Synchronizing the Gtk+ 3 state with the `GUIState`
---------------------------------------------------------------------------------
-
-setGUIParameters :: GUIElements -> GUIState -> IO ()
-setGUIParameters guiElems guiState = do
-  Gtk.set (notebook guiElems)
-    [ notebookPage := pageNumber (guiState ^. currentPage) ]
-
-  forM_ spinButtons    $ setSpinButton       guiElems guiState
-  forM_ intSpinButtons $ setIntSpinButton    guiElems guiState
-  forM_ checkButtons   $ setCheckButton      guiElems guiState
-  forM_ comboBoxTexts  $ setComboBoxText     guiElems guiState
-  forM_ radioButtons   $ setRadioButtonGroup guiElems guiState
 
 --------------------------------------------------------------------------------
 -- Buttons
@@ -207,157 +116,3 @@ registerButtonCB guiElems modelTVar
     let newModel = buttonModelAction callback model
     writeTVar modelTVar newModel
     modifyTVar' guiStateTVar (buttonGUIStateAction callback guiElems newModel)
-
---------------------------------------------------------------------------------
--- Spin buttons
---------------------------------------------------------------------------------
-
-data SpinButtonCB a = SpinButtonCB
-  { spinButtonRef    :: GUIElements -> SpinButton
-  , spinButtonTarget :: Lens' GUIState a
-  }
-
-registerSpinButtonIntCB ::
-     GUIElements
-  -> TVar GUIState
-  -> (IO () -> IO ())
-  -> SpinButtonCB Int
-  -> IO ()
-registerSpinButtonIntCB guiElems guiStateTVar withUpdate callback =
-  let spinButton = spinButtonRef callback guiElems
-  in  void $ afterValueSpinned spinButton $ withUpdate $ do
-        val <- spinButtonGetValueAsInt spinButton
-        atomically $ modifyTVar' guiStateTVar
-                   $ set (spinButtonTarget callback) val
-
-registerSpinButtonCB ::
-     GUIElements
-  -> TVar GUIState
-  -> (IO () -> IO ())
-  -> SpinButtonCB Double
-  -> IO ()
-registerSpinButtonCB guiElems guiStateTVar withUpdate callback =
-  let spinButton = spinButtonRef callback guiElems
-  in  void $ afterValueSpinned spinButton $ withUpdate $ do
-        val <- spinButtonGetValue spinButton
-        atomically $ modifyTVar' guiStateTVar
-                   $ set (spinButtonTarget callback) val
-
-setSpinButton :: GUIElements -> GUIState -> SpinButtonCB Double -> IO ()
-setSpinButton guiElems guiState spinButtonSpec =
-  let spinButton = spinButtonRef    spinButtonSpec
-      target     = spinButtonTarget spinButtonSpec
-  in  Gtk.set (spinButton guiElems)
-        [ spinButtonValue := (guiState ^. target) ]
-
-setIntSpinButton :: GUIElements -> GUIState -> SpinButtonCB Int -> IO ()
-setIntSpinButton guiElems guiState spinButtonSpec =
-  let spinButton = spinButtonRef    spinButtonSpec
-      target     = spinButtonTarget spinButtonSpec
-  in  Gtk.set (spinButton guiElems)
-        [ spinButtonValue := fromIntegral (guiState ^. target) ]
-
---------------------------------------------------------------------------------
--- Check buttons
---------------------------------------------------------------------------------
-
-data CheckButtonCB = CheckButtonCB
-  { checkButtonRef    :: GUIElements -> CheckButton
-  , checkButtonTarget :: Lens' GUIState Bool
-  }
-
-registerCheckButtonCB ::
-     GUIElements
-  -> TVar GUIState
-  -> (IO () -> IO ())
-  -> CheckButtonCB
-  -> IO ()
-registerCheckButtonCB guiElems guiStateTVar withUpdate callback =
-  let checkButton = (checkButtonRef callback) guiElems
-  in  void $ on checkButton buttonActivated $ withUpdate $ do
-        active <- toggleButtonGetActive checkButton
-        atomically $ modifyTVar' guiStateTVar
-                   $ set (checkButtonTarget callback) active
-
-setCheckButton :: GUIElements -> GUIState -> CheckButtonCB -> IO ()
-setCheckButton guiElems guiState checkButtonSpec =
-  let checkButton = checkButtonRef    checkButtonSpec
-      target      = checkButtonTarget checkButtonSpec
-  in  Gtk.set (checkButton guiElems)
-              [ toggleButtonActive := (guiState ^. target) ]
-
---------------------------------------------------------------------------------
--- Combo Boxes
---------------------------------------------------------------------------------
-
-data ComboBoxTextCB = forall a. ComboBoxTextCB
-  (GUIElements -> ComboBox)    -- comboBoxRef
-  (Lens' GUIState (Int, a))    -- comboBoxTarget
-  (Maybe T.Text -> a)          -- comboBoxReader
-
-registerComboBoxTextCB ::
-     GUIElements
-  -> TVar GUIState
-  -> (IO () -> IO ())
-  -> ComboBoxTextCB
-  -> IO ()
-registerComboBoxTextCB guiElems guiStateTVar withUpdate
-  (ComboBoxTextCB ref target reader) =
-  let comboBox = ref guiElems
-  in  void $ on comboBox changed $ withUpdate $ do
-    index <- comboBoxGetActive comboBox
-    listStore <- comboBoxGetModelText comboBox
-    txt <- listStoreSafeGetValue listStore index
-    atomically $ modifyTVar' guiStateTVar
-          $ set target (index, reader txt)
-
-setComboBoxText :: GUIElements -> GUIState -> ComboBoxTextCB -> IO ()
-setComboBoxText guiElems guiState (ComboBoxTextCB ref target _) =
-  let comboBox = ref guiElems
-      index = guiState ^. target . _1
-  in  comboBoxSetActive comboBox index
-
---------------------------------------------------------------------------------
--- Radio buttons
---------------------------------------------------------------------------------
-
-data RadioButtonCB = forall a. RadioButtonCB
-  (GUIElements -> RadioButton)    -- radioButtonRef
-  (Lens' GUIState a)              -- radioButtonTarget
-  a                               -- radioButtonValue
-
-data RadioButtonGroup = forall a. (Bounded a, Enum a) => RadioButtonGroup
-  (Lens' GUIState a)                -- radioButtonGroupTarget
-  (a -> GUIElements -> RadioButton) -- radioButtonGrouping
-
-registerRadioButtonCB ::
-     GUIElements
-  -> TVar GUIState
-  -> (IO () -> IO ())
-  -> RadioButtonCB
-  -> IO ()
-registerRadioButtonCB guiElems guiStateTVar withUpdate
-  (RadioButtonCB ref target value) =
-  let radioButton = ref guiElems
-  in  void $ on radioButton buttonActivated $ do
-        active <- toggleButtonGetActive radioButton
-        when active $ withUpdate $
-          atomically $ modifyTVar' guiStateTVar $ set target value
-
-registerRadioButtonGroupCB ::
-     GUIElements
-  -> TVar GUIState
-  -> (IO () -> IO ())
-  -> RadioButtonGroup
-  -> IO ()
-registerRadioButtonGroupCB guiElems guiStateTVar withUpdate
-  (RadioButtonGroup target grouping) =
-  let register = registerRadioButtonCB guiElems guiStateTVar withUpdate
-  in  forM_ listAll $ \val -> register
-         $ RadioButtonCB (grouping val) target val
-
-setRadioButtonGroup :: GUIElements -> GUIState -> RadioButtonGroup -> IO ()
-setRadioButtonGroup guiElems guiState (RadioButtonGroup target grouping) =
-  let val          = guiState ^. target
-      radioButton  = grouping val guiElems
-  in  Gtk.set radioButton [ toggleButtonActive := True ]

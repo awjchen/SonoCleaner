@@ -15,6 +15,7 @@ executable SonoCleaner
                      , Controller.Glade
                      , Controller.GUIElements
                      , Controller.GUIState
+                     , Controller.GUIStateWidgets
                      , Controller.Interpreter
                      , Controller.Keybindings
                      , Controller.Mouse
