@@ -15,12 +15,12 @@ buttons and mouse gestures one should use to access the program's functionality.
 We will walk through the process of artifact correction using this program by
 correcting two example distance traces.
 
-Tip: If you happen to do something by accident and open an unfamilliar page or
+Tip: If you happen to do something by accident and open an unfamiliar page or
 menu, look for and press a button labelled 'Back' or 'Cancel' to return the
 program to its home page.
 
 Tip: If you make unintentional changes to the data, you can use the 'Undo'
-button to reverse the changes. And if you accidently 'Undo' something, use the
+button to reverse the changes. And if you accidentally 'Undo' something, use the
 'Redo' button.
 
 Note: A "screenshot" function was added to the program after this tutorial was
@@ -116,7 +116,7 @@ One can use the buttons in the first column, 'Full view', 'Full x-axis', and
 - **Zoom out, then zoom in to the other level-shifts to inspect them as well.**
 
 The level-shifts in this trace are typical and well-behaved. There are no
-abormalities.
+abnormalities.
 
 ### 5. Applying automatic elimination of level-shifts
 
@@ -164,7 +164,7 @@ and we do not need to intervene.
 
 - Since we are satisfied with the matches, **click the 'Apply' button**.
 
-Clicking the 'Apply' button returns the controler to the home page and
+Clicking the 'Apply' button returns the controller to the home page and
 applies the previewed changes to the data.
 
 Had we not been satisfied, clicking 'Cancel' would have also returned the
@@ -822,7 +822,7 @@ or additional explanation.
 1.  The program's window can be enlarged by clicking and dragging its edges, just
     as with any regular window. However, it cannot be made smaller.
 
-1.  A lightend or greyed-out button indicates its function is temporarily
+1.  A lightened or greyed-out button indicates its function is temporarily
     blocked because the tool knows that pressing this button will produce no
     effect in the current context.
 
@@ -846,7 +846,7 @@ This tool can currently only read and write .ssa files. Because SonoSoft cannot,
 to our knowledge, read .ssa files, the outputs of this tool cannot be imported
 back into any SonoSoft tools (such as SonoXYZ).
 
-Futhermore, this tool should only be given raw, unmanipulated distance traces.
+Furthermore, this tool should only be given raw, unmanipulated distance traces.
 This is because the 'Manipulate > Remove outliers' function in SonoSoft, for
 example, performs smoothing that can interfere with this program's procedures
 for detecting and correcting level-shifts.
@@ -890,7 +890,7 @@ the trace.
 The amount of computational work required to process and display a distance data
 is proportional to its length. When working with increasingly long traces, it
 will take an increasingly long time for the operations to complete, reducing the
-interactivity of the program. Operations may begin to have noticable delay on
+interactivity of the program. Operations may begin to have noticeable delay on
 traces with more than 50,000 data points (100 seconds at 500 Hz) when all
 possible traces are superimposed, depending of course on the speed of one's
 computer.
@@ -911,7 +911,7 @@ But first, we repeat the disclaimer given at the beginning of that section.
 
 > Note that the following details may apply only to the sonomicrometers
 > manufactured by Sonometrics, as data acquired with these devices were used to
-> develop the artifact removal program. Moveover, we stress that the following
+> develop the artifact removal program. Moreover, we stress that the following
 > is merely our own explanation of sonomicrometry artifacts based on empirical
 > observations using the sonomicrometer's built-in support for viewing raw
 > ultrasound signals with an oscilloscope.
@@ -1044,7 +1044,7 @@ completely unrelated to the 'true' distances. The TRX01:02 trace in example1.ssa
 is an extreme example of this, having _huge_ level-shifts, where portions of the
 distance trace must track a very late ridge.
 
-"Correct" this trace by applying the automated procdure to completion, then
+"Correct" this trace by applying the automated procedure to completion, then
 collapsing the remaining level-shifts with the 'Hold' set to 'Right'.
 
 Then, turn on the 'Show replicate traces' option to superimpose the artifact-free
@@ -1094,7 +1094,7 @@ one "level" is more reliable than the other. For example, in (A), the lower
 level is more noisy than the upper level; if corrections are made such that data
 in the upper level are displaced to fit into the lower level, the result is a
 noisy trace (B). Instead, we can try to preserve the better data in the upper
-level by using it as a template with which we manualy interpolate over the
+level by using it as a template with which we manually interpolate over the
 poorer data in the lower level (C).
 
 (A)
@@ -1126,7 +1126,7 @@ distinct 'levels' in the uncorrected trace; traces with either an excessive
 number of "unpairable" level-shifts or simply a large number of 'levels' may be
 indicative of signal flips and generally poor trace quality.
 
-(Auxillary case 1) _To fine-tune the correction of a zero-sum group of
+(Auxiliary case 1) _To fine-tune the correction of a zero-sum group of
 level-shifts._ Level-shifted segments of the trace might not be corrected
 precisely by the automatic procedure, perhaps because the slope estimation is
 inaccurate, or because of the inexactness of the mirroring of level-shifted data
