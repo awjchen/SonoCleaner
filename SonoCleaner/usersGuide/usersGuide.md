@@ -40,7 +40,7 @@ and manipulate the distance traces (the _controller_).
 Upon startup, the program opens the controller, and sets its to its 'home
 page'.
 
-![screenshots/02-1.png](screenshots/02-1.png)
+![](screenshots/02-1.png)
 
 The display is not yet opened; it appears only when we have opened a
 Sonometrics .ssa file.
@@ -62,7 +62,7 @@ should be in the same directory as this document. The file is called
 Upon opening an .ssa file, the display appears, showing the first trace
 of the file.
 
-![screenshots/03-1.png](screenshots/03-1.png)
+![](screenshots/03-1.png)
 
 For those who might be interested, the .ssa file used in this tutorial is a
 recording of distances within a muscle (the rabbit medial gastrocnemius). The
@@ -108,7 +108,7 @@ Now let's inspect the first cluster of level-shifts.
   key until one can observe four separate level-shifts.** You may need to
   re-center the display as you zoom in.
 
-![screenshots/04-1.png](screenshots/04-1.png)
+![](screenshots/04-1.png)
 
 One can use the buttons in the first column, 'Full view', 'Full x-axis', and
 'Full y-axis', to quickly zoom out.
@@ -131,7 +131,7 @@ automated procedure.
 Clicking the 'Auto' button switches the controller to a new page for
 automatically eliminating level-shifts.
 
-![screenshots/05-1.png](screenshots/05-1.png)
+![](screenshots/05-1.png)
 
 The display now shows a _preview_ of the changes that would be made to
 the trace by the automatic procedure.
@@ -141,7 +141,7 @@ Now we will advance the automatic procedure one step at a time.
 - **Increase the 'Match level' by clicking the plus button once and observe the
   changes to the trace.**
 
-![screenshots/05-2.png](screenshots/05-2.png)
+![](screenshots/05-2.png)
 
 Some level-shifts are eliminated. Changes to the trace appear in alternating
 white and cyan.
@@ -160,7 +160,7 @@ necessary.
 However, for this trace, the action of the automatic procedure is acceptable,
 and we do not need to intervene.
 
-![screenshots/05-3.png](screenshots/05-3.png)
+![](screenshots/05-3.png)
 
 - Since we are satisfied with the matches, **click the 'Apply' button**.
 
@@ -206,7 +206,7 @@ over the current trace.
 
 - **Turn on the 'Show replicate traces' option.**
 
-![screenshots/06-1.png](screenshots/06-1.png)
+![](screenshots/06-1.png)
 
 This superimposes two traces on the display: (1) the aforementioned 'twin'
 trace, in blue, and (2) the current trace but without any of our modifications,
@@ -237,7 +237,7 @@ This is done by setting the 'Reference trace'.
 
 - **Set the 'Reference trace' to the last trace, labelled 'NON'.**
 
-![screenshots/06-2.png](screenshots/06-2.png)
+![](screenshots/06-2.png)
 
 In this example file, the 'NON' trace contains a sync pulse that shows when
 stimulation was applied to the muscle. This trace is superimposed over the
@@ -258,7 +258,7 @@ buttons) to select other traces from the file.
 
 - **Click the 'Next trace' button once** to select the 'TRX02:04' trace.
 
-![screenshots/07-1.png](screenshots/07-1.png)
+![](screenshots/07-1.png)
 
 ### 8. Correcting a non-trivial trace
 
@@ -269,7 +269,7 @@ and there are indeed a number of abnormalities. For example, at about 3.5 s and
 16.2 s we see the distance trace shift momentarily to a lower "level" while
 showing signs of "creep" (that is, instability and variation -- see the paper).
 
-![screenshots/08-1.png](screenshots/08-1.png)
+![](screenshots/08-1.png)
 
 The distance trace also jumps to a lower level at about 12.55 s for just a
 handful of data points, but this data looks more like a "nonsensical artifact"
@@ -277,7 +277,7 @@ rather than a level-shift artifact: it is not nearly as smooth as the data
 around it, nor does it look like a continuation of the surrounding data
 (ignoring the distance offset).
 
-![screenshots/08-2.png](screenshots/08-2.png)
+![](screenshots/08-2.png)
 
 ### 9. Stopping the automated procedure when it makes errors
 
@@ -310,7 +310,7 @@ questionable corrections.
 - **Set the 'Match level' of the automated procedure to 15, then click
   'Apply'.**
 
-![screenshots/09-1.png](screenshots/09-1.png)
+![](screenshots/09-1.png)
 
 ### 10. Manual corrections of groups of level-shifts
 
@@ -318,7 +318,7 @@ Let's first handle the erroneous transition between steps 15 and 16.
 
 - **Zoom to the nonsensical artifact at (12.55 s, 33 mm).**
 
-![screenshots/10-1.png](screenshots/10-1.png)
+![](screenshots/10-1.png)
 
 We will now apply a manual correction to a group of two level-shifts (we might
 call them discontinuities rather than level-shifts since we think they arise
@@ -333,7 +333,7 @@ dragging horizontally with the right mouse button on the display.
   
 If you select the wrong group, press the 'Cancel' button to try again.
 
-![screenshots/10-2.png](screenshots/10-2.png)
+![](screenshots/10-2.png)
 
 If the selected time interval contains at least two level-shifts, the controller
 will switch to a new page for handling groups of level-shifts. The
@@ -347,7 +347,7 @@ The first parameter is the type of correction, which can be either 'Line' or
 
 - **Change the correction type from' Ignore' to 'Line'.**
 
-![screenshots/10-3.png](screenshots/10-3.png)
+![](screenshots/10-3.png)
 
 The 'Line' option interpolates linearly over the span of the group of
 level-shifts. This option is only suitable for eliminating nonsensical artifacts
@@ -364,7 +364,7 @@ Now let's handle the second erroneous transition.
 
 - **Zoom to the other problematic region at (10.48 s, 34.5 mm).**
 
-![screenshots/10-4.png](screenshots/10-4.png)
+![](screenshots/10-4.png)
 
 Here, there are 3 level-shifts in close proximity.
 
@@ -373,7 +373,7 @@ Here, there are 3 level-shifts in close proximity.
 - Then, **apply the 'Sum' correction with no 'Manual adjustment'** (that is,
   with the default Manual adjustment of 0.00).
 
-![screenshots/10-5.png](screenshots/10-5.png)
+![](screenshots/10-5.png)
 
 The 'Sum' correction sets the height of each level-shift in the group to zero,
 except for the first, which it sets to the _sum_ of the heights of the group of
@@ -387,7 +387,7 @@ again with the automated procedure.
 
 - **Apply the automated procedure to completion**.
 
-![screenshots/11-1.png](screenshots/11-1.png)
+![](screenshots/11-1.png)
 
 This time, the automated procedure makes no apparent errors.
 
@@ -404,7 +404,7 @@ right-clicking anywhere on the display will select the nearest level-shift.)
 
 - **Right click on the remaining level-shift.**
 
-![screenshots/12-1.png](screenshots/12-1.png)
+![](screenshots/12-1.png)
 
 Upon selecting a level-shift, the controller will switch to a new page for
 handling individual level-shifts. The display now shows a _preview_ of the
@@ -432,7 +432,7 @@ level-shift, we will use the 'Zero' correction as a no-assumptions default.
 
 - **Change the correction type from' Ignore' to 'Zero'.**
 
-![screenshots/12-2.png](screenshots/12-2.png)
+![](screenshots/12-2.png)
 
 The second parameter, the 'Manual adjustment', applies an additional offset to
 the height of the level-shift. This option should be used sparingly, and only to
@@ -471,7 +471,7 @@ To see things more clearly, let's view things from the twin trace.
 - **Click on the 'Twin trace' button** (found in the third column of buttons),
   to switch to the TRX04:02 trace.
 
-![screenshots/13-1.png](screenshots/13-1.png)
+![](screenshots/13-1.png)
 
 Now our corrected trace appears in blue behind the twin trace, which appears in
 black.
@@ -504,7 +504,7 @@ that making a new change to the trace will cause the program to forget any
 
 - **Zoom to the section of the trace at around 3.5 s.**
 
-![screenshots/14-1.png](screenshots/14-1.png)
+![](screenshots/14-1.png)
 
 This section of the trace appears flicker between two levels, but predominantly
 "tracks" the lower level. The data on the lower level is noisy and variable, so
@@ -537,9 +537,9 @@ result.
 If your results do not match the second screenshot, one can always click the
 'Undo' button to try again.
 
-![screenshotsLabelled/14-1.png](screenshotsLabelled/14-1.png)
+![](screenshotsLabelled/14-1.png)
 
-![screenshots/14-2.png](screenshots/14-2.png)
+![](screenshots/14-2.png)
 
 All the data points below the line are "rejected" and replaced by linear
 interpolation between data points above the line. The same end could more
@@ -551,12 +551,12 @@ We can apply the interpolation brush to most of the other artifacts of this
 trace (it is not necessary for the tutorial to follow the remaining steps in
 this section).
 
-![screenshots/14-3.png](screenshots/14-3.png)
+![](screenshots/14-3.png)
 
 The rest of the correction is completed by application the automated procedure,
 followed by the individual correction of a remaining level-shift.
 
-![screenshots/14-4.png](screenshots/14-4.png)
+![](screenshots/14-4.png)
 
 An aside for those who may be feeling that the use of the interpolation brush
 just demonstrated is too arbitrary and ad-hoc: we are of the opinion that the
@@ -578,7 +578,7 @@ This program has rudimentary support for making such notes.
 
 - **Click the 'Quality' button** (found in the last column of buttons).
 
-![screenshots/15-1.png](screenshots/15-1.png)
+![](screenshots/15-1.png)
 
 The controller switches to a new page for annotating the current trace
 with one of three labels: 'Good', 'Moderate', and "Bad'. These labels have no
@@ -589,7 +589,7 @@ By default, all traces begin with a label of 'Good'.
 
 - **Click the 'Moderate' button** to give the trace the label of 'Moderate'.
 
-![screenshots/15-2.png](screenshots/15-2.png)
+![](screenshots/15-2.png)
 
 The controller immediately switches back to the home page. The background
 of the display becomes tinted with blue to reflect the new label.
@@ -616,7 +616,7 @@ piece-by-piece. These cases can be handled with the cropping feature.
 
 The controller switches to a new page for cropping traces.
 
-![screenshots/16-1.png](screenshots/16-1.png)
+![](screenshots/16-1.png)
 
 Click and drag horizontally on the display with the right mouse button to
 select a time interval to which the trace should be cropped.
@@ -630,14 +630,14 @@ time interval, one may need to zoom out horizontally.
 Two green vertical lines appear, showing the bounds of the selection,
 and the 'Crop to selection' button becomes enabled.
 
-![screenshots/16-2.png](screenshots/16-2.png)
+![](screenshots/16-2.png)
 
 - **Click the 'Crop to selection' button.**
 
 The portions of the trace not in the selection are no longer visible.
 The controller immediately switches back to the home page.
 
-![screenshots/16-3.png](screenshots/16-3.png)
+![](screenshots/16-3.png)
 
 One can apply cropping multiple times.
 
@@ -645,14 +645,14 @@ One can apply cropping multiple times.
 
 The trace is now further cropped.
 
-![screenshots/16-4.png](screenshots/16-4.png)
+![](screenshots/16-4.png)
 
 Cropping simultaneously affects all of the traces in the file.
 
 - **Switch the display to the 'TRX02:03' trace** to see that it too has been
   cropped.
 
-![screenshots/16-5.png](screenshots/16-5.png)
+![](screenshots/16-5.png)
 
 The way in which the program applies cropping is to merely restrict the view of
 the data to the selected time interval. Cropping has no effect on data
@@ -665,7 +665,7 @@ before the crop, even if some of those changes lie outside the cropping bounds.
 
 - **Press the 'Undo' button while viewing the 'TRX02:03' trace.**
 
-![screenshots/16-6.png](screenshots/16-6.png)
+![](screenshots/16-6.png)
 
 - **Click the 'Crop' button** to bring up the cropping page.
 - Then, **click the 'Uncrop' button.**
@@ -673,7 +673,7 @@ before the crop, even if some of those changes lie outside the cropping bounds.
 The missing portions of the trace from 10 s to 15 s now reappear in their
 original form.
 
-![screenshots/16-7.png](screenshots/16-7.png)
+![](screenshots/16-7.png)
 
 Tip: One may restrict the action of the automated procedure through the use of
 cropping.
@@ -697,12 +697,12 @@ For this tutorial, if the program complains in a pop-up notification that the
 default save file exists already, just overwrite it by clicking the 'Replace'
 button.
 
-![screenshots/17-1.png](screenshots/17-1.png)
+![](screenshots/17-1.png)
 
 Upon a successful save, the program confirms the output file name, and
 summarizes the numbers of 'TRX channels' annotated with each possible label.
 
-![screenshots/17-2.png](screenshots/17-2.png)
+![](screenshots/17-2.png)
 
 Note, however, that the program reports only two 'TRX channels' when our file
 contains five traces. There are two things going on.  
@@ -733,7 +733,7 @@ outside the cropping bounds was not recorded in the saved file.
 
 - **Switch the display to the 'TRX02:04' trace.**
 
-![screenshots/17-3.png](screenshots/17-3.png)
+![](screenshots/17-3.png)
 
 Notice that the background of the 'TRX02:04' trace is tinted blue, meaning that
 the 'Moderate' quality annotation we assigned to it was preserved.
@@ -766,7 +766,7 @@ traces.
 The controller switches to a page for adjusting the parameters for
 labelling level-shifts.
 
-![screenshots/18-1.png](screenshots/18-1.png)
+![](screenshots/18-1.png)
 
 The first parameter, the 'Level-shift threshold', informs the program of the
 minimum height of a level-shift in the data. The proper value for this
@@ -1092,27 +1092,25 @@ the trace upon its "correction". Similarly to the treatment of gaps in the data
 (Case 1), these abnormalities are flattened out by interpolating linearly over
 them.
 
-<!-- TODO: first draft -- needs editing  -->
 (Case 3) _To select a preferred "level" when the trace flickers between two_.
 Sometimes the tracking of the ultrasound pulse will rapidly switch back and
 forth between two adjacent ridges. This appears in the distance trace as many
-level-shifts between two parallel "levels", as shown in Figure (?)A. Oftentimes,
-one "level" is more reliable than the other. For example, in Figure (?)A, the
-lower level is noiser than the upper level; if corrections are made such that
-data in the upper level are displaced to fit into the lower level, the result is
-a noisy trace (Figure (?)B). Instead, we can try to preserve the better data in
-the upper level by using it as a template with which we manualy interpolate over
-the poorer data in the lower level (Figure (?)C, (?)D).
-<!-- (Case 3) _To select a preferred "level" when the trace flickers between two_. -->
-<!-- Sometimes the distance trace will level-shift back and forth between two -->
-<!-- adjacent "levels". In such cases, there is often one level that is preferred -->
-<!-- over the other, a common reason being that one level is noisy and/or unreliable. -->
-<!-- However, if one level is occupied more frequently than the other, the preference -->
-<!-- of the automatic matching for shorter-spanning groups of level-shifts causes -->
-<!-- this level to act as a template to which the data in the other level are -->
-<!-- displaced. To remedy this situation we manually perform the displacements in the -->
-<!-- preferred direction, preserving the "better" data. -->
-<!-- end edits -->
+level-shifts between two parallel "levels", as shown below in (A). Oftentimes,
+one "level" is more reliable than the other. For example, in (A), the lower
+level is more noisy than the upper level; if corrections are made such that data
+in the upper level are displaced to fit into the lower level, the result is a
+noisy trace (B). Instead, we can try to preserve the better data in the upper
+level by using it as a template with which we manualy interpolate over the
+poorer data in the lower level (C).
+
+(A)
+![](interpolationBrush/raw.png)
+
+(B)
+![](interpolationBrush/auto_closeup.png)
+
+(C)
+![](interpolationBrush/interpolationBrush_closeup.png)
 
 (Case 4) _To force the redistribution of a group of level-shifts that nearly but
 not quite forms a zero-sum group given the specified tolerance._ Sometimes a
