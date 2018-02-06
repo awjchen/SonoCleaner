@@ -23,6 +23,9 @@ Tip: If you make unintentional changes to the data, you can use the 'Undo'
 button to reverse the changes. And if you accidently 'Undo' something, use the
 'Redo' button.
 
+Note: A "screenshot" function was added to the program after this tutorial was
+written. It is safe to ignore it for this tutorial.
+
 ### 1. Structure of the interface
 
 The graphical user interface of this program is comprised of a single window
@@ -91,18 +94,18 @@ around in the trace).
 Scrolling the scroll wheel of the mouse on the display will zoom the display.
 Zooming acts with respect to the point at which the display is centered.
 
-One can control the zoom for only one axis at a time. Use just the scroll wheel
-on its own to zoom in or out _horizontally_ (that is, in the time axis); hold
-the Control key while scrolling to zoom in or out _vertically_ (that is, in the
-distance axis).
+Use just the scroll wheel on its own to zoom in or out. Hold the Control key
+while scrolling to zoom in or out _horizontally_ (that is, in the time axis);
+hold the Shift key while scrolling to zoom in or out _vertically_ (that is, in
+the distance axis).
 
 Now let's inspect the first cluster of level-shifts.
 
 - **Left click on the first cluster of level-shifts at (12.5 s, 17.5 mm)**, that
   is, at about a time of 12.5 s and a distance of 17.5 mm, in order to center
   the display over them.  
-- Then, to zoom in, **scroll with the mouse wheel (_without_ holding the Control
-  key) until one can observe four separate level-shifts.** You may need to
+- Then, to zoom in, **scroll with the mouse wheel while holding the Control
+  key until one can observe four separate level-shifts.** You may need to
   re-center the display as you zoom in.
 
 ![screenshots/04-1.png](screenshots/04-1.png)
@@ -794,7 +797,9 @@ the tolerance for forming "zero-sum groups of level-shifts" (see the paper).
 
 ### 19. Additional reference
 
-This tutorial has introduced _all_ of the functions available in this program.
+This tutorial has introduced all but one of the functions available in this
+program. This function is the "screenshot" function, which was added after this
+tutorial was written and is not covered in the tutorial.
 
 For reference, each page of the controller has a help icon located
 towards its upper right. Hovering the mouse over that icon will pop up a help
@@ -827,38 +832,13 @@ or additional explanation.
 
 ---
 
-## Examples of bad data
-
-The goal of cleaning sonomicrometry distance traces is to (1) obtain smooth,
-continuous distance traces, but while (2) detecting and rejecting bad data.
-However, this program leaves to the user's judgement the task of detecting and
-rejecting bad data.
-
-To assist with this goal, we provide some examples of bad data.
-
-### example1.ssa -- Avoid data with large level-shifts
-
-In the paper, we claimed that distance trace obtained by tracking ridges far
-beyond the first few could result in smooth, continuous traces that are
-completely unrelated to the 'true' distances. The TRX01:02 trace in example1.ssa
-is an extreme example of this, having _huge_ level-shifts, where portions of the
-distance trace must track a very late ridge.
-
-"Correct" this trace by applying the automated procdure to completion, then
-collapsing the remaining level-shifts with the 'Hold' set to 'Right'.
-
-Then, turn on the 'Show replicate traces' option to superimpose the artifact-free
-twin trace, and observe the discrepancy.
-
----
-
 ## Limitations of the program
 
 ### Supported operating systems
 
 Currently only MacOS and 64-bit Linux (x86\_64) operating systems are supported.
 
-On MacOS, the use of a two-button mouse is recomended.
+On MacOS, the use of a two-button mouse is recommended.
 
 ### Interoperability with SonoSoft
 
@@ -917,6 +897,152 @@ computer.
 
 One workaround is to use the 'Crop' feature of this tool to focus on one portion
 of the trace at a time.
+
+---
+
+## More on sonomicrometry
+
+The paper briefly described level-shifts and other sonomicrometry artifacts in
+Section 2.2 Here, we expand upon that section, assuming that the reader is
+familiar with that section of the paper. We will also continue to "pretend" that
+the triggering protocol of the sonomicrometer is a simple threshold.
+
+But first, we repeat the disclaimer given at the beginning of that section.
+
+> Note that the following details may apply only to the sonomicrometers
+> manufactured by Sonometrics, as data acquired with these devices were used to
+> develop the artifact removal program. Moveover, we stress that the following
+> is merely our own explanation of sonomicrometry artifacts based on empirical
+> observations using the sonomicrometer's built-in support for viewing raw
+> ultrasound signals with an oscilloscope.
+
+### More on dropout artifacts
+
+"Dropout" artifacts were introduced in Section 2.2.3 of the paper under Caveat
+3. Briefly, they are discontinuity artifacts distinct from level-shifts in that
+the data associated with these artifacts is completely unrelated to the actual
+distance between the crystals.
+
+Dropout artifacts may arise from electrical interference, whereby the detection
+threshold may be triggered prematurely, eclipsing the true distances for a
+period of time. Alternatively, the received ultrasound pulses may become so
+attenuated that the threshold does not trigger, in which case the sonomicrometer
+reports an impossibly large default distance. Or, the threshold may trigger on a
+later ridge, one that is not one of the first several; deceptively, the
+positions of these ridges are unstable and do not reliably reflect "true"
+changes in distance, yet change smoothly and continuously. From these examples,
+one can imagine that the sizes of discontinuities associated with dropout
+artifacts are much larger and more varied than those associated with
+level-shifts, which is indeed the case.
+
+### Other sonomicrometry artifacts
+
+It is important to note that level-shifts and other artifacts may also be
+generated by other mechanisms that we will not focus on, for the reason that we
+are unable to address the complexity of the artifacts that can be generated by
+these other mechanisms. For example, larger changes in the relative orientation
+of crystals may also cause level-shifts due to the fact that the some
+sonomicrometry transducers, moreso those that use disc-shaped piezoelectric
+crystals, "transmit" and "receive" ultrasound pulses in a direction dependent
+manner. The impacts of crystal reorientations on the include a vertical flipping
+of the ultrasound signal (when viewed on an oscilloscope). This "signal flip"
+will, in particular, flip the sign of the ridge on which the threshold triggers
+so that the ridge will then lie below the horizontal axis, where it can no
+longer meet the threshold. The threshold must then necessarily trigger on
+something else, causing a level-shift. However, during this flipping, the
+ultrasound signal can change in a complex manner, generating complex artifacts
+that both the software tool and the authors cannot address. Therefore, we urge
+the reader to keep in mind that this software tool and user's guide may only
+address the aspects of sonomicrometry discussed, and that the aspects discussed
+do not form a comprehensive list.
+
+### Typical sizes of level-shifts
+
+We can estimate the sizes of level-shifts _on average_ by modelling the
+ultrasound pulse by a pure sinusoid. However, a glance at the raw ultrasound
+signal on an oscilloscope will show that it is often not a sinusoid, in
+particular because its ridges may have unequal spacing and unequal widths; so,
+indeed, our estimates can only be valid on average.
+
+Let us first examine the typical size of a level-shift that jumps between two
+adjacent ridges of an ultrasound pulse. We can make a first approximation of the
+size of a level-shift by assuming that it is equal to the length of the
+oscillation period of the ultrasound pulse. If the ultrasound pulse is a
+sinusoid, then its oscillation period is equal to the ratio of its propagation
+speed to its frequency. For example, for a frequency of 1.2 MHz
+(emitted by Sonometrics' 2 mm crystals; 1.6 MHz for their 1 mm crystals
+(Sonometrics manual)), and a propagation speed of 1592 m/s (for muscle at 37
+degrees Celsius (Marsh, 2016)), the resulting estimate of the level-shift size
+is about 1.3 mm.
+
+However, this is only an upper bound to the size of a level-shift: the
+level-shift may not span an entire oscillation period. Indeed, the detection
+threshold may trigger closer to the peak of an earlier ridge, but on the
+rising-edge of a later ridge. In the extreme case, the shortest possible
+level-shift must extend at least from the very peak of one ridge to the rising
+zero-intercept of the next; on a pure sinusoid, such a level-shift would span
+3/4 of the oscillation period. By this reasoning, the difference in size between
+the smallest and largest level-shifts should be no greater than 1/4 of the size
+of the largest. Continuing with our example, we would then expect level-shifts
+to be about at least 1 mm and at most 1.3 mm in size.
+
+Alternatively, shorter level-shifts may also result from "signal flips" that
+reflect the ultrasound pulse vertically (see the end of section 2.2.3). The
+action of a vertical reflection on a sinusoidal ultrasound pulse is to cause a
+phase-shift by half the oscillation period; if this reflection is also sudden,
+it results in a level-shift of the same distance. Then, the smallest
+level-shifts may be about as small as half the size of the largest, if we take
+into account the possibility of signal flips.
+
+Now, what about larger level-shifts that jump, not to an adjacent ridge, but over
+multiple oscillation periods at once? For this, we will need to know just how
+many oscillation periods a level-shift can span. The number of oscillation
+periods is finite since the intensity of a typical ultrasound pulse quickly
+plateaus as it reaches full strength; because the earlier ridges eclipse the
+later ridges, there are only a limited number of ridges on which the detection
+threshold can trigger. With this principle in mind, empirical observations of
+raw ultrasound signals suggest that level-shifts (in reasonable data) span at
+most two, but sometimes three, oscillation periods. Continuing with our example,
+we should then expect that level-shifts are mostly no larger than 2.6 mm, and
+only sometimes as large as 3.9 mm. Therefore, discontinuities larger than 4 mm
+are likely to originate from dropout artifacts rather than level-shifts.
+Extending this reasoning, reasonable data with a _total_ level-shift offset of
+more than 4 mm from the lowest "level" should be atypical as well, which is
+consistent with our experience.
+
+### On absolute versus relative distances in sonomicrometry
+
+It is our opinion that the distance traces obtained from sonomicrometry, on
+their own, are insufficient to capture the _absolute_ distances between the
+crystals, but only capture the _changes_ in those distances; knowledge of the
+absolute distances can only be obtained by the incorporation of information
+external to the distance traces, such as an external measure of distance at a
+known point in the trace, which is not within the scope of this software tool.
+
+---
+
+## Examples of bad data
+
+The goal of cleaning sonomicrometry distance traces is to (1) obtain smooth,
+continuous distance traces, but while (2) detecting and rejecting bad data.
+However, this program leaves to the user's judgment the task of detecting and
+rejecting bad data.
+
+To assist with this goal, we provide some examples of bad data.
+
+### example1.ssa -- Avoid data with large level-shifts
+
+In an above section, we claimed that distance trace obtained by tracking ridges
+far beyond the first few could result in smooth, continuous traces that are
+completely unrelated to the 'true' distances. The TRX01:02 trace in example1.ssa
+is an extreme example of this, having _huge_ level-shifts, where portions of the
+distance trace must track a very late ridge.
+
+"Correct" this trace by applying the automated procdure to completion, then
+collapsing the remaining level-shifts with the 'Hold' set to 'Right'.
+
+Then, turn on the 'Show replicate traces' option to superimpose the artifact-free
+twin trace, and observe the discrepancy.
 
 ---
 
@@ -985,5 +1111,5 @@ Due to the two ways in which we tolerate random noise (in the identification of
 high-curvature points, and matching total changes in slope between two such
 points), the labelling procedure requires that the level-shift threshold must be
 at least _three times_ as large as the noise threshold, otherwise smaller
-level-shifts near the level-shift threshold may not be properly labelled.
+level-shifts near the level-shift threshold may not be properly labeled.
 
