@@ -799,7 +799,7 @@ the tolerance for forming "zero-sum groups of level-shifts" (see the paper).
 
 This tutorial has introduced all but one of the functions available in this
 program. This function is the "screenshot" function, which was added after this
-tutorial was written and is not covered in the tutorial.
+tutorial was written will not be covered.
 
 For reference, each page of the controller has a help icon located
 towards its upper right. Hovering the mouse over that icon will pop up a help
@@ -1055,6 +1055,93 @@ collapsing the remaining level-shifts with the 'Hold' set to 'Right'.
 
 Then, turn on the 'Show replicate traces' option to superimpose the artifact-free
 twin trace, and observe the discrepancy.
+
+---
+
+## Example protocol and restrictions on manual artifact correction
+
+The inclusion of manual corrections of artifacts in the correction procedure
+creates opportunity for bias. In an attempt to control this bias, we restrict
+applications of manual corrections to one of 5 cases. The rule of thumb is to
+never introduce non-zero-sum displacements until it is necessary in the final
+stages of correction. If the trace cannot be corrected with combined
+applications of these 5 manual corrections together with the automatic
+procedure, we reject the trace. Furthermore, the corrected trace should be
+checked for consistency against the uncorrected trace and the other trace using
+the same crystal pair (e.g. "TRX01:02" and "TRX02:01").
+
+(Case 1) _To remove gaps in the data produced by the nonsensical artifacts._
+Artifacts generating data that are not strictly displacements of the "true" data
+(Caveat 3) are not accounted for by the automated procedure and therefore must
+be removed. We require that the data after the gap returns to the same "level"
+it occupied before the gap, that is, that no level-shift occurred during the
+gap. To signify that we are not willing to guess what the data should have been,
+we merely interpolate linearly over the gaps when removing them.
+
+It can be easy to identify gaps when there are drastic changes in the quality of
+the trace or large discontinuities, but distinguishing gaps from level-shifts in
+general is treacherous. For reasons discussed in Section 2.2.4, we reject data
+flanked by discontinuities larger than 4 mm.
+
+(Case 2) _To remove single point outliers or other small artifacts that trip up
+the automatic level-shift labelling procedure._ Sometimes there are small,
+isolated fluctuations with sizes just peeking over the thresholds of the
+level-shift detection heuristic. For example, oftentimes only one of the two
+slopes of a single point outlier is labelled, which induces a displacement in
+the trace upon its "correction". Similarly to the treatment of gaps in the data
+(Case 1), these abnormalities are flattened out by interpolating linearly over
+them.
+
+<!-- TODO: first draft -- needs editing  -->
+(Case 3) _To select a preferred "level" when the trace flickers between two_.
+Sometimes the tracking of the ultrasound pulse will rapidly switch back and
+forth between two adjacent ridges. This appears in the distance trace as many
+level-shifts between two parallel "levels", as shown in Figure (?)A. Oftentimes,
+one "level" is more reliable than the other. For example, in Figure (?)A, the
+lower level is noiser than the upper level; if corrections are made such that
+data in the upper level are displaced to fit into the lower level, the result is
+a noisy trace (Figure (?)B). Instead, we can try to preserve the better data in
+the upper level by using it as a template with which we manualy interpolate over
+the poorer data in the lower level (Figure (?)C, (?)D).
+<!-- (Case 3) _To select a preferred "level" when the trace flickers between two_. -->
+<!-- Sometimes the distance trace will level-shift back and forth between two -->
+<!-- adjacent "levels". In such cases, there is often one level that is preferred -->
+<!-- over the other, a common reason being that one level is noisy and/or unreliable. -->
+<!-- However, if one level is occupied more frequently than the other, the preference -->
+<!-- of the automatic matching for shorter-spanning groups of level-shifts causes -->
+<!-- this level to act as a template to which the data in the other level are -->
+<!-- displaced. To remedy this situation we manually perform the displacements in the -->
+<!-- preferred direction, preserving the "better" data. -->
+<!-- end edits -->
+
+(Case 4) _To force the redistribution of a group of level-shifts that nearly but
+not quite forms a zero-sum group given the specified tolerance._ Sometimes a
+group of level-shifts spans a relatively short period of time and appears to be
+a suitable match but lies a bit beyond the specified tolerance for the zero sum.
+This may occur when the level-shifts occur during periods of quick movement, or
+when a bit of noise happens to coincide with a level-shift, or when
+level-shifted data do not precisely mirror the "true" data (Caveat 2). In these
+cases we use our discretion to force the match.
+
+(Case 5) _To individually remove level-shifts that necessarily cannot be
+paired._ In the final stages of correction of a trace that begins and ends on
+different 'levels', there necessarily remains some level-shifts that cannot form
+a zero-sum group. The only remaining course of action is to correct these
+level-shifts individually. However, we require that the regions of the trace
+immediately before and after these level-shifts have approximately equal slope,
+and that the number of unpaired level-shifts be fewer than the number of
+distinct 'levels' in the uncorrected trace; traces with either an excessive
+number of "unpairable" level-shifts or simply a large number of 'levels' may be
+indicative of signal flips and generally poor trace quality.
+
+(Auxillary case 1) _To fine-tune the correction of a zero-sum group of
+level-shifts._ Level-shifted segments of the trace might not be corrected
+precisely by the automatic procedure, perhaps because the slope estimation is
+inaccurate, or because of the inexactness of the mirroring of level-shifted data
+(Caveat 2). We may then introduce a displacement that we think makes it fit
+better into the surrounding trace. This fine-tuning ultimately does not affect
+whether a trace can or cannot be cleaned because the level-shifts already form a
+zero-sum group that would be handled by the automatic procedure.
 
 ---
 
