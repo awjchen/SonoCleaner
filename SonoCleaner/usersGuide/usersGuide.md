@@ -267,7 +267,7 @@ buttons) to select other traces from the file.
 This trace is of poorer quality than the last. In many places the data is noisy,
 and there are indeed a number of abnormalities. For example, at about 3.5 s and
 16.2 s we see the distance trace shift momentarily to a lower "level" while
-showing signs of "creep" (that is, instability and variation -- see the paper).
+showing signs of instability and variation.
 
 ![](screenshots/08-1.png)
 
@@ -478,15 +478,15 @@ black.
 
 Ignoring the artifacts of the twin trace (which can be quickly corrected), it
 appears that our corrected trace tends to follow its twin trace quite closely,
-but has more noise and variation. This was probably due to the effects of
-"creep", and more generally because the distance trace we corrected often
-flickered between two levels while favouring the lower level, which is usually
-more variable than the upper.
+except that it has noticeably more noise and variation. The distance trace we
+corrected often flickered between two levels while favouring the lower level,
+which is usually more variable than the upper level.
 
 ### 14. Manual corrections with the interpolation brush
 
-This program has another method of manual correction to address variation due to
-"creep". To apply this method, let's first undo our previous corrections.
+This program has another method of manual correction to address the kind of
+variation we observe in our corrected trace. To apply this new method, let's
+first undo our previous corrections.
 
 - **Click the 'Twin trace' button** to switch back to the TRX02:04 trace.  
 
@@ -1168,8 +1168,9 @@ shrink a level-shift.
 Effectively, the noise threshold defines our tolerance, not only for random
 noise, but for any sources of variation in the data. So even for traces with
 very little random noise, the noise threshold may be inadequate if set too much
-lower than the default because of the inherent variability in level-shifts, for
-example, due to e.g. "creep".
+lower than the default because of other variability associated with
+level-shifts, such as the possibility that a level-shifted portion of a distance
+trace may not precisely mirror the "true" distance.
 
 Now, with a list of the high-curvature points, the labelling procedure searches
 for pairs of high-curvature points such that (1) the total change in slope
