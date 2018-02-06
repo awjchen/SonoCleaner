@@ -1019,6 +1019,18 @@ absolute distances can only be obtained by the incorporation of information
 external to the distance traces, such as an external measure of distance at a
 known point in the trace, which is not within the scope of this software tool.
 
+One way to obtain some knowledge of absolute distances is to use an oscilloscope
+to verify, at some point in a distance trace, that the sonomicrometer triggers
+on the rising edge of first ridge of a strong, well-defined ultrasound pulse.
+This would allow one to rule out the contribution of sonomicrometry artifacts to
+the distance measurement at that point.
+
+At this point, however, there may still remain confounding factors, depending on
+one's intended uses for the distance traces. For example, for 3D-reconstructions
+from sonomicrometry distance traces, one may need to account for the radii of
+sonomicrometry crystals, due to the increased speed of sound through their epoxy
+shells.
+
 ---
 
 ## Examples of bad data
