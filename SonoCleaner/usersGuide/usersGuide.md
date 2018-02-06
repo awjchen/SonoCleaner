@@ -1025,12 +1025,6 @@ on the rising edge of first ridge of a strong, well-defined ultrasound pulse.
 This would allow one to rule out the contribution of sonomicrometry artifacts to
 the distance measurement at that point.
 
-At this point, however, there may still remain confounding factors, depending on
-one's intended uses for the distance traces. For example, for 3D-reconstructions
-from sonomicrometry distance traces, one may need to account for the radii of
-sonomicrometry crystals, due to the increased speed of sound through their epoxy
-shells.
-
 ---
 
 ## Examples of bad data
