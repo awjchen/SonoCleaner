@@ -85,7 +85,7 @@ instance Default GUIState where
     -- Auto options
     , _matchLevel           = 0
     , _levelShiftThreshold  = 0.72
-    , _noiseThreshold       = 0.12
+    , _noiseThreshold       = 0.10
 
     -- Single options
     , _singleHold           = (0, HoldLeft)

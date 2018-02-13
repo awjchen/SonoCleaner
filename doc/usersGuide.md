@@ -780,7 +780,7 @@ these crystals, we expect sizes level-shifts of about at least 0.75 mm (see the
 "Typical sizes of level-shifts" section in the paper). Adding a small margin
 yields the default value.
 
-The default value for the 'Noise threshold' (0.12 mm) was chosen for a low noise
+The default value for the 'Noise threshold' (0.10 mm) was chosen for a low noise
 level, since the procedures used by the program are unsuited for noisy data.
 
 The default parameters can be obtained by clicking the 'Reset parameters'
