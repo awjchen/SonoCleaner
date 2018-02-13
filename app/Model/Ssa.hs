@@ -179,11 +179,15 @@ parseSSA' filePath = do
              , _ssaDataTraces         = dataTraces
              }
 
-makeTraces :: [String] -> [String] -> [V.Vector Double] -> (Trace, [Trace])
+makeTraces
+  :: (NE.NonEmpty String)
+  -> (NE.NonEmpty String)
+  -> (NE.NonEmpty (V.Vector Double))
+  -> (Trace, [Trace])
 makeTraces allLabels allUnits dataRows =
-  let (timeLabel': dataLabels) = allLabels
-      (timeUnit' : dataUnits)  = allUnits
-      (timeData  : traceData)  = dataRows
+  let (timeLabel' NE.:| dataLabels) = allLabels
+      (timeUnit'  NE.:| dataUnits)  = allUnits
+      (timeData   NE.:| traceData)  = dataRows
       timeTrace = Trace timeLabel' timeUnit' timeData
       dataTraces = zipWith3 Trace dataLabels dataUnits traceData
   in  (timeTrace, dataTraces)
@@ -200,19 +204,20 @@ headerInteger name = headerField name decimal <* eol
 headerFloat :: T.Text -> ParserST s Double
 headerFloat name = headerField name float <* eol
 
-line :: ParserST s [String]
-line = sepEndBy (many (noneOf ['\t', '\n', '\r'])) tab <* eol
+line :: ParserST s (NE.NonEmpty String)
+line = NE.fromList <$> sepEndBy1 (many (noneOf ['\t', '\n', '\r'])) tab <* eol
 
-dataBlock :: (Int, Int) -> ParserST s [V.Vector Double]
+dataBlock :: (Int, Int) -> ParserST s (NE.NonEmpty (V.Vector Double))
 dataBlock (rows, cols) = do
-  vs <- lift $ replicateM cols (VM.new rows)
+  when (cols < 1) $ fail "Number of columns must be at least 1"
+  vs <- fmap NE.fromList $ lift $ replicateM cols (VM.new rows)
   forM_ [0..rows-1] $ \i -> do
     xs <- float6Line
-    lift $ zipWithM_ (`VM.write` i) vs xs
+    lift $ mapM_ (uncurry (`VM.write` i)) $ NE.zip vs xs
   lift $ mapM V.unsafeFreeze vs
 
-float6Line :: ParserST s [Double]
-float6Line = endBy float6 tab <* eol
+float6Line :: ParserST s (NE.NonEmpty Double)
+float6Line = NE.fromList <$> endBy1 float6 tab <* eol
 
 -- This float parser is sufficient for the fixed-precision numbers found in .ssa
 -- files.
@@ -382,7 +387,7 @@ printErrorItem EndOfInput  = "end of input"
 printErrorFancy :: ErrorFancy Void -> String
 printErrorFancy (ErrorFail errMsg)       = errMsg
 printErrorFancy (ErrorIndentation _ _ _) = "Indentation error."
-printErrorFancy (ErrorCustom _) = error "impossible"
+printErrorFancy (ErrorCustom _)          = error "impossible"
 
 --------------------------------------------------------------------------------
 -- Custom error messages

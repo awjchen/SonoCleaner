@@ -126,6 +126,7 @@ import           Control.Monad
 import           Data.Coerce
 import qualified Data.IntMap                  as M
 import qualified Data.IntSet                  as S
+import           Data.Semigroup               (Semigroup)
 import qualified Data.Vector.Unboxed          as V
 import           Data.Vector.Unboxed.Deriving
 import           Data.Void
@@ -294,7 +295,7 @@ iiDiff (IndexInterval (l, u)) = IndexInterval ( fromInt $ toInt l
                                               , fromInt $ pred $ toInt u )
 
 {-# INLINE iiUndiff #-}
-iiUndiff :: (IsInt i, IsInt (ISucc i), Enum (ISucc i))
+iiUndiff :: (IsInt i, IsInt (ISucc i))
          => IndexInterval (ISucc i) -> IndexInterval i
 iiUndiff (IndexInterval (l, u)) = IndexInterval ( fromInt $ toInt l
                                                 , fromInt $ succ $ toInt u )
@@ -466,10 +467,10 @@ ivFindIndices2 f (IVector v) = coerce $ V.findIndices f v
 -- only with the elements of its phantom type.
 
 newtype IIntSet i   = IIntSet { runIIntSet :: S.IntSet }
-  deriving (Monoid)
+  deriving (Semigroup, Monoid)
 
 {-# INLINE iisTranslate #-}
-iisTranslate :: IsInt i => Int -> IIntSet i -> IIntSet i
+iisTranslate :: Int -> IIntSet i -> IIntSet i
 iisTranslate i (IIntSet s) = IIntSet $ S.fromAscList $ map (+i) $ S.toAscList s
 
 {-# INLINE iisFindNearestIndex #-}
