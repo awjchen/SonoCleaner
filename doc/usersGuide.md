@@ -1151,21 +1151,22 @@ The procedure for labelling level-shifts requires two user-provided parameters:
 (1) a height below which a discontinuity should not be considered a level-shift,
 which we call the 'level-shift threshold', and (2) the maximum difference
 between two adjacent distance measurements that can be considered to be due
-purely to random noise, which we call the 'noise threshold'. We require that the
-level-shift threshold be larger than the noise threshold.
+purely to random noise, which we call the 'noise threshold'.
 
 Given these parameters, the first step of the labelling procedure finds all of
 the points of the trace with curvature above a certain threshold. More
-precisely, the program finds points where the difference in heights between the
-two slopes adjacent to the point exceeds a threshold equal to the level-shift
-threshold minus the noise threshold. The purpose of the subtraction of the noise
-threshold is to account for random noise, since random noise may artificially
-shrink a level-shift.
+precisely, the program finds points where the difference in heights between its
+two adjacent slopes exceeds a threshold equal to the level-shift threshold minus
+the noise threshold. The purpose of the subtraction of the noise threshold is to
+account for random noise, since random noise may artificially shrink a
+level-shift. However, the subtraction also requires that level-shift threshold
+be at least _three times_ as large as the noise threshold to guarantee that
+smaller level-shifts (near the level-shift threshold) are not overlooked.
 
 Effectively, the noise threshold defines our tolerance, not only for random
-noise, but for any sources of variation in the data. So even for traces with
-very little random noise, the noise threshold may be inadequate if set too much
-lower than the default because of other variability associated with
+noise, but for any sources of variation in the distance trace. So even for
+traces with very little random noise, the noise threshold may be inadequate if
+set too much lower than the default because of other variability associated with
 level-shifts, such as the possibility that a level-shifted portion of a distance
 trace may not precisely mirror the "true" distance.
 
@@ -1184,21 +1185,14 @@ points is very simplistic. It simply starts at the earliest high-curvature point
 the other high-curvature points until it finds a suitable partner. If there is a
 suitable partner, it processes them and proceeds to the earliest of the
 remaining high-curvature points. If the program cannot find a match for the
-first point, it simply ignores it and proceeds with the next earliest point. A
-consequence of this simplistic search is that any error in the labelling of a
-level-shift is more likely to affect the labelling of subsequent level-shifts:
-if the labelling procedure does not fail, fine; but if it does, it may do so in
-a strange way.
+first point, the program discards the first point and proceeds with the next
+earliest point. A consequence of this simplistic search is that any error in the
+labelling of a level-shift is more likely to affect the labelling of subsequent
+level-shifts: if the labelling procedure does not fail, fine; but if it does, it
+may do so catastrophically.
 
 As in the automatic procedure for eliminating level-shifts, we must accept total
 changes in slope "close enough" to zero in order to account for random noise.
 This tolerance is set equal to _twice_ the 'noise threshold'. We must use a
 factor of two since the maximum change in _slope_ between adjacent segments due
 to random noise is twice as large that for the _absolute distance_.
-
-Due to the two ways in which we tolerate random noise (in the identification of
-high-curvature points, and matching total changes in slope between two such
-points), the labelling procedure requires that the level-shift threshold must be
-at least _three times_ as large as the noise threshold, otherwise smaller
-level-shifts near the level-shift threshold may not be properly labeled.
-
