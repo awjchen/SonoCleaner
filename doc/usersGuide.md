@@ -519,14 +519,11 @@ was released. Holding down the Control key tells the program we want to keep the
 upper level and replace the lower, while holding the Shift key does the
 opposite.
 
-Now, follow these instructions precisely:
-
-- **Press and hold down the Control key.** Don't release the Control key until
-  the last step.  
 - **Move the mouse cursor to (3.3 s, 34.0 mm).**  
 - **Press and hold the right mouse button.**  
 - **While holding down the right mouse button, move the mouse cursor to (3.8 s,
   34.0 mm).**  
+- **Press and hold down the Control key.**
 - **Release the right mouse button.**  
 - **Release the Control key.**
 

@@ -64,7 +64,6 @@ data KeyModifier = ModNone
   deriving (Show)
 
 -- We only recognize certain mouse gestures.
--- This data type enumerates them.
 data MouseGesture =
     MouseClickLeft  Point
   | MouseClickRight Point
@@ -75,8 +74,7 @@ data MouseGesture =
 interpretMouseGesture :: MouseEvent -> MouseEvent -> Maybe MouseGesture
 interpretMouseGesture event1 event2 = do
   button    <- consistentMouseButtons event1 event2
-  modifiers <- consistentKeyModifiers event1 event2
-  let keyModifier = case modifiers of
+  let keyModifier = case event2 ^. mouseEventModifiers of
         [Control] -> ModControl
         [Shift]   -> ModShift
         _         -> ModNone
@@ -122,15 +120,6 @@ consistentMouseButtons event1 event2 =
   in if sameButtons && noMouseModifiers
       then Just pressButton
       else Nothing
-
-consistentKeyModifiers :: MouseEvent -> MouseEvent -> Maybe [Modifier]
-consistentKeyModifiers event1 event2 =
-  let pressMods = event1 ^. mouseEventModifiers
-      sameModifiers = pressMods == event2 ^. mouseEventModifiers
-      atMostOneModifier = length pressMods <= 1
-  in if atMostOneModifier && sameModifiers
-        then Just pressMods
-        else Nothing
 
 -- As opposed to a click-and-drag
 isMouseClick :: MouseEvent -> MouseEvent -> Bool
