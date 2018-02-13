@@ -3,7 +3,7 @@
 {-# LANGUAGE TemplateHaskell   #-}
 {-# LANGUAGE TypeApplications  #-}
 
-module SonoSsa.Ssa
+module Model.Ssa
   ( SSA
   , ssaFilePath
   , ssaTitle
@@ -39,7 +39,7 @@ import           Control.Monad
 import           Control.Monad.ST
 import           Control.Monad.Trans.Class
 import           Control.Monad.Trans.Except
-import           Data.Char                   (isDigit, ord)
+import           Data.Char                   (ord)
 import           Data.Double.Conversion.Text (toFixed)
 import           Data.Foldable
 import           Data.List                   (intercalate, intersperse,
@@ -95,6 +95,9 @@ makeLenses ''Trace
 --------------------------------------------------------------------------------
 -- .ssa file specifics
 --------------------------------------------------------------------------------
+titleLabel, versionLabel, creationDateLabel, creationTimeLabel, parentFileLabel,
+  sampleTimeIntervalLabel, unitTimeIntervalLabel, numberRowsLabel,
+  numberColumnsLabel, indexColumnLabel, beginDataLabel, endDataLabel :: T.Text
 
 titleLabel              = "TITLE:"
 versionLabel            = "VERSION:"
@@ -153,11 +156,11 @@ parseSSA' filePath = do
         where cols' = fromIntegral numberColumns
 
   -- Trace data
-  string beginDataLabel >> eol
+  _ <- string beginDataLabel >> eol
   allLabels  <- line
   allUnits   <- line
   dataRows   <- dataBlock (rows, cols)
-  extraRows  <- manyTill float6Line (string endDataLabel *> eol)
+  _ <- manyTill float6Line (string endDataLabel *> eol) -- extra rows
   eof
 
   let (timeTrace, dataTraces) = makeTraces allLabels allUnits dataRows
@@ -286,7 +289,7 @@ printSSA ssa =
                               then mempty
                               else B.fromString "\tDelineators"
 
-      dataBlock = map (mconcat . map (appendTab . printDouble))
+      dataBlock' = map (mconcat . map (appendTab . printDouble))
                       (transpose columnData)
 
       -- the extra mempty adds an extra newline
@@ -294,7 +297,7 @@ printSSA ssa =
 
       -- .ssa files are generated on windows so use "\r\n" for eol
       fileBuilder = mconcat $ intersperse (B.fromString "\r\n") $ concat
-        [fileHeader, traceDataHeader, dataBlock, end]
+        [fileHeader, traceDataHeader, dataBlock', end]
 
   in  B.toLazyText fileBuilder
 
@@ -317,11 +320,11 @@ sepEndWith c strs =
 --------------------------------------------------------------------------------
 
 simplifyParseError :: ParseError Char Void -> String
-simplifyParseError (TrivialError sourcePositions unexpected expecteds) =
+simplifyParseError (TrivialError sourcePositions unexpected' expecteds) =
   customUnlines
     [ headerMsg
     , positionMsg sourcePositions
-    , unexpectedMsg unexpected
+    , unexpectedMsg unexpected'
     , expectedMsg expecteds
     ]
 simplifyParseError (FancyError sourcePositions fancyErrors) =
@@ -379,7 +382,7 @@ printErrorItem EndOfInput  = "end of input"
 printErrorFancy :: ErrorFancy Void -> String
 printErrorFancy (ErrorFail errMsg)       = errMsg
 printErrorFancy (ErrorIndentation _ _ _) = "Indentation error."
--- printErrorFancy (ErrorCustom void) -- impossible
+printErrorFancy (ErrorCustom _) = error "impossible"
 
 --------------------------------------------------------------------------------
 -- Custom error messages

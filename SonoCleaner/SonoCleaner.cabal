@@ -29,6 +29,7 @@ executable SonoCleaner
                      , Model.Matching
                      , Model.Model
                      , Model.Slope
+                     , Model.Ssa
                      , Model.TraceOperators
                      , Model.TraceState
                      , Types.Bounds
@@ -40,7 +41,6 @@ executable SonoCleaner
                      , View.Rendering
                      , View.Types
   build-depends:       base >= 4.7 && < 5
-                     , SonoSsa
                      , bytestring
                      , cairo
                      , cassava
@@ -50,10 +50,12 @@ executable SonoCleaner
                      , containers
                      , data-default
                      , directory
+                     , double-conversion
                      , filepath
                      , gtk3 == 0.14.8
                      , heaps
                      , lens
+                     , megaparsec
                      , monad-loops
                      , stm
                      , text

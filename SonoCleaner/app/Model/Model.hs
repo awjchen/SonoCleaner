@@ -87,11 +87,11 @@ import           System.FilePath            (splitFileName, (</>))
 import           System.IO.Error            (isDoesNotExistError)
 import           Text.Printf                (printf)
 
-import           SonoSsa.Ssa
 import           Types.Bounds
 import           Types.Indices
 import qualified Types.Zipper               as Z
 
+import           Model.Ssa
 import           Model.TraceOperators
 import           Model.TraceState
 
