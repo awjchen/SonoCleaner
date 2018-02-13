@@ -12,6 +12,8 @@ module View
   ( TraceSet (..)
 
   , setupRenderer
+
+  , module M
   ) where
 
 import           Control.Concurrent                     (forkIO)
@@ -28,7 +30,7 @@ import           Graphics.UI.Gtk                        hiding (set)
 
 import           View.ChartLayout
 import           View.Rendering
-import           View.Types
+import           View.Types                             as M
 
 -------------------------------------------------------------------------------
 -- View interface

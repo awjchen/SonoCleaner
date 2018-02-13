@@ -19,12 +19,14 @@ import           Data.Text.Lens         (unpacked)
 import           System.FilePath        (splitFileName)
 import           Text.Printf            (printf)
 
-import           Controller.GUIState
-import           Model
 import           Types.Bounds
 import           Types.Indices
 import           Types.LevelShifts
-import           View.Types
+
+import           Model
+import           View
+
+import           Controller.GUIState
 
 --------------------------------------------------------------------------------
 -- Data flow
