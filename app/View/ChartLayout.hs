@@ -186,13 +186,13 @@ traces plotSpec xParams =
       $ ivZip (plotTimes plotSpec) (plotSeries plotSpec)
 
     originalTrace =
-        makeLine 1 (opaque (blend 0.38 grey black))
+        makeLine 1 (opaque (blend 0.25 darkgrey black))
       $ makeOptionalTrace $ plotOriginalSeries plotSpec
     twinTrace =
-        makeLine 1 (opaque (blend 0.25 grey darkblue))
+        makeLine 1 (opaque (blend 0.25 darkgrey darkblue))
       $ makeOptionalTrace $ plotTwinSeries plotSpec
     customTrace =
-        makeLine 1 (opaque (blend 0.25 grey greenyellow))
+        makeLine 1 (opaque (blend 0.25 darkgrey greenyellow))
       $ makeOptionalTrace $ plotCustomSeries plotSpec
 
 
