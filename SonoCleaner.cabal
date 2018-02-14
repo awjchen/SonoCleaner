@@ -7,10 +7,9 @@ author:              Alexander Chen <awchen@ucalgary.ca>
 build-type:          Simple
 cabal-version:       >=1.10
 
-executable SonoCleaner
-  hs-source-dirs:      app
-  main-is:             Main.hs
-  other-modules:       Controller
+library
+  hs-source-dirs:      src
+  exposed-modules:     Controller
                      , Controller.GenericCallbacks
                      , Controller.Glade
                      , Controller.GUIElements
@@ -65,5 +64,24 @@ executable SonoCleaner
                      , vector
                      , vector-algorithms
                      , vector-th-unbox
-  ghc-options:         -rtsopts -threaded -O2 -Wall -Wcompat -Wincomplete-record-updates -Wincomplete-uni-patterns -Wredundant-constraints -fno-warn-unused-top-binds -fno-warn-orphans
+  ghc-options:         -O2 -Wall -Wcompat -Wincomplete-record-updates -Wincomplete-uni-patterns -Wredundant-constraints -fno-warn-unused-top-binds -fno-warn-orphans
+  default-language:    Haskell2010
+
+executable SonoCleaner
+  main-is:             Main.hs
+  build-depends:       base >= 4.7 && < 5
+                     , SonoCleaner
+  ghc-options:         -rtsopts -threaded -O2
+  default-language:    Haskell2010
+
+test-suite test-SonoCleaner
+  type:                exitcode-stdio-1.0
+  main-is:             Tests.hs
+  hs-source-dirs:      test
+  build-depends:       base
+                     , SonoCleaner
+                     , raw-strings-qq
+                     , tasty
+                     , tasty-hunit
+                     , text
   default-language:    Haskell2010

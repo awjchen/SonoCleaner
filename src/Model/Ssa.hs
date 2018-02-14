@@ -81,13 +81,13 @@ data SSA = SSA
   , _ssaIndexColumn        :: String
   , _ssaIndexTrace         :: Trace
   , _ssaDataTraces         :: [Trace]
-  } deriving (Show)
+  } deriving (Show, Eq)
 
 data Trace = Trace
   { _traceLabel  :: String
   , _traceUnit   :: String
   , _traceSeries :: V.Vector Double
-  } deriving (Show)
+  } deriving (Show, Eq)
 
 makeLenses ''SSA
 makeLenses ''Trace
