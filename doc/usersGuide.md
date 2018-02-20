@@ -866,8 +866,9 @@ The reading of .ssa files is probably the most unreliable part of the program.
 
 This program has a soft requirement on the minimum sampling rate used to obtain
 the distance traces. A higher sampling rate helps to estimate slopes and to
-differentiate level-shifts from regular movements. This tool has only been
-tested on traces with sampling rates of at least 400 Hz.
+differentiate level-shifts from regular movements. So far, this tool has mostly
+been tested on traces recording sudden contractions of rabbit muscles, for which
+sampling rates of at least 400 Hz were sufficient.
 
 ### Evenly spaced data points
 
