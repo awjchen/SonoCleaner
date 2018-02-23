@@ -37,8 +37,7 @@ and manipulate the distance traces (the _controller_).
 
 - **Start the program by launching the SonoCleaner executable.**
 
-Upon startup, the program opens the controller, and sets its to its 'home
-page'.
+Upon startup, the program opens the controller to its 'home page'.
 
 ![](screenshots/02-1.png)
 
@@ -74,18 +73,17 @@ The title of the display shows the file name
 and the label of the currently selected distance trace
 (TRX02:03).
 
-The distance trace is plotted in a graph.
-The horizontal axis represents time (in seconds),
-and the vertical axis represents distance (in millimeters).
-
 The distance trace appears as a thin black line. The level-shifts in the trace
 are automatically highlighted in alternating magenta and yellow.
+
+The horizontal axis represents time (in seconds);
+the vertical axis represents distance (in millimeters).
 
 ### 4. Inspecting traces: controlling the display
 
 Before attempting to correct artifacts in a distance trace, one should inspect
 the distance trace for abnormalities. For this, we will need to control the
-display
+display.
 
 Left-clicking with the mouse at a point on the display will center the
 display at that point. This action can be used for panning (that is, to move
@@ -101,8 +99,8 @@ the distance axis).
 
 Now let's inspect the first cluster of level-shifts.
 
-- **Left click on the first cluster of level-shifts at (12.5 s, 17.5 mm)**, that
-  is, at about a time of 12.5 s and a distance of 17.5 mm, in order to center
+- **Left click on the first cluster of level-shifts at (12.5 s, 17.5 mm)** (that
+  is, at about a time of 12.5 s and a distance of 17.5 mm) in order to center
   the display over them.  
 - Then, to zoom in, **scroll with the mouse wheel while holding the Control
   key until one can observe four separate level-shifts.** You may need to
@@ -143,12 +141,13 @@ Now we will advance the automatic procedure one step at a time.
 
 ![](screenshots/05-2.png)
 
-Some level-shifts are eliminated. Changes to the trace appear in alternating
-white and cyan.
+Some level-shifts are eliminated. Modified segments of the trace are highlighted
+in alternating white and cyan.
 
 Level-shifts are eliminated in groups, and in increasing order of the length of
-time they span: later steps of the automated procedure will eliminate groups of
-level-shifts that are spread out over longer time intervals.
+time they span: the automated procedure will eliminate groups of level-shifts
+that span shorter time intervals before those that are spread over longer time
+intervals.
 
 The automated procedure is not intended to handle all cases gracefully. So then,
 we need to examine each step in order to check for errors and intervene if
@@ -157,8 +156,8 @@ necessary.
 - **Increase the 'Match level' repeatedly, observing the changes at each step,
   until the match level cannot be increased further.**
 
-However, for this trace, the action of the automatic procedure is acceptable,
-and we do not need to intervene.
+Disappointingly, the action of the automatic procedure is acceptable for this
+trace, and we do not need to intervene.
 
 ![](screenshots/05-3.png)
 
@@ -181,7 +180,7 @@ We have now completed the correction of this trace.
 
 ### 6. Checking the corrected trace for consistency
 
-it is important to check one's corrections for consistency with other data, such
+It is important to check one's corrections for consistency with other data, such
 as data from replicates of the same procedure.
 
 In sonomicrometry, we can check for internal consistency by comparing the two
@@ -264,10 +263,10 @@ buttons) to select other traces from the file.
 
 - As before, **inspect the trace for abnormalities**.
 
-This trace is of poorer quality than the last. In many places the data is noisy,
-and there are indeed a number of abnormalities. For example, at about 3.5 s and
-16.2 s we see the distance trace shift momentarily to a lower "level" while
-showing signs of instability and variation.
+This is a poor quality trace. In many places the data is noisy, and there are
+indeed a number of abnormalities. For example, at about 3.5 s and 16.2 s we see
+the distance trace shift momentarily to a lower "level" while showing signs of
+instability and variation.
 
 ![](screenshots/08-1.png)
 
@@ -275,7 +274,7 @@ The distance trace also jumps to a lower level at about 12.55 s for just a
 handful of data points, but this data looks more like a "nonsensical artifact"
 rather than a level-shift artifact: it is not nearly as smooth as the data
 around it, nor does it look like a continuation of the surrounding data
-(ignoring the distance offset).
+(when ignoring the distance offset).
 
 ![](screenshots/08-2.png)
 
@@ -321,8 +320,9 @@ Let's first handle the erroneous transition between steps 15 and 16.
 ![](screenshots/10-1.png)
 
 We will now apply a manual correction to a group of two level-shifts (we might
-call them discontinuities rather than level-shifts since we think they arise
-from a nonsensical artifact), which are located at about 12.54 s and 12.57 s.
+call them merely discontinuities rather than level-shifts since we think they
+arise from a nonsensical artifact), which are located at about 12.54 s and 12.57
+s.
 
 To select a group of level-shifts, select a time interval by clicking and
 dragging horizontally with the right mouse button on the display.
@@ -331,14 +331,17 @@ dragging horizontally with the right mouse button on the display.
   a time of 12.54 s to 12.57 s** to select the two level-shifts. (You must click
   and drag within the area of the plot, and not on the axes of the plot.)
   
-If you select the wrong group, press the 'Cancel' button to try again.
+If the selected time interval contains at least two level-shifts, the controller
+will switch to a new page for handling groups of level-shifts.
+
+If you selected the wrong group, or if you selected only a single level-shift,
+press the 'Cancel' button to try again. It may help to zoom in a bit further, if
+you haven't already.
 
 ![](screenshots/10-2.png)
 
-If the selected time interval contains at least two level-shifts, the controller
-will switch to a new page for handling groups of level-shifts. The
-display now shows a _preview_ of the selected changes. The selected group
-of level-shifts is flanked by two vertical green lines.
+The display now shows a _preview_ of the selected changes. The selected group of
+level-shifts is flanked by two vertical green lines.
 
 There are two parameters available for correcting a group of level-shifts.
 
@@ -443,9 +446,9 @@ at least one half of the trace in order to change the height of a level-shift.
 For simplicity, we hold one side constant; one can choose this side by setting
 the 'Hold' to either 'Left' (the default) or 'Right'.
 
-One can more clearly observe the effect of the 'Hold' option by selecting the
-hold to be either Left or Right, and then switching back and forth between the
-'Ignore' and 'Zero' options.
+One can more clearly observe the effect of the 'Hold' option by switching back
+and forth between the 'Ignore' and 'Zero' options while the hold is set to
+either Left or Right.
 
 Ultimately, the choice of 'Hold' does not matter because, in our opinion, traces
 obtained by sonomicrometry should only be used to infer _changes_ in distance,
@@ -473,14 +476,18 @@ To see things more clearly, let's view things from the twin trace.
 
 ![](screenshots/13-1.png)
 
-Now our corrected trace appears in blue behind the twin trace, which appears in
-black.
+Our corrected trace now appears in blue behind the twin trace, which now appears
+in black.
 
 Ignoring the artifacts of the twin trace (which can be quickly corrected), it
-appears that our corrected trace tends to follow its twin trace quite closely,
-except that it has noticeably more noise and variation. The distance trace we
-corrected often flickered between two levels while favouring the lower level,
-which is usually more variable than the upper level.
+appears that our corrected trace tends to follow its twin trace somewhat
+closely, except that it has noticeably more noise and variation.
+
+One source of variation in the distance trace is related to the fact that it
+often flickered between two levels. In such cases, the lower level is often more
+variable than the upper level, and is the case for this trace in particular.
+Since the automated procedure unfortunately chose to make corrections favouring
+this lower level, the resulting trace inherits its variability.
 
 ### 14. Manual corrections with the interpolation brush
 
@@ -508,9 +515,9 @@ that making a new change to the trace will cause the program to forget any
 
 This section of the trace appears flicker between two levels, but predominantly
 "tracks" the lower level. The data on the lower level is noisy and variable, so
-we would reconstruct the trace by tracking the upper level.
+we would prefer to reconstruct the trace by using the upper level as a template.
 
-To achieve this, we must draw for the program a boundary between the upper and
+To achieve this, we will draw for the program a boundary between the upper and
 lower levels. This is done by clicking and dragging with the right mouse button
 while holding down one of the Shift or Control keys. This gesture provides the
 program with a line connecting two points: (1) the location at which the right
@@ -527,8 +534,8 @@ opposite.
 - **Release the right mouse button.**  
 - **Release the Control key.**
 
-The first of the next screenshots shows in green the line the instructions
-intend for should draw with the mouse. The second screenshot shows the intended
+The first of the next screenshots shows, in green, the line the instructions
+intend for you to draw with the mouse. The second screenshot shows the intended
 result.
 
 If your results do not match the second screenshot, one can always click the
@@ -541,8 +548,8 @@ If your results do not match the second screenshot, one can always click the
 All the data points below the line are "rejected" and replaced by linear
 interpolation between data points above the line. The same end could more
 painstakingly be achieved by repeated use of the 'Line' correction for groups of
-level-shifts, but is streamlined with the use of this manual correction, which
-we call the "interpolation brush".
+level-shifts, but the process is streamlined with the use of this manual
+correction, which we call the "interpolation brush".
 
 We can apply the interpolation brush to most of the other artifacts of this
 trace (it is not necessary for the tutorial to follow the remaining steps in
@@ -558,8 +565,8 @@ followed by the individual correction of a remaining level-shift.
 An aside for those who may be feeling that the use of the interpolation brush
 just demonstrated is too arbitrary and ad-hoc: we are of the opinion that the
 interpolation brush should only be used in situations where rigorous use of the
-other methods suffices to correct the trace (see the "Protocol and restrictions
-on manual correction" section of the paper). Used only in this way, the
+other methods suffices to correct the trace (see the "Example protocol and
+restrictions on manual corrections" section, below). Used only in this way, the
 interpolation brush does not affect whether or not a distance trace can be
 corrected, but only serves to reduce the variance of an already corrected trace.
 By this reasoning, our liberal use of the interpolation brush on this trace is
@@ -593,8 +600,8 @@ of the display becomes tinted with blue to reflect the new label.
 (Likewise, the 'Bad' label is associated with a red tint, and 'Good' with the
 default grey.)
 
-One can easily record more detailed annotations on one's own; the main point of
-this feature is convenience. When saving an .ssa file, the annotations are
+One could easily record more detailed annotations on one's own; the main point
+of this feature is convenience. When saving an .ssa file, the annotations are
 automatically saved alongside the .ssa file in a separate comma-separated-value
 (CSV) file. Upon loading the saved .ssa file, the program will also load the CSV
 file of annotations and apply them to the traces. Furthermore, having the
@@ -605,7 +612,7 @@ out the annotations by hand in a format suitable for input into other programs.
 
 There are cases where one would like to focus on only a part of a distance
 trace. Perhaps one would like certain conditions to hold at the start and end of
-a trace (for example, to make things easier for downstream analyses), or perhaps
+a trace (for example, to make things easier for subsequent analyses), or perhaps
 one is correcting a very long recording that would be best dealt with
 piece-by-piece. These cases can be handled with the cropping feature.
 
@@ -621,8 +628,8 @@ select a time interval to which the trace should be cropped.
 - **With the right mouse button, click and drag from a time of about 10 s to 15
   s.**
 
-Note that in order to include the very beginning of the trace in the selected
-time interval, one may need to zoom out horizontally.
+Note that in order to include the very beginning or end of the trace in the
+selected time interval, one may need to zoom out horizontally.
 
 Two green vertical lines appear, showing the bounds of the selection,
 and the 'Crop to selection' button becomes enabled.
@@ -672,8 +679,8 @@ original form.
 
 ![](screenshots/16-7.png)
 
-Tip: One may restrict the action of the automated procedure through the use of
-cropping.
+Tip: One may restrict the action of the automated procedure to a chosen time
+interval by cropping the trace.
 
 ### 17. Saving an .ssa file
 
@@ -796,7 +803,7 @@ the tolerance for forming "zero-sum groups of level-shifts" (see the paper).
 
 This tutorial has introduced all but one of the functions available in this
 program. This function is the "screenshot" function, which was added after this
-tutorial was written will not be covered.
+tutorial was written and will not be covered.
 
 For reference, each page of the controller has a help icon located
 towards its upper right. Hovering the mouse over that icon will pop up a help
@@ -816,8 +823,8 @@ or additional explanation.
     limits of the automatic correction. Also, middle-clicking the plus and minus
     buttons will increment or decrement the number with a larger step size.
 
-1.  The program's window can be enlarged by clicking and dragging its edges, just
-    as with any regular window. However, it cannot be made smaller.
+1.  The program's window can be enlarged just as with any regular window.
+    However, it cannot be made smaller.
 
 1.  A lightened or greyed-out button indicates its function is temporarily
     blocked because the tool knows that pressing this button will produce no
@@ -835,7 +842,7 @@ or additional explanation.
 
 Currently only MacOS and 64-bit Linux (x86\_64) operating systems are supported.
 
-On MacOS, the use of a two-button mouse is recommended.
+On MacOS, the use of a two-button mouse is highly recommended.
 
 ### Interoperability with SonoSoft
 
@@ -857,8 +864,9 @@ found on its second line (when opened as a text file).
 
 The version of an .ssa file created by SonoSoft depends on the version of
 SonoSoft. You could try to use a newer version of SonoSoft to export .ssa files
-of a supported version. If this program does not support the newest .ssa
-version, please contact us so that we may add support for it.
+of a supported version. If this program does not support a certain .ssa version,
+please contact us and send us an example .ssa file so that we may add support
+for it.
 
 The reading of .ssa files is probably the most unreliable part of the program.
 
@@ -874,7 +882,8 @@ sampling rates of at least 400 Hz were sufficient.
 
 This program completely ignores the values under the 'Time' column of the .ssa
 file, and assumes that all data points are uniformly separated by the 'Sample
-time interval' (found on line 6 of the .ssa file).
+time interval' (found on line 6 of the .ssa file). This makes the programming
+simpler.
 
 The first data point is always displayed at time of 0 seconds.
 
@@ -893,6 +902,10 @@ traces with more than 50,000 data points (100 seconds at 500 Hz) when all
 possible traces are superimposed, depending of course on the speed of one's
 computer.
 
+The slow speed is due, in part, to the program's use of the CPU for rendering
+the display. Therefore, using a computer with more powerful GPU may not speed up
+the program.
+
 One workaround is to use the 'Crop' feature of this tool to focus on one portion
 of the trace at a time.
 
@@ -901,9 +914,9 @@ of the trace at a time.
 ## More on sonomicrometry
 
 The paper briefly described level-shifts and other sonomicrometry artifacts in
-Section 2.2 Here, we expand upon that section, assuming that the reader is
-familiar with that section of the paper. We will also continue to "pretend" that
-the triggering protocol of the sonomicrometer is a simple threshold.
+Section 2.2. Assuming that the reader is familiar with that section, we expand
+upon that section here. We will also continue to "pretend" that the triggering
+protocol of the sonomicrometer is a simple threshold.
 
 But first, we repeat the disclaimer given at the beginning of that section.
 
@@ -936,23 +949,22 @@ level-shifts, which is indeed the case.
 ### Other sonomicrometry artifacts
 
 It is important to note that level-shifts and other artifacts may also be
-generated by other mechanisms that we will not focus on, for the reason that we
-are unable to address the complexity of the artifacts that can be generated by
-these other mechanisms. For example, larger changes in the relative orientation
-of crystals may also cause level-shifts due to the fact that the some
+generated by other mechanisms. We will not focus on these mechanisms for the
+reason that we are unable to address the complexity of the artifacts that they
+can generate. For example, larger changes in the relative orientation of
+crystals may also cause level-shifts due to the fact that the some
 sonomicrometry transducers, moreso those that use disc-shaped piezoelectric
 crystals, "transmit" and "receive" ultrasound pulses in a direction dependent
-manner. The impacts of crystal reorientations on the include a vertical flipping
-of the ultrasound signal (when viewed on an oscilloscope). This "signal flip"
-will, in particular, flip the sign of the ridge on which the threshold triggers
-so that the ridge will then lie below the horizontal axis, where it can no
-longer meet the threshold. The threshold must then necessarily trigger on
-something else, causing a level-shift. However, during this flipping, the
-ultrasound signal can change in a complex manner, generating complex artifacts
-that both the software tool and the authors cannot address. Therefore, we urge
-the reader to keep in mind that this software tool and user's guide may only
-address the aspects of sonomicrometry discussed, and that the aspects discussed
-do not form a comprehensive list.
+manner. The effects of crystal reorientations on the ultrasound signal include a
+vertical flipping (when viewed on an oscilloscope). This "signal flip" will, in
+particular, flip the sign of the ridge on which the threshold triggers so that
+the ridge will then lie below the horizontal axis, where it can no longer meet
+the threshold. The threshold must then necessarily trigger on something else,
+causing a level-shift. However, during this flipping, the ultrasound signal can
+change in a complex manner, generating complex discontinuities that both the
+software tool and the authors cannot address. Therefore, we urge the reader to
+keep in mind that this software tool and user's guide can only address the
+aspects of sonomicrometry we discuss, which are not comprehensive.
 
 ### Typical sizes of level-shifts
 
@@ -1156,13 +1168,13 @@ purely to random noise, which we call the 'noise threshold'.
 
 Given these parameters, the first step of the labelling procedure finds all of
 the points of the trace with curvature above a certain threshold. More
-precisely, the program finds points where the difference in heights between its
+precisely, the program finds points where the difference in heights between the
 two adjacent slopes exceeds a threshold equal to the level-shift threshold minus
 the noise threshold. The purpose of the subtraction of the noise threshold is to
-account for random noise, since random noise may artificially shrink a
-level-shift. However, the subtraction also requires that level-shift threshold
-be at least _three times_ as large as the noise threshold to guarantee that
-smaller level-shifts (near the level-shift threshold) are not overlooked.
+account for the possibility that random noise may artificially shrink a
+level-shift. However, the subtraction also requires that the level-shift
+threshold be at least _three times_ as large as the noise threshold to guarantee
+that smaller level-shifts (near the level-shift threshold) are not overlooked.
 
 Effectively, the noise threshold defines our tolerance, not only for random
 noise, but for any sources of variation in the distance trace. So even for
@@ -1177,8 +1189,8 @@ between the two points is "close enough" to zero, (2) _almost_ every segment
 between the two points has a slope large enough to be a level-shift, and (3)
 the two points are separated by a limited number of timesteps. Such a pair of
 high-curvature points is then processed by labelling all segments between them
-as level-shifts, and furthermore, the two high-curvature points and all the
-high-curvature points between them are removed from further considerations.
+as level-shifts. The two high-curvature points and all the high-curvature points
+between them are then removed from further considerations.
 
 However, the method by which the program conducts the search for these pairs of
 points is very simplistic. It simply starts at the earliest high-curvature point
@@ -1186,11 +1198,11 @@ points is very simplistic. It simply starts at the earliest high-curvature point
 the other high-curvature points until it finds a suitable partner. If there is a
 suitable partner, it processes them and proceeds to the earliest of the
 remaining high-curvature points. If the program cannot find a match for the
-first point, the program discards the first point and proceeds with the next
-earliest point. A consequence of this simplistic search is that any error in the
-labelling of a level-shift is more likely to affect the labelling of subsequent
-level-shifts: if the labelling procedure does not fail, fine; but if it does, it
-may do so catastrophically.
+first point, the program discards the first point and begins the search again. A
+consequence of this simplistic search is that any error in the labelling of a
+level-shift is more likely to affect the labelling of subsequent level-shifts.
+This means that if the labelling procedure fails, it may do so catastrophically
+(but in also in a noticeable way).
 
 As in the automatic procedure for eliminating level-shifts, we must accept total
 changes in slope "close enough" to zero in order to account for random noise.
