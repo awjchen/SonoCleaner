@@ -214,8 +214,7 @@ controllerMain = do
         case mFilePath of
           Nothing -> ExceptT $ return $ Left "Could not get any files."
           Just filePath -> do
-            modelOld <- liftIO $ atomically $ readTVar modelTVar
-            model <- loadSSAFile filePath modelOld
+            model <- loadSSAFile filePath
             liftIO $ withUpdate $ do
               atomically $ do
                 guiState <- readTVar guiStateTVar

@@ -78,6 +78,7 @@ import           Data.List                  (findIndex, stripPrefix)
 import qualified Data.List.NonEmpty         as NE
 import qualified Data.Map.Strict            as M
 import           Data.Maybe                 (fromMaybe, mapMaybe)
+import           Data.Time.Clock.POSIX      (getPOSIXTime)
 import           Data.Tuple                 (swap)
 import qualified Data.Vector                as V
 import qualified Data.Vector.Unboxed        as VU
@@ -373,8 +374,8 @@ twinLabelQuotient str = makeTrxLabel . sort2 <$> parseTrxLabel str
 -- File initialization
 -------------------------------------------------------------------------------
 
-loadSSAFile :: FilePath -> Model -> ExceptT String IO Model
-loadSSAFile filePath' model = do
+loadSSAFile :: FilePath -> ExceptT String IO Model
+loadSSAFile filePath' = do
   ssa <- loadSSA filePath'
   traceQualities <- readQualityFile filePath'
   let dt = ssa ^. ssaSampleTimeInterval
@@ -393,13 +394,19 @@ loadSSAFile filePath' model = do
     [ "Unacceptable .ssa file '"
     , filePath'
     , "': traces must have at least 3 data points." ]
+
+  -- We only require that the `traceDataVersion` is not the same as the that of
+  -- an existing model. The following implementation should suffice, since both
+  -- the data version and time can only increase.
+  newDataVersion <- fmap (negate . round) $ liftIO $ getPOSIXTime
+
   return Model { _filePath  = filePath'
                , _ssaFile   = ssa
                , _fakeTimes = fakeTimes'
                , _traces    = traces'
                , _timeStep  = dt
                , _cropHistory = bounds NE.:| []
-               , _traceDataVersion = succ (_traceDataVersion model) }
+               , _traceDataVersion = newDataVersion }
 
 initTraceInfo :: Trace -> TraceInfo
 initTraceInfo tr =

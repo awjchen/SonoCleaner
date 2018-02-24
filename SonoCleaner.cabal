@@ -58,6 +58,7 @@ library
                      , monad-loops
                      , stm
                      , text
+                     , time
                      , raw-strings-qq
                      , statistics
                      , transformers
