@@ -69,7 +69,7 @@ import           Control.Exception
 import           Control.Lens
 import           Control.Monad              (mzero, when)
 import           Control.Monad.IO.Class     (liftIO)
-import           Control.Monad.Trans.Except (ExceptT (..), throwE)
+import           Control.Monad.Trans.Except (ExceptT (..))
 import qualified Data.ByteString.Lazy       as BL
 import           Data.Csv
 import           Data.Foldable              (find, foldl')

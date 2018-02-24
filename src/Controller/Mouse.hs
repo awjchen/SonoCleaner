@@ -35,12 +35,12 @@ data MouseEvent = MouseEvent
 makeLenses ''MouseEvent
 
 captureMouseEvent ::
-     TVar (PickFn LayoutPick')
+     STM (PickFn LayoutPick')
   -> EventM EButton MouseEvent
-captureMouseEvent pickFnTVar = do
+captureMouseEvent getPickFn = do
   pixelCoordinates <- eventCoordinates
   time <- eventTime
-  pickFn <- liftIO $ readTVarIO pickFnTVar
+  pickFn <- liftIO $ atomically getPickFn
   button <- eventButton
   modifiers <- eventModifier
   mouseModifiers <- eventModifierMouse

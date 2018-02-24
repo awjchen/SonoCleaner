@@ -11,6 +11,7 @@
 module View
   ( TraceSet (..)
 
+  , Handle (..)
   , setupRenderer
 
   , module M
@@ -36,13 +37,17 @@ import           View.Types                             as M
 -- View interface
 -------------------------------------------------------------------------------
 
+data Handle = Handle
+  { getPickFn :: STM (PickFn (LayoutPick Double Double Double))
+  , requestDraw :: ChartSpec -> STM ()
+  , requestScreenshot :: FilePath -> Chart.FileFormat -> ChartSpec -> IO ()
+  }
+
 setupRenderer ::
      Window
   -> Image
   -> Box
-  -> IO ( TVar (PickFn (LayoutPick Double Double Double))
-        , ChartSpec -> STM ()
-        , FilePath -> Chart.FileFormat -> ChartSpec -> IO () )
+  -> IO Handle
 setupRenderer controllerWindow image controllerBox = do
   -- Define global rendering variables
   drawCommandTMVar <- newEmptyTMVarIO :: IO (TMVar DrawCommand)
@@ -57,12 +62,12 @@ setupRenderer controllerWindow image controllerBox = do
   -- Start renderer
   _ <- forkIO $ renderer image surfaceTVar drawCommandTMVar pickFnTVar
 
-  let requestDraw :: ChartSpec -> STM ()
-      requestDraw chartSpec =
+  let requestDraw' :: ChartSpec -> STM ()
+      requestDraw' chartSpec =
         fillTMVar drawCommandTMVar (DrawNew chartSpec)
 
-      requestScreenshot :: FilePath -> Chart.FileFormat -> ChartSpec -> IO ()
-      requestScreenshot filePath format chartSpec = do
+      requestScreenshot' :: FilePath -> Chart.FileFormat -> ChartSpec -> IO ()
+      requestScreenshot' filePath format chartSpec = do
         surface <- atomically $ readTVar surfaceTVar
         w <- Cairo.imageSurfaceGetWidth  surface
         h <- Cairo.imageSurfaceGetHeight surface
@@ -70,6 +75,9 @@ setupRenderer controllerWindow image controllerBox = do
                               & Chart.fo_format .~ format
         void $ Chart.renderableToFile fileOptions filePath
           $ layoutToRenderable (chartLayout ScreenshotMode chartSpec (w, h))
+
+      getPickFn' :: STM (PickFn (LayoutPick Double Double Double))
+      getPickFn' = readTVar pickFnTVar
 
   -- Register callback: resize surface and redraw on window resize
   _ <- controllerWindow `on` configureEvent $ do
@@ -83,7 +91,7 @@ setupRenderer controllerWindow image controllerBox = do
         fillTMVar drawCommandTMVar Redraw
     return False
 
-  return (pickFnTVar, requestDraw, requestScreenshot)
+  pure $ Handle getPickFn' requestDraw' requestScreenshot'
 
 -------------------------------------------------------------------------------
 -- Misc.

@@ -76,9 +76,8 @@ controllerMain = do
     <- setupInterpreter
 
   -- for rendering
-  (pickFnTVar, requestDraw, requestScreenshot)
-    <- setupRenderer (controllerWindow guiElems) (image guiElems)
-                     (controllerWindowBox guiElems)
+  viewH <- setupRenderer (controllerWindow guiElems) (image guiElems)
+                         (controllerWindowBox guiElems)
 
 --------------------------------------------------------------------------------
 -- Locking mechanism for GUI state synchronization and canvas updates
@@ -114,7 +113,7 @@ controllerMain = do
 
               updateGUIStateWidgets guiElems guiState
               setGUISensitivity guiElems model guiState
-              atomically $ getChart model guiState >>= requestDraw
+              atomically $ getChart model guiState >>= requestDraw viewH
 
     pure withUpdate
 
@@ -275,7 +274,7 @@ controllerMain = do
     case responseID of
       ResponseAccept ->
         fileChooserGetFilename fileChooserScreenshotDialog >>= \case
-          Just filePath -> requestScreenshot filePath extension chartSpec
+          Just filePath -> requestScreenshot viewH filePath extension chartSpec
           Nothing -> return ()
       _ -> return ()
 
@@ -319,7 +318,7 @@ controllerMain = do
   -- Zooming
 
   _ <- imageEventBox guiElems `on` scrollEvent $ do
-    pickFn <- liftIO $ readTVarIO pickFnTVar
+    pickFn <- liftIO $ atomically $ getPickFn viewH
     scrollDirection <- eventScrollDirection
     modifiers <- eventModifier
     layoutPick <- (pickFn . uncurry Point) <$> eventCoordinates
@@ -358,7 +357,7 @@ controllerMain = do
   lastMousePressTMVar <- atomically newEmptyTMVar :: IO (TMVar MouseEvent)
 
   _ <- imageEventBox guiElems `on` buttonPressEvent $ do
-    mouseEvent <- captureMouseEvent pickFnTVar
+    mouseEvent <- captureMouseEvent $ getPickFn viewH
     liftIO $ atomically $ fillTMVar lastMousePressTMVar mouseEvent
     return False
 
@@ -369,7 +368,7 @@ controllerMain = do
     case maybeMouseEvent1 of
       Nothing -> return False
       Just mouseEvent1 -> do
-        mouseEvent2 <- captureMouseEvent pickFnTVar
+        mouseEvent2 <- captureMouseEvent $ getPickFn viewH
         (model, guiState, levelShifts) <- liftIO $ atomically $ do
           model' <- readTVar modelTVar
           guiState' <- readTVar guiStateTVar
