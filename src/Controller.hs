@@ -72,8 +72,7 @@ controllerMain = do
 --------------------------------------------------------------------------------
 
   -- for computations
-  (initializeInterpreter, getChart, getMatches, getLevelShifts, getNewModel)
-    <- setupInterpreter
+  interpreterH <- setupInterpreter
 
   -- for rendering
   viewH <- setupRenderer (controllerWindow guiElems) (image guiElems)
@@ -113,7 +112,9 @@ controllerMain = do
 
               updateGUIStateWidgets guiElems guiState
               setGUISensitivity guiElems model guiState
-              atomically $ getChart model guiState >>= requestDraw viewH
+              atomically
+                  $ fmap resultChart (getResults interpreterH model guiState)
+                >>= requestDraw viewH
 
     pure withUpdate
 
@@ -220,7 +221,6 @@ controllerMain = do
                 writeTVar modelTVar model
                 writeTVar guiStateTVar $ guiState &
                   setDefaultViewBounds model
-                initializeInterpreter model guiState
 
               setComboBoxTextLabels ("None" : getLabels model)
                                     (referenceTraceComboBoxText guiElems)
@@ -247,7 +247,7 @@ controllerMain = do
     (model, guiState, chartSpec) <- atomically $ do
       model <- readTVar modelTVar
       guiState <- readTVar guiStateTVar
-      chartSpec <- getChart model guiState
+      chartSpec <- fmap resultChart (getResults interpreterH model guiState)
       pure (model, guiState, chartSpec)
     let (originalDirectory, originalFileName) =
           splitFileName $ getFilePath model
@@ -284,7 +284,7 @@ controllerMain = do
     matchLevels' <- atomically $ do
       model <- readTVar modelTVar
       guiState <- readTVar guiStateTVar
-      matches <- getMatches model guiState
+      matches <- fmap resultMatches (getResults interpreterH model guiState)
 
       modifyTVar' guiStateTVar (set currentPage AutoPage)
 
@@ -302,7 +302,7 @@ controllerMain = do
   let apply = withUpdate $ atomically $ do
         model <- readTVar modelTVar
         guiState <- readTVar guiStateTVar
-        newModel <- getNewModel model guiState
+        newModel <- fmap resultNewModel (getResults interpreterH model guiState)
         writeTVar modelTVar newModel
         modifyTVar' guiStateTVar resetGUIPreservingOptions
 
@@ -372,7 +372,8 @@ controllerMain = do
         (model, guiState, levelShifts) <- liftIO $ atomically $ do
           model' <- readTVar modelTVar
           guiState' <- readTVar guiStateTVar
-          levelShifts' <- getLevelShifts model' guiState'
+          levelShifts' <-
+            fmap resultLevelShifts (getResults interpreterH model' guiState')
           return (model', guiState', levelShifts')
 
         -- helper functions and variables

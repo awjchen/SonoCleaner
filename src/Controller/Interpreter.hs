@@ -1,11 +1,14 @@
 -- This module is where the data, parameters, and operators come together; where
 -- the actual computation takes place. The main result is a specification of
--- what to display to the user (a `ChartSpec`). Intermediate steps are cached.
+-- what to display to the user (a `ChartSpec`). The intention of this module is
+-- optimization: intermediate steps in the computation are cached.
 
 {-# LANGUAGE LambdaCase #-}
 
 module Controller.Interpreter
-  ( setupInterpreter
+  ( Handle (..)
+  , Results (..)
+  , setupInterpreter
   ) where
 
 import           Control.Arrow          ((&&&))
@@ -14,6 +17,7 @@ import           Control.Lens           hiding (index, indices, transform)
 import           Control.Monad          (when)
 import           Data.Colour            (blend, opaque)
 import           Data.Colour.Names
+import           Data.Default
 import qualified Data.Text              as T
 import           Data.Text.Lens         (unpacked)
 import           System.FilePath        (splitFileName)
@@ -24,7 +28,7 @@ import           Types.Indices
 import           Types.LevelShifts
 
 import           Model
-import           View
+import qualified View                   as View
 
 import           Controller.GUIState
 
@@ -156,7 +160,7 @@ data AnnotatedTraceState a = AnnotatedTraceState
 -- D
 data AnnotatedChartSpec = AnnotatedChartSpec
   { acsDependencies :: DisplayDependencies
-  , acsChartSpec    :: ChartSpec  }
+  , acsChartSpec    :: View.ChartSpec  }
 
 --------------------------------------------------------------------------------
 -- The functions between the 'objects'
@@ -260,9 +264,9 @@ specifyChart
   :: Model
   -> ViewParams
   -> AnnotatedTraceState NewDataDependencies
-  -> ChartSpec
-specifyChart model viewParams ats = ChartSpec
-  { plotTitle =
+  -> View.ChartSpec
+specifyChart model viewParams ats = View.ChartSpec
+  { View.plotTitle =
       let label = getLabel model
           fileName = snd $ splitFileName $ getFilePath model
           prefix = case vpCurrentPage viewParams of
@@ -276,7 +280,7 @@ specifyChart model viewParams ats = ChartSpec
             QualityPage    -> "Setting trace quality -- "
             ScreenshotPage -> "Taking a screenshot -- "
       in  prefix ++ fileName ++ " (" ++ label ++ ")"
-  , plotTitleColour =
+  , View.plotTitleColour =
       case vpCurrentPage viewParams of
         MainPage       -> opaque black
         AutoPage       -> opaque greenyellow
@@ -287,16 +291,16 @@ specifyChart model viewParams ats = ChartSpec
         CropPage     _ -> opaque orange
         QualityPage    -> opaque cyan
         ScreenshotPage -> opaque beige
-  , plotSeries           = ats ^. to atsTraceState . series
-  , plotLevelShifts      = atsLevelShifts ats
-  , plotModifiedSegments = ats ^. to atsTraceState . modifiedSegments
-  , plotOriginalSeries   = if vpShowReplicateTraces viewParams
+  , View.plotSeries           = ats ^. to atsTraceState . series
+  , View.plotLevelShifts      = atsLevelShifts ats
+  , View.plotModifiedSegments = ats ^. to atsTraceState . modifiedSegments
+  , View.plotOriginalSeries   = if vpShowReplicateTraces viewParams
                             then Just $ getInputState model ^. series
                             else Nothing
-  , plotTwinSeries       = if vpShowReplicateTraces viewParams
+  , View.plotTwinSeries       = if vpShowReplicateTraces viewParams
                             then fmap (view series) (getTwinTrace model)
                             else Nothing
-  , plotCustomSeries =
+  , View.plotCustomSeries =
         viewParams
       & preview (to vpReferenceTraceLabel . _2 . _Just . unpacked)
       & (>>= findTraceByLabel model)
@@ -311,7 +315,7 @@ specifyChart model viewParams ats = ChartSpec
               c1 = (y1+y0)/2
               r1 = (y1-y0)/2
               rescale y = (y-c1)*r2/r1 + c2
-  , plotHighlightRegion  =
+  , View.plotHighlightRegion  =
       case nddOperation (atsDependencies ats) of
         IdentityOp -> Nothing
         AutoOp _ -> Nothing
@@ -322,15 +326,15 @@ specifyChart model viewParams ats = ChartSpec
               $ iiUndiff $ IndexInterval $ (head &&& last) js
         CropOp cropBounds ->
           fmap runIndexInterval cropBounds
-  , plotXRange           = viewParams ^. to vpViewBounds . viewBoundsX
-  , plotYRange           = viewParams ^. to vpViewBounds . viewBoundsY
-  , plotBackgroundColour =
+  , View.plotXRange           = viewParams ^. to vpViewBounds . viewBoundsX
+  , View.plotYRange           = viewParams ^. to vpViewBounds . viewBoundsY
+  , View.plotBackgroundColour =
       case getQuality model of
         -- darkgrey (169) is lighter than grey (128) ...
         Good     -> opaque darkgrey
         Moderate -> opaque (blend 0.85 darkgrey blue)
         Bad      -> opaque (blend 0.85 darkgrey red)
-  , plotAnnotation =
+  , View.plotAnnotation =
       case nddOperation (atsDependencies ats) of
         ManualSingleOp _ j _ _ ->
           let idSeries = getCurrentState model ^. series
@@ -339,43 +343,50 @@ specifyChart model viewParams ats = ChartSpec
               y1 = ivIndex idSeries i1
           in  Just (i1, (y0+y1)/2, printf "%.2f" (y1-y0))
         _ -> Nothing
-  , plotTimes            = getTimes model
-  , plotTimeStep         = getTimeStep model
-  , plotToTime           = timeAtPoint model
-  , plotToIndex          = nearestPoint model
+  , View.plotTimes            = getTimes model
+  , View.plotTimeStep         = getTimeStep model
+  , View.plotToTime           = timeAtPoint model
+  , View.plotToIndex          = nearestPoint model
   }
 
 --------------------------------------------------------------------------------
--- Initialization of the interpreter
+-- Interface of the interpreter
 --------------------------------------------------------------------------------
 
-setupInterpreter :: IO ( Model -> GUIState -> STM ()
-                       , Model -> GUIState -> STM ChartSpec
-                       , Model -> GUIState -> STM LevelShiftMatches
-                       , Model -> GUIState -> STM (IIntSet Index1)
-                       , Model -> GUIState -> STM Model )
+-- Is there a better name for `Results`?
+
+data Handle = Handle
+  { getResults :: Model -> GUIState -> STM Results
+  }
+
+data Results = Results
+  { resultChart       :: View.ChartSpec
+  , resultMatches     :: LevelShiftMatches
+  , resultLevelShifts :: IIntSet Index1
+  , resultNewModel    :: Model
+  }
+
+setupInterpreter :: IO Handle
 setupInterpreter = do
   idAnnotationTVar       <- newTVarIO undefined -- B
   opAnnotationTVar       <- newTVarIO undefined -- C
   annotatedChartSpecTVar <- newTVarIO undefined -- D
 
-  -- Compute without using cached intermediate results
-  let initializeInterpreter :: Model -> GUIState -> STM ()
-      initializeInterpreter model guiState = do
-        let dataParams = readDataParams guiState
-            traceOp    = readCommand guiState
-            viewParams = readViewParams guiState
+    -- Use default values for initialization
+  atomically $ do
+    let dataParams = readDataParams def
+        traceOp    = readCommand def
+        viewParams = readViewParams def
 
-            idAnnotation = annotateRawData dataParams model
-            opAnnotation = applyTraceOperation traceOp idAnnotation
-            annotatedChartSpec =
-              makeAnnotatedChartSpec model viewParams opAnnotation
+        idAnnotation = annotateRawData dataParams defaultModel
+        opAnnotation = applyTraceOperation traceOp idAnnotation
+        annotatedChartSpec =
+          makeAnnotatedChartSpec defaultModel viewParams opAnnotation
 
-        writeTVar idAnnotationTVar idAnnotation
-        writeTVar opAnnotationTVar opAnnotation
-        writeTVar annotatedChartSpecTVar annotatedChartSpec
+    writeTVar idAnnotationTVar idAnnotation
+    writeTVar opAnnotationTVar opAnnotation
+    writeTVar annotatedChartSpecTVar annotatedChartSpec
 
-  -- Compute using cached intermediate results when possible
   let updateData :: Model -> GUIState -> STM ()
       updateData model guiState = do
         let dataParams  = readDataParams guiState
@@ -409,37 +420,25 @@ setupInterpreter = do
           writeTVar annotatedChartSpecTVar
             $ makeAnnotatedChartSpec model viewParams opAnnotationNew
 
-  let getChart :: Model -> GUIState -> STM ChartSpec
-      getChart model guiState = do
+  let getResults' :: Model -> GUIState -> STM Results
+      getResults' model guiState = do
         updateData model guiState
-        acsChartSpec <$> readTVar annotatedChartSpecTVar
 
-  let getMatches :: Model -> GUIState -> STM LevelShiftMatches
-      getMatches model guiState = do
-        updateData model guiState
-        atsLevelShiftMatches <$> readTVar idAnnotationTVar
-
-  let getLevelShifts :: Model -> GUIState -> STM (IIntSet Index1)
-      getLevelShifts model guiState = do
-        updateData model guiState
-        atsLevelShifts <$> readTVar idAnnotationTVar
-
-  let getNewModel :: Model -> GUIState -> STM Model
-      getNewModel model guiState = do
-        updateData model guiState
-        -- We must manually extract `TraceStateOperator` and use `applyToModel`,
-        -- since this is the only way to transform the Model.
+        chart <- acsChartSpec <$> readTVar annotatedChartSpecTVar
         idAnnotation <- readTVar idAnnotationTVar
-        let traceOp  = readCommand guiState
+
+        let matches = atsLevelShiftMatches idAnnotation
+            levelShifts = atsLevelShifts idAnnotation
+
+            -- We must manually extract `TraceStateOperator` and use `applyToModel`,
+            -- since this is the only way to transform the Model.
+            traceOp  = readCommand guiState
             traceStateOp = getTraceStateTransform traceOp idAnnotation
             newModel = applyToModel traceStateOp model
-        return newModel
 
-  return ( initializeInterpreter
-         , getChart
-         , getMatches
-         , getLevelShifts
-         , getNewModel)
+        pure $ Results chart matches levelShifts newModel
+
+  pure $ Handle getResults'
 
 --------------------------------------------------------------------------------
 -- Utility
