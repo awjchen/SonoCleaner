@@ -18,6 +18,7 @@ import qualified Graphics.Rendering.Chart.Backend.Cairo as Chart
 import           Graphics.UI.Gtk                        hiding (set)
 import qualified Graphics.UI.Gtk                        as Gtk (set)
 
+import           Controller.AppState
 import           Controller.GUIElements
 import           Controller.GUIState
 import           Types.LevelShifts
@@ -81,39 +82,39 @@ syncWidgets =
 
 registerGUIStateWidgets ::
      GUIElements
-  -> TVar GUIState
+  -> AppStateHandle
   -> (IO () -> IO ())
   -> IO ()
-registerGUIStateWidgets guiElems guiStateTVar withUpdate =
-  forM_ syncWidgets $ registerGUIStateWidget guiElems guiStateTVar withUpdate
+registerGUIStateWidgets guiElems appH withUpdate =
+  forM_ syncWidgets $ registerGUIStateWidget guiElems appH withUpdate
 
 registerGUIStateWidget
   :: GUIElements
-  -> TVar GUIState
+  -> AppStateHandle
   -> (IO () -> IO ())
   -> SyncWidget
   -> IO ()
-registerGUIStateWidget guiElems guiStateTVar withUpdate syncCallback =
+registerGUIStateWidget guiElems appH withUpdate syncCallback =
   case syncCallback of
     SyncSpinButtonDouble spinButtonRef stateRef -> do
       let spinButton = spinButtonRef guiElems
       void $ afterValueSpinned spinButton $ withUpdate $ do
         val <- spinButtonGetValue spinButton
-        atomically $ modifyTVar' guiStateTVar
+        atomically $ modifyAppGUIState appH
                    $ set stateRef val
 
     SyncSpinButtonInt spinButtonRef stateRef -> do
       let spinButton = spinButtonRef guiElems
       void $ afterValueSpinned spinButton $ withUpdate $ do
         val <- spinButtonGetValueAsInt spinButton
-        atomically $ modifyTVar' guiStateTVar
+        atomically $ modifyAppGUIState appH
                    $ set stateRef val
 
     SyncCheckButton checkButtonRef stateRef -> do
       let checkButton = checkButtonRef guiElems
       void $ on checkButton buttonActivated $ withUpdate $ do
         active <- toggleButtonGetActive checkButton
-        atomically $ modifyTVar' guiStateTVar
+        atomically $ modifyAppGUIState appH
                   $ set stateRef active
 
     SyncComboBoxText comboBoxRef stateRef reader -> do
@@ -122,7 +123,7 @@ registerGUIStateWidget guiElems guiStateTVar withUpdate syncCallback =
         index <- comboBoxGetActive comboBox
         listStore <- comboBoxGetModelText comboBox
         txt <- listStoreSafeGetValue listStore index
-        atomically $ modifyTVar' guiStateTVar
+        atomically $ modifyAppGUIState appH
               $ set stateRef (index, reader txt)
 
     SyncRadioButtonGroup stateRef grouping -> do
@@ -131,7 +132,7 @@ registerGUIStateWidget guiElems guiStateTVar withUpdate syncCallback =
         void $ on radioButton buttonActivated $ do
           active <- toggleButtonGetActive radioButton
           when active $ withUpdate $
-            atomically $ modifyTVar' guiStateTVar $ set stateRef val
+            atomically $ modifyAppGUIState appH $ set stateRef val
 
 --------------------------------------------------------------------------------
 

@@ -19,13 +19,11 @@ import           Control.Concurrent.STM
 import           Control.Lens
 import           Control.Monad.IO.Class                 (liftIO)
 import           Control.Monad.Trans.Except
-import           Data.Default
 import           Graphics.Rendering.Chart
-import qualified Graphics.Rendering.Chart.Backend.Cairo as Chart
 import           Graphics.UI.Gtk                        hiding (set)
-import           System.FilePath                        (dropExtension,
-                                                         splitFileName)
+import           System.FilePath                        (splitFileName)
 
+import           Controller.AppState as App
 import           Controller.GenericCallbacks
 import           Controller.Glade
 import           Controller.GUIElements
@@ -36,23 +34,14 @@ import           Controller.Keybindings
 import           Controller.Mouse
 import           Controller.Sensitivity
 import           Controller.Util
+
 import           Model
 import           Types.Bounds
 import           Types.Indices
-import           View
+-- import           View
 
 controllerMain :: IO ()
 controllerMain = do
-
---------------------------------------------------------------------------------
--- Define mutable state
---------------------------------------------------------------------------------
-
-  -- `modelTVar` is the single, global representation of the user's data.
-  -- Is is filled with a proper value when a .ssa data file is opened.
-  modelTVar <- newTVarIO defaultModel :: IO (TVar Model)
-
-  guiStateTVar <- newTVarIO def :: IO (TVar GUIState)
 
 --------------------------------------------------------------------------------
 -- Import GUI (from Glade)
@@ -68,15 +57,10 @@ controllerMain = do
   windowSetDefaultSize (controllerWindow guiElems) 1024 640
 
 --------------------------------------------------------------------------------
--- Setup "subprocesses"
+-- Define mutable state
 --------------------------------------------------------------------------------
 
-  -- for computations
-  interpreterH <- setupInterpreter
-
-  -- for rendering
-  viewH <- setupRenderer (controllerWindow guiElems) (image guiElems)
-                         (controllerWindowBox guiElems)
+  appH <- initializeAppState guiElems
 
 --------------------------------------------------------------------------------
 -- Locking mechanism for GUI state synchronization and canvas updates
@@ -107,14 +91,12 @@ controllerMain = do
           where
             update :: IO ()
             update = do
-              (model, guiState) <- atomically $
-                (,) <$> readTVar modelTVar <*> readTVar guiStateTVar
+              (model, guiState) <- atomically $ getAppModelGUIState appH
 
               updateGUIStateWidgets guiElems guiState
               setGUISensitivity guiElems model guiState
-              atomically
-                  $ fmap resultChart (getResults interpreterH model guiState)
-                >>= requestDraw viewH
+
+              atomically $ App.requestDraw appH
 
     pure withUpdate
 
@@ -122,7 +104,7 @@ controllerMain = do
 -- Keyboard shortcuts
 --------------------------------------------------------------------------------
 
-  registerKeyboardShortcuts guiElems guiStateTVar
+  registerKeyboardShortcuts guiElems appH
 
 --------------------------------------------------------------------------------
 -- Generic callbacks
@@ -131,8 +113,8 @@ controllerMain = do
 -- structured and restrictive environemnt. In particular, all callbacks that
 -- update parameters in `GUIState` are here in `registerGUIStateWidgets`.
 
-  registerGUIStateWidgets guiElems guiStateTVar withUpdate
-  registerCallbacks guiElems modelTVar guiStateTVar withUpdate
+  registerGUIStateWidgets guiElems appH withUpdate
+  registerCallbacks guiElems appH withUpdate
 
 --------------------------------------------------------------------------------
 -- Special callbacks
@@ -168,7 +150,7 @@ controllerMain = do
 
   _ <- saveButton guiElems `on` buttonActivated $ do
     (originalDirectory, originalFileName) <-
-      splitFileName . getFilePath <$> atomically (readTVar modelTVar)
+      splitFileName . getFilePath <$> atomically (getAppModel appH)
     _ <- fileChooserSetCurrentFolder fileChooserSaveDialog originalDirectory
     fileChooserSetCurrentName fileChooserSaveDialog
       ("output_" ++ originalFileName)
@@ -182,7 +164,7 @@ controllerMain = do
         case mFilePath of
           Nothing -> return ()
           Just filePath -> guiRunExceptT (controllerWindow guiElems) $ do
-                (liftIO $ atomically $ readTVar modelTVar)
+                (liftIO $ atomically $ getAppModel appH)
             >>= saveSSAFile filePath
             >>= (liftIO . messageDialog (controllerWindow guiElems))
       _ -> return ()
@@ -214,15 +196,12 @@ controllerMain = do
         case mFilePath of
           Nothing -> ExceptT $ return $ Left "Could not get any files."
           Just filePath -> do
-            model <- loadSSAFile filePath
+            newModel <- loadSSAFile filePath
             liftIO $ withUpdate $ do
-              atomically $ do
-                guiState <- readTVar guiStateTVar
-                writeTVar modelTVar model
-                writeTVar guiStateTVar $ guiState &
-                  setDefaultViewBounds model
+              atomically $ modifyAppModelGUIState appH $ \(_, guiState) ->
+                (newModel, setDefaultViewBounds newModel guiState)
 
-              setComboBoxTextLabels ("None" : getLabels model)
+              setComboBoxTextLabels ("None" : getLabels newModel)
                                     (referenceTraceComboBoxText guiElems)
 
               widgetShowAll (controllerWindow guiElems)
@@ -243,51 +222,26 @@ controllerMain = do
 
     pure fc
 
-  _ <- screenshotSaveButton guiElems `on` buttonActivated $ do
-    (model, guiState, chartSpec) <- atomically $ do
-      model <- readTVar modelTVar
-      guiState <- readTVar guiStateTVar
-      chartSpec <- fmap resultChart (getResults interpreterH model guiState)
-      pure (model, guiState, chartSpec)
-    let (originalDirectory, originalFileName) =
-          splitFileName $ getFilePath model
-        extension = guiState ^. screenshotFileFormat . _2
-        extensionString = case extension of
-          Chart.PNG -> "png"
-          Chart.SVG -> "svg"
-          Chart.PS  -> "ps"
-          Chart.PDF -> "pdf"
-    _ <- fileChooserSetCurrentFolder
-           fileChooserScreenshotDialog originalDirectory
-    fileChooserSetCurrentName fileChooserScreenshotDialog $ concat $
-      [ "screenshot_"
-      , dropExtension originalFileName
-      , "_"
-      , getLabel model
-      , "."
-      , extensionString
-      ]
+  _ <- screenshotSaveButton guiElems `on` buttonActivated $
+    App.requestScreenshot appH $ \defaultFilePath -> do
+      let (defaultDirectory, defaultFileName) = splitFileName defaultFilePath
+      _ <- fileChooserSetCurrentFolder
+            fileChooserScreenshotDialog defaultDirectory
+      fileChooserSetCurrentName fileChooserScreenshotDialog $ defaultFileName
 
-    responseID <- dialogRun fileChooserScreenshotDialog
-    widgetHide fileChooserScreenshotDialog
+      responseID <- dialogRun fileChooserScreenshotDialog
+      widgetHide fileChooserScreenshotDialog
 
-    case responseID of
-      ResponseAccept ->
-        fileChooserGetFilename fileChooserScreenshotDialog >>= \case
-          Just filePath -> requestScreenshot viewH filePath extension chartSpec
-          Nothing -> return ()
-      _ -> return ()
+      case responseID of
+        ResponseAccept -> fileChooserGetFilename fileChooserScreenshotDialog
+        _              -> pure $ Nothing
 
   -- Run the automated procedure when switching to the 'Auto' page
 
   _ <- autoButton guiElems `on` buttonActivated $ withUpdate $ do
     matchLevels' <- atomically $ do
-      model <- readTVar modelTVar
-      guiState <- readTVar guiStateTVar
-      matches <- fmap resultMatches (getResults interpreterH model guiState)
-
-      modifyTVar' guiStateTVar (set currentPage AutoPage)
-
+      matches <- resultMatches <$> getAppResults appH
+      modifyAppGUIState appH $ set currentPage AutoPage
       pure $ matchLevels matches
 
     -- Increase the step size of the match level spin button with the number of
@@ -300,11 +254,9 @@ controllerMain = do
   -- Applying transforms to the data
 
   let apply = withUpdate $ atomically $ do
-        model <- readTVar modelTVar
-        guiState <- readTVar guiStateTVar
-        newModel <- fmap resultNewModel (getResults interpreterH model guiState)
-        writeTVar modelTVar newModel
-        modifyTVar' guiStateTVar resetGUIPreservingOptions
+        newModel <- resultNewModel . appResults <$> getAppState appH
+        modifyAppModelGUIState appH $
+          set _1 newModel . over _2 resetGUIPreservingOptions
 
   _ <- autoApplyButton guiElems     `on` buttonActivated $ apply
   _ <- singleApplyButton guiElems   `on` buttonActivated $ apply
@@ -318,14 +270,14 @@ controllerMain = do
   -- Zooming
 
   _ <- imageEventBox guiElems `on` scrollEvent $ do
-    pickFn <- liftIO $ atomically $ getPickFn viewH
+    pickFn <- liftIO $ atomically $ getPickFn appH
     scrollDirection <- eventScrollDirection
     modifiers <- eventModifier
     layoutPick <- (pickFn . uncurry Point) <$> eventCoordinates
 
     case layoutPick of
       Just LayoutPick_PlotArea{} -> liftIO $ withUpdate $ do
-        model <- atomically (readTVar modelTVar)
+        model <- atomically $ getAppModel appH
         let (rx, ry) = getTraceBounds model ^. toViewPort . viewPortRadii
             -- hardcoded lower bounds:
             -- may need to change them depending on data resolution
@@ -335,7 +287,7 @@ controllerMain = do
               ScrollDown ->         sqrt 2
               _          -> 1
 
-        atomically $ modifyTVar' guiStateTVar $ case modifiers of
+        atomically $ modifyAppGUIState appH $ case modifiers of
           [Control] ->
             over (viewBounds . toViewPort . viewPortRadii . _1)
                  (bound (fst radiiBounds) . (*scaleFactor))
@@ -357,7 +309,7 @@ controllerMain = do
   lastMousePressTMVar <- atomically newEmptyTMVar :: IO (TMVar MouseEvent)
 
   _ <- imageEventBox guiElems `on` buttonPressEvent $ do
-    mouseEvent <- captureMouseEvent $ getPickFn viewH
+    mouseEvent <- captureMouseEvent $ getPickFn appH
     liftIO $ atomically $ fillTMVar lastMousePressTMVar mouseEvent
     return False
 
@@ -368,12 +320,10 @@ controllerMain = do
     case maybeMouseEvent1 of
       Nothing -> return False
       Just mouseEvent1 -> do
-        mouseEvent2 <- captureMouseEvent $ getPickFn viewH
+        mouseEvent2 <- captureMouseEvent $ getPickFn appH
         (model, guiState, levelShifts) <- liftIO $ atomically $ do
-          model' <- readTVar modelTVar
-          guiState' <- readTVar guiStateTVar
-          levelShifts' <-
-            fmap resultLevelShifts (getResults interpreterH model' guiState')
+          (model', guiState') <- getAppModelGUIState appH
+          levelShifts' <- resultLevelShifts <$> getAppResults appH
           return (model', guiState', levelShifts')
 
         -- helper functions and variables
@@ -389,8 +339,8 @@ controllerMain = do
           Just (MouseClickLeft pt) -> liftIO $ withUpdate $ atomically $ do
             let cx = bound (getTraceBounds model ^. viewBoundsX) (p_x pt)
                 cy = bound (getTraceBounds model ^. viewBoundsY) (p_y pt)
-            modifyTVar' guiStateTVar
-              $ set (viewBounds . toViewPort . viewPortCenter) (cx, cy)
+            modifyAppGUIState appH $ 
+              set (viewBounds . toViewPort . viewPortCenter) (cx, cy)
 
           -- Right-click: selecting a single level-shift
           Just (MouseClickRight pt) -> liftIO $ withUpdate $
@@ -402,7 +352,7 @@ controllerMain = do
                     let t = timeAtSlope' j
                         h = mid' $ over both (ivIndex s)
                           $ runIndexInterval $ levelShiftEndpoints j
-                    in  atomically $ modifyTVar' guiStateTVar $
+                    in  atomically $ modifyAppGUIState appH $
                             set currentPage (SinglePage j)
                           . set (viewBounds.toViewPort.viewPortCenter) (t, h)
               _ -> return ()
@@ -418,7 +368,7 @@ controllerMain = do
                        (IndexInterval (lowerTarget, upperTarget)) levelShifts of
                     Just (js@(_:_:_)) ->
                       let t = mid' $ over both timeAtSlope' $ (head &&& last) js
-                      in  atomically $ modifyTVar' guiStateTVar $
+                      in  atomically $ modifyAppGUIState appH $
                               set currentPage (MultiplePage js)
                             . set (viewBounds.toViewPort.viewPortCenter._1) t
                     _ -> return ()
@@ -430,7 +380,7 @@ controllerMain = do
                       $ over both nearestPoint' $ (xLeft, xRight)
                     t = mid' $ over both timeAtPoint' $ (l, u)
                 in  if iiLength interval < 3 then return () else
-                      atomically $ modifyTVar' guiStateTVar $
+                      atomically $ modifyAppGUIState appH $
                           set currentPage (CropPage $ Just interval)
                         . set (viewBounds . toViewPort . viewPortCenter . _1) t
               _ -> return ()
@@ -447,7 +397,7 @@ controllerMain = do
                                  (nearestPoint' x1, nearestPoint' x2)
                     operator = interpolationBrushOp stratum interval (y1, y2)
                 in  withUpdate $ atomically $
-                      writeTVar modelTVar (applyToModel operator model)
+                      modifyAppModel appH $ applyToModel operator
               _ -> return ()
 
           _ -> return ()

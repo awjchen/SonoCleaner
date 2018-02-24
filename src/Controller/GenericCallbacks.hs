@@ -12,6 +12,7 @@ import           Graphics.UI.Gtk        hiding (set)
 
 import           Model
 
+import           Controller.AppState
 import           Controller.GUIElements
 import           Controller.GUIState
 
@@ -106,27 +107,22 @@ pureCallbacks =
 
 registerPureCallback
   :: GUIElements
-  -> TVar Model
-  -> TVar GUIState
+  -> AppStateHandle
   -> (IO () -> IO ())
   -> PureCallback
   -> IO ()
-registerPureCallback guiElems modelTVar guiStateTVar withUpdate
+registerPureCallback guiElems appH withUpdate
   (PureCallback buttonRef action) =
   let button = buttonRef guiElems
-  in  void $ on button buttonActivated $ withUpdate $ atomically $ do
-    (model, guiState) <- (,) <$> readTVar modelTVar <*> readTVar guiStateTVar
-    let (model', guiState') = action model guiState
-    writeTVar modelTVar model'
-    writeTVar guiStateTVar guiState'
+  in  void $ on button buttonActivated $ withUpdate $ atomically $
+        modifyAppModelGUIState appH $ uncurry action
 
 registerCallbacks ::
      GUIElements
-  -> TVar Model
-  -> TVar GUIState
+  -> AppStateHandle
   -> (IO () -> IO ())
   -> IO ()
-registerCallbacks guiElems modelTVar guiStateTVar withUpdate =
+registerCallbacks guiElems appH withUpdate =
   forM_ pureCallbacks
-    $ registerPureCallback guiElems modelTVar guiStateTVar withUpdate
+    $ registerPureCallback guiElems appH withUpdate
 
