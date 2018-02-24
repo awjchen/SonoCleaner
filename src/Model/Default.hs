@@ -12,6 +12,7 @@
 
 module Model.Default
   ( defaultModel
+  , defaultModel'
   ) where
 
 import qualified Data.Text         as T
@@ -40,11 +41,14 @@ sec	mm		Delineators
 END DATA
 |]
 
--- this needs a test
-defaultModel :: Model
-defaultModel = fromRight $ do
+defaultModel' :: Either String Model
+defaultModel' = do
   ssa <- parseSSA "" defaultSsaFile
   initModel "default.ssa" ssa [] 0
+
+-- There is a test for the success of `fromRight`
+defaultModel :: Model
+defaultModel = fromRight defaultModel'
 
 fromRight :: Either a b -> b
 fromRight = either (error "fromRight") id
