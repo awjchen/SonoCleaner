@@ -21,6 +21,7 @@ library
                      , Controller.Sensitivity
                      , Controller.Util
                      , Model
+                     , Model.Default
                      , Model.IndexedChain
                      , Model.InterpolationBrush
                      , Model.Labelling

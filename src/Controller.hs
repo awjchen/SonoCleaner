@@ -50,7 +50,7 @@ controllerMain = do
 
   -- `modelTVar` is the single, global representation of the user's data.
   -- Is is filled with a proper value when a .ssa data file is opened.
-  modelTVar <- newTVarIO initUndefinedModel :: IO (TVar Model)
+  modelTVar <- newTVarIO defaultModel :: IO (TVar Model)
 
   guiStateTVar <- newTVarIO def :: IO (TVar GUIState)
 

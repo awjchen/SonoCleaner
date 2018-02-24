@@ -13,8 +13,6 @@ module Model.Model
   ( Model
   , TraceQuality (..)
 
-  , initUndefinedModel
-
   -- Model operations
   , applyToModel
 
@@ -60,6 +58,7 @@ module Model.Model
 
   -- File input
   , loadSSAFile
+  , initModel
 
   -- File output
   , saveSSAFile
@@ -109,17 +108,6 @@ data Model = Model
   , _timeStep         :: Double
   , _cropHistory      :: NE.NonEmpty (IndexInterval Index0)
   , _traceDataVersion :: Integer }
-
-initUndefinedModel :: Model
-initUndefinedModel = Model
-  { _filePath         = undefined
-  , _ssaFile          = undefined
-  , _fakeTimes        = undefined
-  , _traces           = undefined
-  , _timeStep         = undefined
-  , _cropHistory      = undefined
-  , _traceDataVersion = 0 -- this needs to be initialized even when there is no data
-  }
 
 data TraceInfo = TraceInfo
   { _history :: Z.Zipper TraceState
@@ -378,11 +366,27 @@ loadSSAFile :: FilePath -> ExceptT String IO Model
 loadSSAFile filePath' = do
   ssa <- loadSSA filePath'
   traceQualities <- readQualityFile filePath'
+
+  -- We only require that the `traceDataVersion` is not the same as the that of
+  -- an existing model. The following implementation should suffice, since both
+  -- the data version and time can only increase.
+  newDataVersion <- fmap (negate . round) $ liftIO $ getPOSIXTime
+
+  ExceptT $ pure $ initModel filePath' ssa traceQualities newDataVersion
+
+initModel
+  :: FilePath
+  -> SSA
+  -> [(String, TraceQuality)]
+  -> Integer
+  -> Either String Model
+initModel filePath' ssa traceQualities newDataVersion = do
   let dt = ssa ^. ssaSampleTimeInterval
       readQuality ti = ti & set quality
         (fromMaybe Good $ Prelude.lookup (ti ^. label) traceQualities)
       dataLength = VU.length (ssa ^. ssaIndexTrace . traceSeries)
       bounds = IndexInterval $ over both index0 $ (0, dataLength - 1)
+
       -- We assume that the data is a time series, allowing us to pretend that
       -- the measurements are evenly spaced in time. Using these fake timestamps
       -- simplifies conversions between times and indices.
@@ -390,15 +394,11 @@ loadSSAFile filePath' = do
       traces' = Z.unsafeFromList
               $ map (readQuality . initTraceInfo)
               $ ssa ^. ssaDataTraces
-  when (dataLength < 3) $ throwE $ concat
+
+  when (dataLength < 3) $ Left $ concat
     [ "Unacceptable .ssa file '"
     , filePath'
     , "': traces must have at least 3 data points." ]
-
-  -- We only require that the `traceDataVersion` is not the same as the that of
-  -- an existing model. The following implementation should suffice, since both
-  -- the data version and time can only increase.
-  newDataVersion <- fmap (negate . round) $ liftIO $ getPOSIXTime
 
   return Model { _filePath  = filePath'
                , _ssaFile   = ssa

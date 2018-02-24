@@ -13,6 +13,7 @@ module Model
   ( module M
   ) where
 
+import           Model.Default            as M
 import           Model.InterpolationBrush as M
 import           Model.Labelling          as M
 import           Model.Matching           as M
