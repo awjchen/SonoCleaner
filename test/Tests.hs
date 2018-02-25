@@ -17,17 +17,31 @@ import           Model.Default     (defaultModel')
 
 tests :: TestTree
 tests = testGroup "tests"
-  [ testCase "Read-then-write round trip from .ssa file" $
-    assertEqual ".ssa read-write round trip failed"
-      (Right testSsa1)
+  [ testCase ".ssa 3.10: read-then-write round trip" $
+    assertEqual ".ssa 3.10 read-then-write round trip failed"
+      (Right ssa3_10)
       ( fmap (TL.toStrict . TL.filter (/= '\r') . SSA.printSSA)
-        $ SSA.parseSSA "" testSsa1 )
+        $ SSA.parseSSA "" ssa3_10 )
 
   -- This test does not cover the case where parsing fails, but parsing failure
   -- is covered by the read-then-write round trip test.
-  , testCase "Write-then-read round trip from SSA data structure" $
-    let ssa = SSA.parseSSA "" testSsa1 in
-    assertEqual "SSA write-read round trip failed"
+  , testCase ".ssa 3.10: write-then-read round trip" $
+    let ssa = SSA.parseSSA "" ssa3_10 in
+    assertEqual ".ssa 3.10 write-then-read round trip failed"
+      ssa
+      (fmap (TL.toStrict . SSA.printSSA) ssa >>= SSA.parseSSA "")
+
+  , testCase ".ssa 3.00: read-then-write round trip" $
+    assertEqual ".ssa 3.00 read-then-write round trip failed"
+      (Right ssa3_00)
+      ( fmap (TL.toStrict . TL.filter (/= '\r') . SSA.printSSA)
+        $ SSA.parseSSA "" ssa3_00 )
+
+  -- This test does not cover the case where parsing fails, but parsing failure
+  -- is covered by the read-then-write round trip test.
+  , testCase ".ssa 3.00: write-then-read round trip" $
+    let ssa = SSA.parseSSA "" ssa3_00 in
+    assertEqual ".ssa 3.00 write-then-read round trip failed"
       ssa
       (fmap (TL.toStrict . SSA.printSSA) ssa >>= SSA.parseSSA "")
 
@@ -36,14 +50,13 @@ tests = testGroup "tests"
       (either (const False) (const True) defaultModel')
   ]
 
-
 main :: IO ()
 main = defaultMain tests
 
 --------------------------------------------------------------------------------
 
-testSsa1 :: T.Text
-testSsa1 = [r|TITLE:	Trace Segment ASCII
+ssa3_10 :: T.Text
+ssa3_10 = [r|TITLE:	Trace Segment ASCII
 VERSION:	3.10
 CREATION DATE:	02/17/17
 CREATION TIME:	10:32:53
@@ -88,5 +101,30 @@ sec	mm	mm	mm	mm	NON		Delineators
 0.071500	17.639063	34.185001	17.502422	34.147736	2048.000000	
 0.073966	17.639063	34.185001	17.502422	34.147736	2048.000000	
 0.076431	17.639063	34.185001	17.490000	34.147736	2048.000000	
+END DATA
+|]
+
+ssa3_00 :: T.Text
+ssa3_00 = [r|TITLE:	Trace Segment ASCII
+VERSION:	3.00
+CREATION DATE:	04/25/16
+CREATION TIME:	13:54:40
+PARENT FILE:	D:\Lindsay Sono\LINDT02.slb
+SAMPLE TIME INTERVAL:	0.002032
+UNIT OF TIME INTERVAL:	second
+# OF ROW:	8
+# OF COLUMN:	12
+INDEX COLUMN #:	1
+BEGIN DATA:
+Time	TRX01:02	TRX01:03	TRX01:04	TRX02:01	TRX02:03	TRX02:04	TRX03:01	TRX03:02	TRX03:04	TRX04:01	TRX04:02	TRX04:03	
+sec	mm	mm	mm	mm	mm	mm	mm	mm	mm	mm	mm	mm	
+0.000000	3.180000	177.247742	26.197735	3.229687	12.869062	21.365625	177.247742	12.906328	7.366172	177.247742	177.247742	8.422031	
+0.002032	3.180000	177.247742	26.185312	3.229687	12.869062	21.328360	177.247742	12.906328	7.366172	177.247742	177.247742	8.422031	
+0.004064	3.180000	177.247742	26.197735	3.229687	12.869062	21.390469	177.247742	12.906328	7.378594	177.247742	177.247742	8.422031	
+0.006096	3.180000	177.247742	26.185312	3.229687	12.869062	21.340782	177.247742	12.906328	7.366172	177.247742	177.247742	8.422031	
+0.008128	3.180000	177.247742	26.185312	3.229687	12.869062	21.353203	177.247742	12.906328	7.353750	177.247742	177.247742	8.422031	
+0.010160	3.180000	177.247742	26.185312	3.229687	12.869062	21.353203	177.247742	12.906328	7.328907	177.247742	177.247742	8.422031	
+0.012192	3.180000	177.247742	26.172892	3.229687	12.869062	21.328360	177.247742	12.906328	7.366172	177.247742	177.247742	8.422031	
+0.014224	3.180000	177.247742	26.172892	3.229687	12.869062	21.353203	177.247742	12.906328	7.366172	177.247742	177.247742	8.422031	
 END DATA
 |]
