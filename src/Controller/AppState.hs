@@ -43,7 +43,7 @@ data AppState = AppState
 data AppStateHandle = AppStateHandle
   { getAppState       :: STM AppState
   , getPickFn         :: STM (PickFn (LayoutPick Double Double Double))
-  , updateAppState    :: (AppState -> (Model, GUIState)) -> IO ()
+  , modifyAppState    :: (AppState -> (Model, GUIState)) -> IO ()
   , requestDraw       :: STM ()
   , requestScreenshot :: (FilePath -> IO (Maybe FilePath)) -> IO ()
   }
@@ -91,8 +91,8 @@ initializeAppState guiElems = do
 
             atomically requestDraw'
 
-      updateAppState' :: (AppState -> (Model, GUIState)) -> IO ()
-      updateAppState' f = withUpdate $ atomically $ do
+      modifyAppState' :: (AppState -> (Model, GUIState)) -> IO ()
+      modifyAppState' f = withUpdate $ atomically $ do
         (newModel, newGUIState) <- f <$> readTVar appStateTVar
         newResults <- getResults interpreterH newModel newGUIState
         writeTVar appStateTVar $ AppState newModel newGUIState newResults
@@ -139,7 +139,7 @@ initializeAppState guiElems = do
   pure $ AppStateHandle
     { getAppState = readTVar appStateTVar
     , getPickFn = View.getPickFn viewH
-    , updateAppState = updateAppState'
+    , modifyAppState = modifyAppState'
     , requestDraw = requestDraw'
     , requestScreenshot = requestScreenshot'
     }
@@ -164,16 +164,16 @@ getAppResults = getFromApp appResults
 
 modifyAppModel :: AppStateHandle -> (Model -> Model) -> IO ()
 modifyAppModel appStateH f =
-  updateAppState appStateH $ over _1 f . (appModel &&& appGUIState)
+  modifyAppState appStateH $ over _1 f . (appModel &&& appGUIState)
 
 modifyAppGUIState :: AppStateHandle -> (GUIState -> GUIState) -> IO ()
 modifyAppGUIState appStateH f =
-  updateAppState appStateH $ over _2 f . (appModel &&& appGUIState)
+  modifyAppState appStateH $ over _2 f . (appModel &&& appGUIState)
 
 modifyAppModelGUIState
   :: AppStateHandle
   -> ((Model, GUIState) -> (Model, GUIState))
   -> IO ()
 modifyAppModelGUIState appStateH f =
-  updateAppState appStateH $ f . (appModel &&& appGUIState)
+  modifyAppState appStateH $ f . (appModel &&& appGUIState)
 

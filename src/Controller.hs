@@ -14,11 +14,9 @@ module Controller
   ( controllerMain
   ) where
 
-import           Control.Arrow                ((&&&))
 import           Control.Concurrent.STM
 import           Control.Lens
 import           Control.Monad.IO.Class       (liftIO)
-import           Graphics.Rendering.Chart
 import           Graphics.UI.Gtk              hiding (set)
 
 import           Controller.AppState          as App
@@ -30,13 +28,11 @@ import           Controller.GUIState
 import           Controller.GUIStateCallbacks
 import           Controller.Interpreter
 import           Controller.Keybindings
-import           Controller.Mouse
+import           Controller.MouseCallbacks
 import           Controller.Sensitivity
 import           Controller.Util
 
 import           Model
-import           Types.Bounds
-import           Types.Indices
 
 controllerMain :: IO ()
 controllerMain = do
@@ -77,12 +73,16 @@ controllerMain = do
   registerCallbacks guiElems appH
 
 --------------------------------------------------------------------------------
+-- Other callbacks
+--------------------------------------------------------------------------------
+
+  registerDialogCallbacks guiElems appH
+  registerMouseCallbacks guiElems appH
+
+--------------------------------------------------------------------------------
 -- Special callbacks
 --------------------------------------------------------------------------------
 -- Callbacks requiring more than basic functionality are defined by hand.
-
-  -- Dialog callbacks
-  registerDialogCallbacks guiElems appH
 
   -- On attempting to close either the display or controller window, quit the
   -- program, but only after asking for confirmation.
@@ -124,145 +124,6 @@ controllerMain = do
   _ <- singleApplyButton guiElems   `on` buttonActivated $ apply
   _ <- multipleApplyButton guiElems `on` buttonActivated $ apply
 
---------------------------------------------------------------------------------
--- Mouse actions
---------------------------------------------------------------------------------
--- See Controller.Mouse for the definition of mouse gestures
-
-  -- Zooming
-
-  _ <- imageEventBox guiElems `on` scrollEvent $ do
-    pickFn <- liftIO $ atomically $ getPickFn appH
-    scrollDirection <- eventScrollDirection
-    modifiers <- eventModifier
-    layoutPick <- (pickFn . uncurry Point) <$> eventCoordinates
-
-    case layoutPick of
-      Just LayoutPick_PlotArea{} -> liftIO $ do
-        model <- atomically $ getAppModel appH
-        let (rx, ry) = getTraceBounds model ^. toViewPort . viewPortRadii
-            -- hardcoded lower bounds:
-            -- may need to change them depending on data resolution
-            radiiBounds = ((0.02, 2*rx), (0.1, max 200 (2*ry)))
-            scaleFactor = case scrollDirection of
-              ScrollUp   -> recip $ sqrt 2
-              ScrollDown ->         sqrt 2
-              _          -> 1
-
-        modifyAppGUIState appH $ case modifiers of
-          [Control] ->
-            over (viewBounds . toViewPort . viewPortRadii . _1)
-                 (bound (fst radiiBounds) . (*scaleFactor))
-          [Shift] ->
-            over (viewBounds . toViewPort . viewPortRadii . _2)
-                 (bound (snd radiiBounds) . (*scaleFactor))
-          [] ->
-              over (viewBounds . toViewPort . viewPortRadii . _1)
-                  (bound (fst radiiBounds) . (*scaleFactor))
-            . over (viewBounds . toViewPort . viewPortRadii . _2)
-                  (bound (snd radiiBounds) . (*scaleFactor))
-          _ -> id
-
-      _ -> return ()
-    return False
-
-  -- Capturing mouse button presses
-
-  lastMousePressTMVar <- atomically newEmptyTMVar :: IO (TMVar MouseEvent)
-
-  _ <- imageEventBox guiElems `on` buttonPressEvent $ do
-    mouseEvent <- captureMouseEvent $ getPickFn appH
-    liftIO $ atomically $ fillTMVar lastMousePressTMVar mouseEvent
-    return False
-
-  -- Capturing mouse button releases
-
-  _ <- imageEventBox guiElems `on` buttonReleaseEvent $ do
-    maybeMouseEvent1 <- liftIO $ atomically $ tryReadTMVar lastMousePressTMVar
-    case maybeMouseEvent1 of
-      Nothing -> return False
-      Just mouseEvent1 -> do
-        mouseEvent2 <- captureMouseEvent $ getPickFn appH
-        (model, guiState, levelShifts) <- liftIO $ atomically $ do
-          (model', guiState') <- getAppModelGUIState appH
-          levelShifts' <- resultLevelShifts <$> getAppResults appH
-          return (model', guiState', levelShifts')
-
-        -- helper functions and variables
-        let nearestPoint' = nearestPoint model
-            nearestSlope' = nearestSlope model
-            timeAtPoint' = timeAtPoint model
-            timeAtSlope' = timeAtSlope model
-            mid' (x, y) = 0.5*(x+y)
-            s = getCurrentState model ^. series
-
-        case interpretMouseGesture mouseEvent1 mouseEvent2 of
-          -- Left-click: panning
-          Just (MouseClickLeft pt) -> liftIO $ do
-            let cx = bound (getTraceBounds model ^. viewBoundsX) (p_x pt)
-                cy = bound (getTraceBounds model ^. viewBoundsY) (p_y pt)
-            modifyAppGUIState appH $
-              set (viewBounds . toViewPort . viewPortCenter) (cx, cy)
-
-          -- Right-click: selecting a single level-shift
-          Just (MouseClickRight pt) -> liftIO $
-            case guiState ^. currentPage of
-              MainPage ->
-                case iisFindNearestIndex (nearestSlope' (p_x pt)) levelShifts of
-                  Nothing -> return ()
-                  Just j ->
-                    let t = timeAtSlope' j
-                        h = mid' $ over both (ivIndex s)
-                          $ runIndexInterval $ levelShiftEndpoints j
-                    in  modifyAppGUIState appH $
-                            set currentPage (SinglePage j)
-                          . set (viewBounds.toViewPort.viewPortCenter) (t, h)
-              _ -> return ()
-
-          -- Right-click-and-drag: selecting a time interval for something
-          Just (MouseDragRightX (xLeft, xRight)) -> liftIO $
-            case guiState ^. currentPage of
-              -- Selecting the level-shifts within a time interval
-              MainPage ->  do
-                let lowerTarget = nearestSlope' xLeft
-                    upperTarget = nearestSlope' xRight
-                case iisFindIntermediateIndices1
-                       (IndexInterval (lowerTarget, upperTarget)) levelShifts of
-                    Just (js@(_:_:_)) ->
-                      let t = mid' $ over both timeAtSlope' $ (head &&& last) js
-                      in  modifyAppGUIState appH $
-                              set currentPage (MultiplePage js)
-                            . set (viewBounds.toViewPort.viewPortCenter._1) t
-                    _ -> return ()
-
-              -- Selecting crop boundaries
-              CropPage _ ->
-                let interval@(IndexInterval (l, u)) =
-                        iiBoundByIVector s $ IndexInterval
-                      $ over both nearestPoint' $ (xLeft, xRight)
-                    t = mid' $ over both timeAtPoint' $ (l, u)
-                in  if iiLength interval < 3 then return () else
-                      modifyAppGUIState appH $
-                          set currentPage (CropPage $ Just interval)
-                        . set (viewBounds . toViewPort . viewPortCenter . _1) t
-              _ -> return ()
-
-          -- Right-click-and-drag with a key modifier: interpolation brush
-          Just (MouseDragRightXY keyMod (Point x1 y1) (Point x2 y2)) ->
-            liftIO $ case guiState ^. currentPage of
-              MainPage ->
-                let stratum = case keyMod of
-                      ModControl -> ReplaceLowerData
-                      ModShift   -> ReplaceUpperData
-                      _          -> ReplaceLowerData
-                    interval = IndexInterval
-                                 (nearestPoint' x1, nearestPoint' x2)
-                    operator = interpolationBrushOp stratum interval (y1, y2)
-                in  modifyAppModel appH $ applyToModel operator
-              _ -> return ()
-
-          _ -> return ()
-        return False
 
 --------------------------------------------------------------------------------
 -- Start the GUI
