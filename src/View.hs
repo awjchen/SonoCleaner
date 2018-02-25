@@ -11,7 +11,7 @@
 module View
   ( TraceSet (..)
 
-  , Handle (..)
+  , ViewHandle (..)
   , setupRenderer
 
   , module M
@@ -37,7 +37,7 @@ import           View.Types                             as M
 -- View interface
 -------------------------------------------------------------------------------
 
-data Handle = Handle
+data ViewHandle = ViewHandle
   { getPickFn :: STM (PickFn (LayoutPick Double Double Double))
   , requestDraw :: ChartSpec -> STM ()
   , requestScreenshot :: FilePath -> Chart.FileFormat -> ChartSpec -> IO ()
@@ -47,7 +47,7 @@ setupRenderer ::
      Window
   -> Image
   -> Box
-  -> IO Handle
+  -> IO ViewHandle
 setupRenderer controllerWindow image controllerBox = do
   -- Define global rendering variables
   drawCommandTMVar <- newEmptyTMVarIO :: IO (TMVar DrawCommand)
@@ -91,7 +91,7 @@ setupRenderer controllerWindow image controllerBox = do
         fillTMVar drawCommandTMVar Redraw
     return False
 
-  pure $ Handle getPickFn' requestDraw' requestScreenshot'
+  pure $ ViewHandle getPickFn' requestDraw' requestScreenshot'
 
 -------------------------------------------------------------------------------
 -- Misc.

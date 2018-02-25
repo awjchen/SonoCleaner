@@ -6,7 +6,7 @@
 {-# LANGUAGE LambdaCase #-}
 
 module Controller.Interpreter
-  ( Handle (..)
+  ( InterpreterHandle (..)
   , Results (..)
   , setupInterpreter
   ) where
@@ -28,7 +28,7 @@ import           Types.Indices
 import           Types.LevelShifts
 
 import           Model
-import qualified View                   as View
+import           View
 
 import           Controller.GUIState
 
@@ -64,8 +64,8 @@ data DataParams = DataParams
 type MatchLevel = Int
 type Offset = Double
 
-data Command =
-    IdentityOp
+data Command
+  = IdentityOp
   | AutoOp MatchLevel
   | ManualSingleOp   SingleAction   Index1   Offset (Int, Hold)
   | ManualMultipleOp MultipleAction [Index1] Offset
@@ -160,7 +160,7 @@ data AnnotatedTraceState a = AnnotatedTraceState
 -- D
 data AnnotatedChartSpec = AnnotatedChartSpec
   { acsDependencies :: DisplayDependencies
-  , acsChartSpec    :: View.ChartSpec  }
+  , acsChartSpec    :: ChartSpec  }
 
 --------------------------------------------------------------------------------
 -- The functions between the 'objects'
@@ -188,7 +188,6 @@ annotateRawData dataParams model =
         , atsLevelShifts       = idLevelShifts
         , atsLevelShiftMatches = idMatches }
 
-
 -- 2
 applyTraceOperation
   :: Command
@@ -201,22 +200,20 @@ applyTraceOperation traceOp ats =
         { nddDataVersion = iddDataVersion (atsDependencies ats)
         , nddDataParams  = dataParams
         , nddOperation   = traceOp }
+      newTraceState = getOp transform (atsTraceState ats)
+      newLevelShifts = labelLevelShifts (dpNoiseThreshold dataParams)
+                                        (dpLevelShiftThreshold dataParams)
+                                        newTraceState
+      newMatches = matchLevelShifts (dpNoiseThreshold dataParams)
+                                    newLevelShifts
+                                    newTraceState
   in  if isIdentityOp transform
       then ats{ atsDependencies = newDependencies }
-      else  let newTraceState = getOp transform (atsTraceState ats)
-                newLevelShifts = labelLevelShifts
-                                  (dpNoiseThreshold dataParams)
-                                  (dpLevelShiftThreshold dataParams)
-                                  newTraceState
-                newMatches = matchLevelShifts
-                               (dpNoiseThreshold dataParams)
-                               newLevelShifts
-                               newTraceState
-            in  AnnotatedTraceState
-                  { atsDependencies      = newDependencies
-                  , atsTraceState        = newTraceState
-                  , atsLevelShifts       = newLevelShifts
-                  , atsLevelShiftMatches = newMatches }
+      else AnnotatedTraceState
+            { atsDependencies      = newDependencies
+            , atsTraceState        = newTraceState
+            , atsLevelShifts       = newLevelShifts
+            , atsLevelShiftMatches = newMatches }
 
 -- helper for 2
 getTraceStateTransform
@@ -248,13 +245,11 @@ makeAnnotatedChartSpec
 makeAnnotatedChartSpec model viewParams ats =
   let atsDeps = atsDependencies ats
       displayDependencies = DisplayDependencies
-        { ddDataVersion = nddDataVersion (atsDependencies ats)
+        { ddDataVersion = nddDataVersion atsDeps
         , ddDataParams  = nddDataParams atsDeps
-        , ddOperation   = nddOperation  atsDeps
+        , ddOperation   = nddOperation atsDeps
         , ddViewParams  = viewParams }
-
       chartSpec = specifyChart model viewParams ats
-
   in  AnnotatedChartSpec
         { acsDependencies = displayDependencies
         , acsChartSpec    = chartSpec }
@@ -264,9 +259,9 @@ specifyChart
   :: Model
   -> ViewParams
   -> AnnotatedTraceState NewDataDependencies
-  -> View.ChartSpec
-specifyChart model viewParams ats = View.ChartSpec
-  { View.plotTitle =
+  -> ChartSpec
+specifyChart model viewParams ats = ChartSpec
+  { plotTitle =
       let label = getLabel model
           fileName = snd $ splitFileName $ getFilePath model
           prefix = case vpCurrentPage viewParams of
@@ -280,7 +275,7 @@ specifyChart model viewParams ats = View.ChartSpec
             QualityPage    -> "Setting trace quality -- "
             ScreenshotPage -> "Taking a screenshot -- "
       in  prefix ++ fileName ++ " (" ++ label ++ ")"
-  , View.plotTitleColour =
+  , plotTitleColour =
       case vpCurrentPage viewParams of
         MainPage       -> opaque black
         AutoPage       -> opaque greenyellow
@@ -291,16 +286,16 @@ specifyChart model viewParams ats = View.ChartSpec
         CropPage     _ -> opaque orange
         QualityPage    -> opaque cyan
         ScreenshotPage -> opaque beige
-  , View.plotSeries           = ats ^. to atsTraceState . series
-  , View.plotLevelShifts      = atsLevelShifts ats
-  , View.plotModifiedSegments = ats ^. to atsTraceState . modifiedSegments
-  , View.plotOriginalSeries   = if vpShowReplicateTraces viewParams
+  , plotSeries           = ats ^. to atsTraceState . series
+  , plotLevelShifts      = atsLevelShifts ats
+  , plotModifiedSegments = ats ^. to atsTraceState . modifiedSegments
+  , plotOriginalSeries   = if vpShowReplicateTraces viewParams
                             then Just $ getInputState model ^. series
                             else Nothing
-  , View.plotTwinSeries       = if vpShowReplicateTraces viewParams
+  , plotTwinSeries       = if vpShowReplicateTraces viewParams
                             then fmap (view series) (getTwinTrace model)
                             else Nothing
-  , View.plotCustomSeries =
+  , plotCustomSeries =
         viewParams
       & preview (to vpReferenceTraceLabel . _2 . _Just . unpacked)
       & (>>= findTraceByLabel model)
@@ -315,7 +310,7 @@ specifyChart model viewParams ats = View.ChartSpec
               c1 = (y1+y0)/2
               r1 = (y1-y0)/2
               rescale y = (y-c1)*r2/r1 + c2
-  , View.plotHighlightRegion  =
+  , plotHighlightRegion  =
       case nddOperation (atsDependencies ats) of
         IdentityOp -> Nothing
         AutoOp _ -> Nothing
@@ -326,15 +321,15 @@ specifyChart model viewParams ats = View.ChartSpec
               $ iiUndiff $ IndexInterval $ (head &&& last) js
         CropOp cropBounds ->
           fmap runIndexInterval cropBounds
-  , View.plotXRange           = viewParams ^. to vpViewBounds . viewBoundsX
-  , View.plotYRange           = viewParams ^. to vpViewBounds . viewBoundsY
-  , View.plotBackgroundColour =
+  , plotXRange           = viewParams ^. to vpViewBounds . viewBoundsX
+  , plotYRange           = viewParams ^. to vpViewBounds . viewBoundsY
+  , plotBackgroundColour =
       case getQuality model of
         -- darkgrey (169) is lighter than grey (128) ...
         Good     -> opaque darkgrey
         Moderate -> opaque (blend 0.85 darkgrey blue)
         Bad      -> opaque (blend 0.85 darkgrey red)
-  , View.plotAnnotation =
+  , plotAnnotation =
       case nddOperation (atsDependencies ats) of
         ManualSingleOp _ j _ _ ->
           let idSeries = getCurrentState model ^. series
@@ -343,10 +338,10 @@ specifyChart model viewParams ats = View.ChartSpec
               y1 = ivIndex idSeries i1
           in  Just (i1, (y0+y1)/2, printf "%.2f" (y1-y0))
         _ -> Nothing
-  , View.plotTimes            = getTimes model
-  , View.plotTimeStep         = getTimeStep model
-  , View.plotToTime           = timeAtPoint model
-  , View.plotToIndex          = nearestPoint model
+  , plotTimes            = getTimes model
+  , plotTimeStep         = getTimeStep model
+  , plotToTime           = timeAtPoint model
+  , plotToIndex          = nearestPoint model
   }
 
 --------------------------------------------------------------------------------
@@ -355,18 +350,18 @@ specifyChart model viewParams ats = View.ChartSpec
 
 -- Is there a better name for `Results`?
 
-data Handle = Handle
+data InterpreterHandle = InterpreterHandle
   { getResults :: Model -> GUIState -> STM Results
   }
 
 data Results = Results
-  { resultChart       :: View.ChartSpec
+  { resultChart       :: ChartSpec
   , resultMatches     :: LevelShiftMatches
   , resultLevelShifts :: IIntSet Index1
   , resultNewModel    :: Model
   }
 
-setupInterpreter :: IO Handle
+setupInterpreter :: IO InterpreterHandle
 setupInterpreter = do
   idAnnotationTVar       <- newTVarIO undefined -- B
   opAnnotationTVar       <- newTVarIO undefined -- C
@@ -430,15 +425,16 @@ setupInterpreter = do
         let matches = atsLevelShiftMatches idAnnotation
             levelShifts = atsLevelShifts idAnnotation
 
-            -- We must manually extract `TraceStateOperator` and use `applyToModel`,
-            -- since this is the only way to transform the Model.
+            -- We must manually extract `TraceStateOperator` and use
+            -- `applyToModel`, since this is the only way to transform the
+            -- Model.
             traceOp  = readCommand guiState
             traceStateOp = getTraceStateTransform traceOp idAnnotation
             newModel = applyToModel traceStateOp model
 
         pure $ Results chart matches levelShifts newModel
 
-  pure $ Handle getResults'
+  pure $ InterpreterHandle getResults'
 
 --------------------------------------------------------------------------------
 -- Utility

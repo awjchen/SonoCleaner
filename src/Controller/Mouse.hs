@@ -18,7 +18,7 @@ import           Control.Monad.IO.Class   (liftIO)
 import           Graphics.Rendering.Chart hiding (Limit)
 import           Graphics.UI.Gtk          hiding (Point, set)
 
-import           Controller.Util
+import           View
 
 --------------------------------------------------------------------------------
 -- Recording mouse events
@@ -37,10 +37,10 @@ makeLenses ''MouseEvent
 captureMouseEvent ::
      STM (PickFn LayoutPick')
   -> EventM EButton MouseEvent
-captureMouseEvent getPickFn = do
+captureMouseEvent getPickFn' = do
   pixelCoordinates <- eventCoordinates
   time <- eventTime
-  pickFn <- liftIO $ atomically getPickFn
+  pickFn <- liftIO $ atomically getPickFn'
   button <- eventButton
   modifiers <- eventModifier
   mouseModifiers <- eventModifierMouse

@@ -1,5 +1,5 @@
 module Controller.AppState
-  ( AppStateHandle (..)
+  ( AppHandle (..)
   , AppState (..)
 
   , initializeAppState
@@ -24,7 +24,7 @@ import           System.FilePath.Posix                  (dropExtension,
                                                          splitFileName, (</>))
 
 import           Model
-import qualified View                                   as View
+import           View
 
 import           Controller.GUIElements
 import           Controller.GUIState
@@ -40,19 +40,18 @@ data AppState = AppState
   , appResults  :: Results
   }
 
-data AppStateHandle = AppStateHandle
-  { getAppState       :: STM AppState
-  , getPickFn         :: STM (PickFn (LayoutPick Double Double Double))
-  , modifyAppState    :: (AppState -> (Model, GUIState)) -> IO ()
-  , requestDraw       :: STM ()
-  , requestScreenshot :: (FilePath -> IO (Maybe FilePath)) -> IO ()
+data AppHandle = AppHandle
+  { getAppState          :: STM AppState
+  , getAppPickFn         :: STM (PickFn (LayoutPick Double Double Double))
+  , modifyAppState       :: (AppState -> (Model, GUIState)) -> IO ()
+  , appRequestScreenshot :: (FilePath -> IO (Maybe FilePath)) -> IO ()
   }
 
 --------------------------------------------------------------------------------
 
-initializeAppState :: GUIElements -> IO AppStateHandle
+initializeAppState :: GUIElements -> IO AppHandle
 initializeAppState guiElems = do
-  viewH <- View.setupRenderer (controllerWindow guiElems) (image guiElems)
+  viewH <- setupRenderer (controllerWindow guiElems) (image guiElems)
                               (controllerWindowBox guiElems)
   interpreterH <- setupInterpreter
 
@@ -91,17 +90,17 @@ initializeAppState guiElems = do
 
             atomically requestDraw'
 
+      requestDraw' :: STM ()
+      requestDraw' = do
+        appState <- readTVar appStateTVar
+        let chart = resultChart $ appResults appState
+        requestDraw viewH chart
+
       modifyAppState' :: (AppState -> (Model, GUIState)) -> IO ()
       modifyAppState' f = withUpdate $ atomically $ do
         (newModel, newGUIState) <- f <$> readTVar appStateTVar
         newResults <- getResults interpreterH newModel newGUIState
         writeTVar appStateTVar $ AppState newModel newGUIState newResults
-
-      requestDraw' :: STM ()
-      requestDraw' = do
-        appState <- readTVar appStateTVar
-        let chart = resultChart $ appResults appState
-        View.requestDraw viewH chart
 
       -- `filePathCont` provides a default `FilePath`
       requestScreenshot' :: (FilePath -> IO (Maybe FilePath)) -> IO ()
@@ -133,45 +132,45 @@ initializeAppState guiElems = do
         case mFilePath of
           Nothing -> return ()
           Just filePath ->
-            View.requestScreenshot viewH
+            requestScreenshot viewH
               filePath extension (resultChart $ appResults appState)
 
-  pure $ AppStateHandle
+  pure $ AppHandle
     { getAppState = readTVar appStateTVar
-    , getPickFn = View.getPickFn viewH
+    , getAppPickFn = getPickFn viewH
     , modifyAppState = modifyAppState'
-    , requestDraw = requestDraw'
-    , requestScreenshot = requestScreenshot'
+    , appRequestScreenshot = requestScreenshot'
     }
 
 --------------------------------------------------------------------------------
 
-getFromApp :: (AppState -> a) -> AppStateHandle -> STM a
+getFromApp :: (AppState -> a) -> AppHandle -> STM a
 getFromApp f appStateH = f <$> getAppState appStateH
 
-getAppModel :: AppStateHandle -> STM Model
+getAppModel :: AppHandle -> STM Model
 getAppModel = getFromApp appModel
 
-getAppGUIState :: AppStateHandle -> STM GUIState
+getAppGUIState :: AppHandle -> STM GUIState
 getAppGUIState = getFromApp appGUIState
 
-getAppModelGUIState :: AppStateHandle -> STM (Model, GUIState)
+getAppModelGUIState :: AppHandle -> STM (Model, GUIState)
 getAppModelGUIState = getFromApp ((,) <$> appModel <*> appGUIState)
 
-getAppResults :: AppStateHandle -> STM Results
+getAppResults :: AppHandle -> STM Results
 getAppResults = getFromApp appResults
 
+--------------------------------------------------------------------------------
 
-modifyAppModel :: AppStateHandle -> (Model -> Model) -> IO ()
+modifyAppModel :: AppHandle -> (Model -> Model) -> IO ()
 modifyAppModel appStateH f =
   modifyAppState appStateH $ over _1 f . (appModel &&& appGUIState)
 
-modifyAppGUIState :: AppStateHandle -> (GUIState -> GUIState) -> IO ()
+modifyAppGUIState :: AppHandle -> (GUIState -> GUIState) -> IO ()
 modifyAppGUIState appStateH f =
   modifyAppState appStateH $ over _2 f . (appModel &&& appGUIState)
 
 modifyAppModelGUIState
-  :: AppStateHandle
+  :: AppHandle
   -> ((Model, GUIState) -> (Model, GUIState))
   -> IO ()
 modifyAppModelGUIState appStateH f =

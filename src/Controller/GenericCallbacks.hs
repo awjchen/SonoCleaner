@@ -104,20 +104,13 @@ pureCallbacks =
 
 --------------------------------------------------------------------------------
 
-registerPureCallback
-  :: GUIElements
-  -> AppStateHandle
-  -> PureCallback
-  -> IO ()
+registerPureCallback :: GUIElements -> AppHandle -> PureCallback -> IO ()
 registerPureCallback guiElems appH (PureCallback buttonRef action) =
   let button = buttonRef guiElems
-  in  void $ on button buttonActivated $ 
+  in  void $ on button buttonActivated $
         modifyAppModelGUIState appH $ uncurry action
 
-registerPureCallbacks ::
-     GUIElements
-  -> AppStateHandle
-  -> IO ()
+registerPureCallbacks :: GUIElements -> AppHandle -> IO ()
 registerPureCallbacks guiElems appH =
   forM_ pureCallbacks $ registerPureCallback guiElems appH
 

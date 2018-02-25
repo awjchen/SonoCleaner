@@ -10,12 +10,11 @@ import           Data.Functor                 (void)
 import           Graphics.Rendering.Chart
 import           Graphics.UI.Gtk              hiding (Point, set)
 
-import           Controller.AppState          as App
+import           Controller.AppState
 import           Controller.GUIElements
 import           Controller.GUIState
 import           Controller.Interpreter
 import           Controller.Mouse
-import           Controller.Util
 
 import           Model
 import           Types.Bounds
@@ -23,16 +22,16 @@ import           Types.Indices
 
 --------------------------------------------------------------------------------
 
-registerMouseCallbacks :: GUIElements -> AppStateHandle -> IO ()
+registerMouseCallbacks :: GUIElements -> AppHandle -> IO ()
 registerMouseCallbacks guiElems appH = do
   scrollWheelZoom (imageEventBox guiElems) appH
   mouseButtonCallbacks guiElems appH
 
 --------------------------------------------------------------------------------
 
-scrollWheelZoom :: EventBox -> AppStateHandle -> IO ()
+scrollWheelZoom :: EventBox -> AppHandle -> IO ()
 scrollWheelZoom eventBox appH = void $ eventBox `on` scrollEvent $ do
-    pickFn <- liftIO $ atomically $ getPickFn appH
+    pickFn <- liftIO $ atomically $ getAppPickFn appH
     scrollDirection <- eventScrollDirection
     modifiers <- eventModifier
     layoutPick <- (pickFn . uncurry Point) <$> eventCoordinates
@@ -69,13 +68,13 @@ scrollWheelZoom eventBox appH = void $ eventBox `on` scrollEvent $ do
 
 --------------------------------------------------------------------------------
 
-mouseButtonCallbacks :: GUIElements -> AppStateHandle -> IO ()
+mouseButtonCallbacks :: GUIElements -> AppHandle -> IO ()
 mouseButtonCallbacks guiElems appH = do
   lastMousePressTMVar <- atomically newEmptyTMVar :: IO (TMVar MouseEvent)
 
   -- Mouse button presses
   void $ imageEventBox guiElems `on` buttonPressEvent $ do
-    mouseEvent <- captureMouseEvent $ getPickFn appH
+    mouseEvent <- captureMouseEvent $ getAppPickFn appH
     liftIO $ atomically $ fillTMVar lastMousePressTMVar mouseEvent
     pure False
 
@@ -85,7 +84,7 @@ mouseButtonCallbacks guiElems appH = do
     case maybeMouseEvent1 of
       Nothing -> pure False
       Just mouseEvent1 -> do
-        mouseEvent2 <- captureMouseEvent $ getPickFn appH
+        mouseEvent2 <- captureMouseEvent $ getAppPickFn appH
 
         -- See Controller.Mouse for the definition of mouse gestures
         liftIO $ case interpretMouseGesture mouseEvent1 mouseEvent2 of
@@ -117,14 +116,14 @@ mouseButtonCallbacks guiElems appH = do
 
         pure False
 
-doPanning :: AppStateHandle -> Point -> IO ()
+doPanning :: AppHandle -> Point -> IO ()
 doPanning appH pt = modifyAppModelGUIState appH $ \(model, guiState) ->
   let cx = bound (getTraceBounds model ^. viewBoundsX) (p_x pt)
       cy = bound (getTraceBounds model ^. viewBoundsY) (p_y pt)
   in  ( model
       , set (viewBounds . toViewPort . viewPortCenter) (cx, cy) guiState )
 
-doSelectSingleLevelShift :: AppStateHandle -> Double -> IO ()
+doSelectSingleLevelShift :: AppHandle -> Double -> IO ()
 doSelectSingleLevelShift appH time = do
   (model, levelShifts) <- atomically $
     (appModel &&& resultLevelShifts . appResults) <$> getAppState appH
@@ -139,7 +138,7 @@ doSelectSingleLevelShift appH time = do
               set currentPage (SinglePage j)
             . set (viewBounds.toViewPort.viewPortCenter) (t, h)
 
-doSelectMultipleLevelShifts :: AppStateHandle -> (Double, Double) -> IO ()
+doSelectMultipleLevelShifts :: AppHandle -> (Double, Double) -> IO ()
 doSelectMultipleLevelShifts appH (xLeft, xRight) = do
   (model, levelShifts) <- atomically $
     (appModel &&& resultLevelShifts . appResults) <$> getAppState appH
@@ -154,7 +153,7 @@ doSelectMultipleLevelShifts appH (xLeft, xRight) = do
               . set (viewBounds.toViewPort.viewPortCenter._1) t
       _ -> pure ()
 
-doCropping :: AppStateHandle -> (Double, Double) -> IO ()
+doCropping :: AppHandle -> (Double, Double) -> IO ()
 doCropping appH bounds = do
   model <- atomically $ getAppModel appH
   let s = getCurrentState model ^. series
@@ -167,7 +166,7 @@ doCropping appH bounds = do
         set currentPage (CropPage $ Just interval)
       . set (viewBounds . toViewPort . viewPortCenter . _1) t
 
-doInterpolationBrush :: AppStateHandle -> KeyModifier -> Point -> Point -> IO ()
+doInterpolationBrush :: AppHandle -> KeyModifier -> Point -> Point -> IO ()
 doInterpolationBrush appH keyMod (Point x1 y1) (Point x2 y2) = do
   model <- atomically $ getAppModel appH
   let stratum = case keyMod of
@@ -181,3 +180,9 @@ doInterpolationBrush appH keyMod (Point x1 y1) (Point x2 y2) = do
 
 mid' :: (Double, Double) -> Double
 mid' (x, y) = 0.5*(x+y)
+
+fillTMVar :: TMVar a -> a -> STM ()
+fillTMVar tmvar a = do
+   _ <- tryTakeTMVar tmvar
+   putTMVar tmvar a
+

@@ -9,7 +9,7 @@ import           Data.Functor                 (void)
 import           Graphics.UI.Gtk              hiding (set)
 import           System.FilePath              (splitFileName)
 
-import           Controller.AppState          as App
+import           Controller.AppState
 import           Controller.GUIElements
 import           Controller.GUIState
 import           Controller.Util
@@ -18,7 +18,7 @@ import           Model
 
 --------------------------------------------------------------------------------
 
-registerDialogCallbacks :: GUIElements -> AppStateHandle -> IO ()
+registerDialogCallbacks :: GUIElements -> AppHandle -> IO ()
 registerDialogCallbacks guiElems appH = do
   registerSsaSaveCallback    guiElems appH
   registerSsaOpenCallback    guiElems appH
@@ -26,7 +26,7 @@ registerDialogCallbacks guiElems appH = do
 
 --------------------------------------------------------------------------------
 
-registerSsaSaveCallback :: GUIElements -> AppStateHandle -> IO ()
+registerSsaSaveCallback :: GUIElements -> AppHandle -> IO ()
 registerSsaSaveCallback guiElems appH = do
   fileChooserSaveDialog <-
     makeSaveDialog "Save an .ssa file" (controllerWindow guiElems)
@@ -52,7 +52,7 @@ registerSsaSaveCallback guiElems appH = do
             >>= (liftIO . messageDialog (controllerWindow guiElems))
       _ -> return ()
 
-registerSsaOpenCallback :: GUIElements -> AppStateHandle -> IO ()
+registerSsaOpenCallback :: GUIElements -> AppHandle -> IO ()
 registerSsaOpenCallback guiElems appH = do
   fileChooserOpenDialog <- makeOpenSsaDialog (controllerWindow guiElems)
 
@@ -78,13 +78,13 @@ registerSsaOpenCallback guiElems appH = do
 
       _ -> return ()
 
-registerScreenshotCallback :: GUIElements -> AppStateHandle -> IO ()
+registerScreenshotCallback :: GUIElements -> AppHandle -> IO ()
 registerScreenshotCallback guiElems appH = do
   fileChooserScreenshotDialog <-
     makeSaveDialog "Save a screenshot" (controllerWindow guiElems)
 
   _ <- screenshotSaveButton guiElems `on` buttonActivated $
-    App.requestScreenshot appH $ \defaultFilePath -> do
+    appRequestScreenshot appH $ \defaultFilePath -> do
       let (defaultDirectory, defaultFileName) = splitFileName defaultFilePath
       _ <- fileChooserSetCurrentFolder
             fileChooserScreenshotDialog defaultDirectory
@@ -126,3 +126,12 @@ makeSaveDialog title window = do
   fileChooserSetDoOverwriteConfirmation fc True
 
   pure fc
+
+--------------------------------------------------------------------------------
+
+guiRunExceptT :: Window -> ExceptT String IO () -> IO ()
+guiRunExceptT window m = do
+  e <- runExceptT m
+  case e of
+    Left s   -> messageDialog window s
+    Right () -> return ()

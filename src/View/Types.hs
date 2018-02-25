@@ -1,13 +1,12 @@
 module View.Types where
 
-import           Data.Colour         (AlphaColour)
+import           Data.Colour              (AlphaColour)
 import           Data.Default
+import           Graphics.Rendering.Chart
 
 import           Types.Indices
 
---------------------------------------------------------------------------------
 -- Specification of the display
---------------------------------------------------------------------------------
 
 data ChartSpec = ChartSpec
   { plotTitle            :: String
@@ -29,9 +28,7 @@ data ChartSpec = ChartSpec
   , plotToIndex          :: Double -> Index0
   }
 
--------------------------------------------------------------------------------
 -- Specification of the set of traces to display
--------------------------------------------------------------------------------
 
 data TraceSet = TraceSet
   { showOriginal :: Bool
@@ -43,3 +40,7 @@ instance Default TraceSet where
     { showOriginal   = False
     , showTwin       = False
     }
+
+-- Other
+
+type LayoutPick' = LayoutPick Double Double Double

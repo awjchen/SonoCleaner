@@ -18,7 +18,9 @@ import           Control.Monad.IO.Class       (liftIO)
 import           Data.Functor                 (void)
 import           Graphics.UI.Gtk              hiding (set)
 
-import           Controller.AppState          as App
+import           Model
+
+import           Controller.AppState
 import           Controller.DialogCallbacks
 import           Controller.GenericCallbacks
 import           Controller.Glade
@@ -29,9 +31,6 @@ import           Controller.Interpreter
 import           Controller.Keybindings
 import           Controller.MouseCallbacks
 import           Controller.Sensitivity
-import           Controller.Util
-
-import           Model
 
 controllerMain :: IO ()
 controllerMain = do
@@ -109,3 +108,14 @@ controllerMain = do
   insensitizeAll guiElems
 
   mainGUI
+
+-------------------------------------------------------------------------------
+
+confirmDialog :: Window -> String -> IO Bool
+confirmDialog window msg = do
+  msgDialog <- messageDialogNew (Just window) [] MessageInfo ButtonsOkCancel msg
+  responseID <- dialogRun msgDialog
+  widgetDestroy msgDialog
+  return $ case responseID of
+    ResponseOk -> True
+    _          -> False
