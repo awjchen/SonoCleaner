@@ -10,17 +10,23 @@ cabal-version:       >=1.10
 library
   hs-source-dirs:      src
   exposed-modules:     Controller
+                     , Controller.AppState
+                     , Controller.DialogCallbacks
                      , Controller.GenericCallbacks
                      , Controller.Glade
                      , Controller.GUIElements
                      , Controller.GUIState
+                     , Controller.GUIStateCallbacks
+                     , Controller.GUIStateSync
                      , Controller.GUIStateWidgets
                      , Controller.Interpreter
                      , Controller.Keybindings
                      , Controller.Mouse
+                     , Controller.MouseCallbacks
                      , Controller.Sensitivity
                      , Controller.Util
                      , Model
+                     , Model.Default
                      , Model.IndexedChain
                      , Model.InterpolationBrush
                      , Model.Labelling
@@ -58,6 +64,7 @@ library
                      , monad-loops
                      , stm
                      , text
+                     , time
                      , raw-strings-qq
                      , statistics
                      , transformers

@@ -1,11 +1,14 @@
 -- This module is where the data, parameters, and operators come together; where
 -- the actual computation takes place. The main result is a specification of
--- what to display to the user (a `ChartSpec`). Intermediate steps are cached.
+-- what to display to the user (a `ChartSpec`). The intention of this module is
+-- optimization: intermediate steps in the computation are cached.
 
 {-# LANGUAGE LambdaCase #-}
 
 module Controller.Interpreter
-  ( setupInterpreter
+  ( InterpreterHandle (..)
+  , Results (..)
+  , setupInterpreter
   ) where
 
 import           Control.Arrow          ((&&&))
@@ -14,6 +17,7 @@ import           Control.Lens           hiding (index, indices, transform)
 import           Control.Monad          (when)
 import           Data.Colour            (blend, opaque)
 import           Data.Colour.Names
+import           Data.Default
 import qualified Data.Text              as T
 import           Data.Text.Lens         (unpacked)
 import           System.FilePath        (splitFileName)
@@ -60,8 +64,8 @@ data DataParams = DataParams
 type MatchLevel = Int
 type Offset = Double
 
-data Command =
-    IdentityOp
+data Command
+  = IdentityOp
   | AutoOp MatchLevel
   | ManualSingleOp   SingleAction   Index1   Offset (Int, Hold)
   | ManualMultipleOp MultipleAction [Index1] Offset
@@ -184,7 +188,6 @@ annotateRawData dataParams model =
         , atsLevelShifts       = idLevelShifts
         , atsLevelShiftMatches = idMatches }
 
-
 -- 2
 applyTraceOperation
   :: Command
@@ -197,22 +200,20 @@ applyTraceOperation traceOp ats =
         { nddDataVersion = iddDataVersion (atsDependencies ats)
         , nddDataParams  = dataParams
         , nddOperation   = traceOp }
+      newTraceState = getOp transform (atsTraceState ats)
+      newLevelShifts = labelLevelShifts (dpNoiseThreshold dataParams)
+                                        (dpLevelShiftThreshold dataParams)
+                                        newTraceState
+      newMatches = matchLevelShifts (dpNoiseThreshold dataParams)
+                                    newLevelShifts
+                                    newTraceState
   in  if isIdentityOp transform
       then ats{ atsDependencies = newDependencies }
-      else  let newTraceState = getOp transform (atsTraceState ats)
-                newLevelShifts = labelLevelShifts
-                                  (dpNoiseThreshold dataParams)
-                                  (dpLevelShiftThreshold dataParams)
-                                  newTraceState
-                newMatches = matchLevelShifts
-                               (dpNoiseThreshold dataParams)
-                               newLevelShifts
-                               newTraceState
-            in  AnnotatedTraceState
-                  { atsDependencies      = newDependencies
-                  , atsTraceState        = newTraceState
-                  , atsLevelShifts       = newLevelShifts
-                  , atsLevelShiftMatches = newMatches }
+      else AnnotatedTraceState
+            { atsDependencies      = newDependencies
+            , atsTraceState        = newTraceState
+            , atsLevelShifts       = newLevelShifts
+            , atsLevelShiftMatches = newMatches }
 
 -- helper for 2
 getTraceStateTransform
@@ -244,13 +245,11 @@ makeAnnotatedChartSpec
 makeAnnotatedChartSpec model viewParams ats =
   let atsDeps = atsDependencies ats
       displayDependencies = DisplayDependencies
-        { ddDataVersion = nddDataVersion (atsDependencies ats)
+        { ddDataVersion = nddDataVersion atsDeps
         , ddDataParams  = nddDataParams atsDeps
-        , ddOperation   = nddOperation  atsDeps
+        , ddOperation   = nddOperation atsDeps
         , ddViewParams  = viewParams }
-
       chartSpec = specifyChart model viewParams ats
-
   in  AnnotatedChartSpec
         { acsDependencies = displayDependencies
         , acsChartSpec    = chartSpec }
@@ -346,36 +345,43 @@ specifyChart model viewParams ats = ChartSpec
   }
 
 --------------------------------------------------------------------------------
--- Initialization of the interpreter
+-- Interface of the interpreter
 --------------------------------------------------------------------------------
 
-setupInterpreter :: IO ( Model -> GUIState -> STM ()
-                       , Model -> GUIState -> STM ChartSpec
-                       , Model -> GUIState -> STM LevelShiftMatches
-                       , Model -> GUIState -> STM (IIntSet Index1)
-                       , Model -> GUIState -> STM Model )
+-- Is there a better name for `Results`?
+
+data InterpreterHandle = InterpreterHandle
+  { getResults :: Model -> GUIState -> STM Results
+  }
+
+data Results = Results
+  { resultChart       :: ChartSpec
+  , resultMatches     :: LevelShiftMatches
+  , resultLevelShifts :: IIntSet Index1
+  , resultNewModel    :: Model
+  }
+
+setupInterpreter :: IO InterpreterHandle
 setupInterpreter = do
   idAnnotationTVar       <- newTVarIO undefined -- B
   opAnnotationTVar       <- newTVarIO undefined -- C
   annotatedChartSpecTVar <- newTVarIO undefined -- D
 
-  -- Compute without using cached intermediate results
-  let initializeInterpreter :: Model -> GUIState -> STM ()
-      initializeInterpreter model guiState = do
-        let dataParams = readDataParams guiState
-            traceOp    = readCommand guiState
-            viewParams = readViewParams guiState
+    -- Use default values for initialization
+  atomically $ do
+    let dataParams = readDataParams def
+        traceOp    = readCommand def
+        viewParams = readViewParams def
 
-            idAnnotation = annotateRawData dataParams model
-            opAnnotation = applyTraceOperation traceOp idAnnotation
-            annotatedChartSpec =
-              makeAnnotatedChartSpec model viewParams opAnnotation
+        idAnnotation = annotateRawData dataParams defaultModel
+        opAnnotation = applyTraceOperation traceOp idAnnotation
+        annotatedChartSpec =
+          makeAnnotatedChartSpec defaultModel viewParams opAnnotation
 
-        writeTVar idAnnotationTVar idAnnotation
-        writeTVar opAnnotationTVar opAnnotation
-        writeTVar annotatedChartSpecTVar annotatedChartSpec
+    writeTVar idAnnotationTVar idAnnotation
+    writeTVar opAnnotationTVar opAnnotation
+    writeTVar annotatedChartSpecTVar annotatedChartSpec
 
-  -- Compute using cached intermediate results when possible
   let updateData :: Model -> GUIState -> STM ()
       updateData model guiState = do
         let dataParams  = readDataParams guiState
@@ -409,37 +415,26 @@ setupInterpreter = do
           writeTVar annotatedChartSpecTVar
             $ makeAnnotatedChartSpec model viewParams opAnnotationNew
 
-  let getChart :: Model -> GUIState -> STM ChartSpec
-      getChart model guiState = do
+  let getResults' :: Model -> GUIState -> STM Results
+      getResults' model guiState = do
         updateData model guiState
-        acsChartSpec <$> readTVar annotatedChartSpecTVar
 
-  let getMatches :: Model -> GUIState -> STM LevelShiftMatches
-      getMatches model guiState = do
-        updateData model guiState
-        atsLevelShiftMatches <$> readTVar idAnnotationTVar
-
-  let getLevelShifts :: Model -> GUIState -> STM (IIntSet Index1)
-      getLevelShifts model guiState = do
-        updateData model guiState
-        atsLevelShifts <$> readTVar idAnnotationTVar
-
-  let getNewModel :: Model -> GUIState -> STM Model
-      getNewModel model guiState = do
-        updateData model guiState
-        -- We must manually extract `TraceStateOperator` and use `applyToModel`,
-        -- since this is the only way to transform the Model.
+        chart <- acsChartSpec <$> readTVar annotatedChartSpecTVar
         idAnnotation <- readTVar idAnnotationTVar
-        let traceOp  = readCommand guiState
+
+        let matches = atsLevelShiftMatches idAnnotation
+            levelShifts = atsLevelShifts idAnnotation
+
+            -- We must manually extract `TraceStateOperator` and use
+            -- `applyToModel`, since this is the only way to transform the
+            -- Model.
+            traceOp  = readCommand guiState
             traceStateOp = getTraceStateTransform traceOp idAnnotation
             newModel = applyToModel traceStateOp model
-        return newModel
 
-  return ( initializeInterpreter
-         , getChart
-         , getMatches
-         , getLevelShifts
-         , getNewModel)
+        pure $ Results chart matches levelShifts newModel
+
+  pure $ InterpreterHandle getResults'
 
 --------------------------------------------------------------------------------
 -- Utility

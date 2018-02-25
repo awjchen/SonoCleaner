@@ -17,6 +17,7 @@ import qualified Data.Map.Strict        as M
 import qualified Data.Text              as T
 import           Graphics.UI.Gtk        hiding (set)
 
+import           Controller.AppState
 import           Controller.GUIElements
 import           Controller.GUIState
 
@@ -155,14 +156,11 @@ screenshotPageKeybindings = generalKeybindings `M.union` M.fromList
   , (("Escape",  []), GUIAction screenshotBackButton buttonClicked)
   ]
 
-registerKeyboardShortcuts ::
-     GUIElements
-  -> TVar GUIState
-  -> IO ()
-registerKeyboardShortcuts guiElems guiStateMVar = do
+registerKeyboardShortcuts :: GUIElements -> AppHandle -> IO ()
+registerKeyboardShortcuts guiElems appH = do
   let interpretKeyPress :: EventM EKey Bool
       interpretKeyPress = do
-        guiState <- liftIO $ readTVarIO guiStateMVar
+        guiState <- liftIO $ atomically $ getAppGUIState appH
         keyCombination <- (,) <$> eventKeyName <*> eventModifier
 
         let bindings = case guiState ^. currentPage of

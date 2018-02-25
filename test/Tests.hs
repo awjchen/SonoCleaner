@@ -11,26 +11,29 @@ import qualified Data.Text.Lazy    as TL
 import           Text.RawString.QQ (r)
 
 import qualified Model.Ssa         as SSA
+import           Model.Default     (defaultModel')
 
 --------------------------------------------------------------------------------
 
 tests :: TestTree
 tests = testGroup "tests"
-  [ testCase "Read-write round trip from .ssa file" $
-    assertEqual
-      ".ssa read-write round trip failed"
+  [ testCase "Read-then-write round trip from .ssa file" $
+    assertEqual ".ssa read-write round trip failed"
       (Right testSsa1)
       ( fmap (TL.toStrict . TL.filter (/= '\r') . SSA.printSSA)
         $ SSA.parseSSA "" testSsa1 )
 
-  -- This test does not cover the case where parsing fails, but this is covered
-  -- by the previous test.
-  , testCase "Write-read round trip from SSA data structure" $
+  -- This test does not cover the case where parsing fails, but parsing failure
+  -- is covered by the read-then-write round trip test.
+  , testCase "Write-then-read round trip from SSA data structure" $
     let ssa = SSA.parseSSA "" testSsa1 in
-    assertEqual
-      "SSA write-read round trip failed"
+    assertEqual "SSA write-read round trip failed"
       ssa
       (fmap (TL.toStrict . SSA.printSSA) ssa >>= SSA.parseSSA "")
+
+  , testCase "Parsing of the .ssa file for the default model" $
+    assertBool "Failed to parse the .ssa file for the default model"
+      (either (const False) (const True) defaultModel')
   ]
 
 

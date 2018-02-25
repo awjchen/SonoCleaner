@@ -123,12 +123,15 @@ loadSSA :: FilePath -> ExceptT String IO SSA
 loadSSA filePath = do
   ssaText <- ExceptT $ catch (Right <$> TIO.readFile filePath)
                              (fmap Left . pure . show @IOException)
-  withExceptT simplifyParseError
-    $ ExceptT $ return $ parseSSA filePath ssaText
+  ExceptT $ return $ parseSSA filePath ssaText
 
-parseSSA :: FilePath -> T.Text -> Either (ParseError Char Void) SSA
-parseSSA filePath ssaText =
-  runST $ runParserT (parseSSA' filePath) filePath ssaText
+parseSSA :: FilePath -> T.Text -> Either String SSA
+parseSSA filePath ssaText = mapLeft simplifyParseError
+  $ runST $ runParserT (parseSSA' filePath) filePath ssaText
+  where
+    mapLeft f e = case e of
+      Left a -> Left (f a)
+      Right b -> Right b
 
 --------------------------------------------------------------------------------
 -- .ssa parser

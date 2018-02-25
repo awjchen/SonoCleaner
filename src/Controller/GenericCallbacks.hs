@@ -1,10 +1,9 @@
 -- TODO: summary
 
 module Controller.GenericCallbacks
-  ( registerCallbacks
+  ( registerPureCallbacks
   ) where
 
-import           Control.Concurrent.STM
 import           Control.Lens           hiding (index)
 import           Control.Monad
 import           Data.Default
@@ -12,6 +11,7 @@ import           Graphics.UI.Gtk        hiding (set)
 
 import           Model
 
+import           Controller.AppState
 import           Controller.GUIElements
 import           Controller.GUIState
 
@@ -104,29 +104,13 @@ pureCallbacks =
 
 --------------------------------------------------------------------------------
 
-registerPureCallback
-  :: GUIElements
-  -> TVar Model
-  -> TVar GUIState
-  -> (IO () -> IO ())
-  -> PureCallback
-  -> IO ()
-registerPureCallback guiElems modelTVar guiStateTVar withUpdate
-  (PureCallback buttonRef action) =
+registerPureCallback :: GUIElements -> AppHandle -> PureCallback -> IO ()
+registerPureCallback guiElems appH (PureCallback buttonRef action) =
   let button = buttonRef guiElems
-  in  void $ on button buttonActivated $ withUpdate $ atomically $ do
-    (model, guiState) <- (,) <$> readTVar modelTVar <*> readTVar guiStateTVar
-    let (model', guiState') = action model guiState
-    writeTVar modelTVar model'
-    writeTVar guiStateTVar guiState'
+  in  void $ on button buttonActivated $
+        modifyAppModelGUIState appH $ uncurry action
 
-registerCallbacks ::
-     GUIElements
-  -> TVar Model
-  -> TVar GUIState
-  -> (IO () -> IO ())
-  -> IO ()
-registerCallbacks guiElems modelTVar guiStateTVar withUpdate =
-  forM_ pureCallbacks
-    $ registerPureCallback guiElems modelTVar guiStateTVar withUpdate
+registerPureCallbacks :: GUIElements -> AppHandle -> IO ()
+registerPureCallbacks guiElems appH =
+  forM_ pureCallbacks $ registerPureCallback guiElems appH
 
