@@ -8,8 +8,6 @@
 -- This module deinfes `controllerMain`, which is basically the entry point of
 -- the program.
 
-{-# LANGUAGE LambdaCase #-}
-
 module Controller
   ( controllerMain
   ) where
@@ -17,6 +15,7 @@ module Controller
 import           Control.Concurrent.STM
 import           Control.Lens
 import           Control.Monad.IO.Class       (liftIO)
+import           Data.Functor                 (void)
 import           Graphics.UI.Gtk              hiding (set)
 
 import           Controller.AppState          as App
@@ -37,11 +36,9 @@ import           Model
 controllerMain :: IO ()
 controllerMain = do
 
---------------------------------------------------------------------------------
--- Import GUI (from Glade)
---------------------------------------------------------------------------------
+  void initGUI
 
-  _ <- initGUI
+-- Import GUI from Glade
 
   builder <- builderNew
   builderAddFromString builder builderString
@@ -50,43 +47,25 @@ controllerMain = do
 
   windowSetDefaultSize (controllerWindow guiElems) 1024 640
 
---------------------------------------------------------------------------------
 -- Mutable state
---------------------------------------------------------------------------------
 
   appH <- initializeAppState guiElems
 
---------------------------------------------------------------------------------
--- Keyboard shortcuts
---------------------------------------------------------------------------------
+-- Callbacks
 
   registerKeyboardShortcuts guiElems appH
-
---------------------------------------------------------------------------------
--- Generic callbacks
---------------------------------------------------------------------------------
--- Callbacks requiring only basic functionality are defined within a more
--- structured and restrictive environemnt. In particular, all callbacks that
--- update parameters in `GUIState` are here in `registerGUIStateWidgets`.
-
-  registerGUIStateWidgets guiElems appH
-  registerCallbacks guiElems appH
-
---------------------------------------------------------------------------------
--- Other callbacks
---------------------------------------------------------------------------------
-
   registerDialogCallbacks guiElems appH
   registerMouseCallbacks guiElems appH
 
---------------------------------------------------------------------------------
--- Special callbacks
---------------------------------------------------------------------------------
--- Callbacks requiring more than basic functionality are defined by hand.
+  -- for widgets holding internal state that needs synchronization with the
+  -- GUIState
+  registerGUIStateCallbacks guiElems appH
+
+  -- for buttons operating purely on (Model, GUIState)
+  registerPureCallbacks guiElems appH
 
   -- On attempting to close either the display or controller window, quit the
   -- program, but only after asking for confirmation.
-
   let quitWithConfirmation :: EventM EAny Bool
       quitWithConfirmation = liftIO $ do
         isResponseConfirm <-
@@ -95,39 +74,32 @@ controllerMain = do
           then mainQuit >> return False
           else return True
 
-  _ <- controllerWindow guiElems `on` deleteEvent $ quitWithConfirmation
+  void $ controllerWindow guiElems `on` deleteEvent $ quitWithConfirmation
 
-  -- Run the automated procedure when switching to the 'Auto' page
-
-  _ <- autoButton guiElems `on` buttonActivated $ do
+  -- When switching to the Auto page, adjust the step size of the match level
+  -- spin button based on the number of match levels
+  void $ autoButton guiElems `on` buttonActivated $ do
     matchLevels' <- atomically
       $ matchLevels . resultMatches <$> getAppResults appH
 
     modifyAppGUIState appH $ set currentPage AutoPage
-
-    -- Increase the step size of the match level spin button with the number of
-    -- match levels
     let lvls = fromIntegral matchLevels'
         sqrtLvls = fromIntegral (floor $ sqrt lvls :: Integer)
     adjustment <- adjustmentNew 0 0 lvls 1 sqrtLvls 0
     spinButtonSetAdjustment (matchLevelSpinButton guiElems) adjustment
 
   -- Applying transforms to the data
-
   let apply = do
         newModel <- atomically $
           resultNewModel . appResults <$> getAppState appH
         modifyAppModelGUIState appH $
           set _1 newModel . over _2 resetGUIPreservingOptions
 
-  _ <- autoApplyButton guiElems     `on` buttonActivated $ apply
-  _ <- singleApplyButton guiElems   `on` buttonActivated $ apply
-  _ <- multipleApplyButton guiElems `on` buttonActivated $ apply
+  void $ autoApplyButton guiElems     `on` buttonActivated $ apply
+  void $ singleApplyButton guiElems   `on` buttonActivated $ apply
+  void $ multipleApplyButton guiElems `on` buttonActivated $ apply
 
-
---------------------------------------------------------------------------------
--- Start the GUI
---------------------------------------------------------------------------------
+-- Start
 
   widgetShowAll (controllerWindow guiElems)
   widgetHide (image guiElems)

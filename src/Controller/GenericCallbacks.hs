@@ -1,7 +1,7 @@
 -- TODO: summary
 
 module Controller.GenericCallbacks
-  ( registerCallbacks
+  ( registerPureCallbacks
   ) where
 
 import           Control.Lens           hiding (index)
@@ -114,10 +114,10 @@ registerPureCallback guiElems appH (PureCallback buttonRef action) =
   in  void $ on button buttonActivated $ 
         modifyAppModelGUIState appH $ uncurry action
 
-registerCallbacks ::
+registerPureCallbacks ::
      GUIElements
   -> AppStateHandle
   -> IO ()
-registerCallbacks guiElems appH =
+registerPureCallbacks guiElems appH =
   forM_ pureCallbacks $ registerPureCallback guiElems appH
 

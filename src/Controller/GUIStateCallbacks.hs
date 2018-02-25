@@ -1,5 +1,5 @@
 module Controller.GUIStateCallbacks
-  ( registerGUIStateWidgets
+  ( registerGUIStateCallbacks
   ) where
 
 import           Control.Lens                           hiding (index)
@@ -10,19 +10,19 @@ import           Controller.AppState
 import           Controller.GUIElements
 import           Controller.GUIStateWidgets
 
-registerGUIStateWidgets ::
+registerGUIStateCallbacks ::
      GUIElements
   -> AppStateHandle
   -> IO ()
-registerGUIStateWidgets guiElems appH =
-  forM_ syncWidgets $ registerGUIStateWidget guiElems appH
+registerGUIStateCallbacks guiElems appH =
+  forM_ syncWidgets $ registerGUIStateCallback guiElems appH
 
-registerGUIStateWidget
+registerGUIStateCallback
   :: GUIElements
   -> AppStateHandle
   -> SyncWidget
   -> IO ()
-registerGUIStateWidget guiElems appH syncCallback =
+registerGUIStateCallback guiElems appH syncCallback =
   case syncCallback of
     SyncSpinButtonDouble spinButtonRef stateRef -> do
       let spinButton = spinButtonRef guiElems
