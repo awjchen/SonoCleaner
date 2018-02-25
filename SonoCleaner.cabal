@@ -15,6 +15,8 @@ library
                      , Controller.Glade
                      , Controller.GUIElements
                      , Controller.GUIState
+                     , Controller.GUIStateCallbacks
+                     , Controller.GUIStateSync
                      , Controller.GUIStateWidgets
                      , Controller.Interpreter
                      , Controller.Keybindings

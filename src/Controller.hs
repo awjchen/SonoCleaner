@@ -28,7 +28,7 @@ import           Controller.GenericCallbacks
 import           Controller.Glade
 import           Controller.GUIElements
 import           Controller.GUIState
-import           Controller.GUIStateWidgets
+import           Controller.GUIStateCallbacks
 import           Controller.Interpreter
 import           Controller.Keybindings
 import           Controller.Mouse
@@ -57,48 +57,10 @@ controllerMain = do
   windowSetDefaultSize (controllerWindow guiElems) 1024 640
 
 --------------------------------------------------------------------------------
--- Define mutable state
+-- Mutable state
 --------------------------------------------------------------------------------
 
   appH <- initializeAppState guiElems
-
---------------------------------------------------------------------------------
--- Locking mechanism for GUI state synchronization and canvas updates
---------------------------------------------------------------------------------
-
--- Disclaimer: I am not very familliar with Gtk+ 3, and I don't know what I'm
--- doing.
-
--- For some reason, the triggering of one widget is often accompanied by the
--- triggering of other widgets, sometimes by design in Gtk+ 3 and sometimes
--- because of our synchronization of the Gtk+3 widget states with our `GUIState`
--- (or so I suspect). In any case, it would be expensive and redundant if each
--- of the widgets were to demand a canvas redraw. We prevent this by wrapping
--- every callback with a function `withUpdate`, which obtains a lock that
--- prevents both GUI state synchronization and canvas updates until all of the
--- callbacks have finished executing.
-
-  withUpdate <- do
-    updateLock <- atomically $ newTMVar () :: IO (TMVar ())
-
-    let withUpdate :: IO () -> IO ()
-        withUpdate action = do
-          maybeLock <- atomically $ tryTakeTMVar updateLock
-          action
-          case maybeLock of
-            Nothing -> return ()
-            Just () -> update >> atomically (putTMVar updateLock ())
-          where
-            update :: IO ()
-            update = do
-              (model, guiState) <- atomically $ getAppModelGUIState appH
-
-              updateGUIStateWidgets guiElems guiState
-              setGUISensitivity guiElems model guiState
-
-              atomically $ App.requestDraw appH
-
-    pure withUpdate
 
 --------------------------------------------------------------------------------
 -- Keyboard shortcuts
@@ -113,8 +75,8 @@ controllerMain = do
 -- structured and restrictive environemnt. In particular, all callbacks that
 -- update parameters in `GUIState` are here in `registerGUIStateWidgets`.
 
-  registerGUIStateWidgets guiElems appH withUpdate
-  registerCallbacks guiElems appH withUpdate
+  registerGUIStateWidgets guiElems appH
+  registerCallbacks guiElems appH
 
 --------------------------------------------------------------------------------
 -- Special callbacks
@@ -197,8 +159,8 @@ controllerMain = do
           Nothing -> ExceptT $ return $ Left "Could not get any files."
           Just filePath -> do
             newModel <- loadSSAFile filePath
-            liftIO $ withUpdate $ do
-              atomically $ modifyAppModelGUIState appH $ \(_, guiState) ->
+            liftIO $ do
+              modifyAppModelGUIState appH $ \(_, guiState) ->
                 (newModel, setDefaultViewBounds newModel guiState)
 
               setComboBoxTextLabels ("None" : getLabels newModel)
@@ -238,11 +200,11 @@ controllerMain = do
 
   -- Run the automated procedure when switching to the 'Auto' page
 
-  _ <- autoButton guiElems `on` buttonActivated $ withUpdate $ do
-    matchLevels' <- atomically $ do
-      matches <- resultMatches <$> getAppResults appH
-      modifyAppGUIState appH $ set currentPage AutoPage
-      pure $ matchLevels matches
+  _ <- autoButton guiElems `on` buttonActivated $ do
+    matchLevels' <- atomically
+      $ matchLevels . resultMatches <$> getAppResults appH
+
+    modifyAppGUIState appH $ set currentPage AutoPage
 
     -- Increase the step size of the match level spin button with the number of
     -- match levels
@@ -253,8 +215,9 @@ controllerMain = do
 
   -- Applying transforms to the data
 
-  let apply = withUpdate $ atomically $ do
-        newModel <- resultNewModel . appResults <$> getAppState appH
+  let apply = do
+        newModel <- atomically $
+          resultNewModel . appResults <$> getAppState appH
         modifyAppModelGUIState appH $
           set _1 newModel . over _2 resetGUIPreservingOptions
 
@@ -276,7 +239,7 @@ controllerMain = do
     layoutPick <- (pickFn . uncurry Point) <$> eventCoordinates
 
     case layoutPick of
-      Just LayoutPick_PlotArea{} -> liftIO $ withUpdate $ do
+      Just LayoutPick_PlotArea{} -> liftIO $ do
         model <- atomically $ getAppModel appH
         let (rx, ry) = getTraceBounds model ^. toViewPort . viewPortRadii
             -- hardcoded lower bounds:
@@ -287,7 +250,7 @@ controllerMain = do
               ScrollDown ->         sqrt 2
               _          -> 1
 
-        atomically $ modifyAppGUIState appH $ case modifiers of
+        modifyAppGUIState appH $ case modifiers of
           [Control] ->
             over (viewBounds . toViewPort . viewPortRadii . _1)
                  (bound (fst radiiBounds) . (*scaleFactor))
@@ -336,14 +299,14 @@ controllerMain = do
 
         case interpretMouseGesture mouseEvent1 mouseEvent2 of
           -- Left-click: panning
-          Just (MouseClickLeft pt) -> liftIO $ withUpdate $ atomically $ do
+          Just (MouseClickLeft pt) -> liftIO $ do
             let cx = bound (getTraceBounds model ^. viewBoundsX) (p_x pt)
                 cy = bound (getTraceBounds model ^. viewBoundsY) (p_y pt)
             modifyAppGUIState appH $ 
               set (viewBounds . toViewPort . viewPortCenter) (cx, cy)
 
           -- Right-click: selecting a single level-shift
-          Just (MouseClickRight pt) -> liftIO $ withUpdate $
+          Just (MouseClickRight pt) -> liftIO $
             case guiState ^. currentPage of
               MainPage ->
                 case iisFindNearestIndex (nearestSlope' (p_x pt)) levelShifts of
@@ -352,13 +315,13 @@ controllerMain = do
                     let t = timeAtSlope' j
                         h = mid' $ over both (ivIndex s)
                           $ runIndexInterval $ levelShiftEndpoints j
-                    in  atomically $ modifyAppGUIState appH $
+                    in  modifyAppGUIState appH $
                             set currentPage (SinglePage j)
                           . set (viewBounds.toViewPort.viewPortCenter) (t, h)
               _ -> return ()
 
           -- Right-click-and-drag: selecting a time interval for something
-          Just (MouseDragRightX (xLeft, xRight)) -> liftIO $ withUpdate $
+          Just (MouseDragRightX (xLeft, xRight)) -> liftIO $
             case guiState ^. currentPage of
               -- Selecting the level-shifts within a time interval
               MainPage ->  do
@@ -368,7 +331,7 @@ controllerMain = do
                        (IndexInterval (lowerTarget, upperTarget)) levelShifts of
                     Just (js@(_:_:_)) ->
                       let t = mid' $ over both timeAtSlope' $ (head &&& last) js
-                      in  atomically $ modifyAppGUIState appH $
+                      in  modifyAppGUIState appH $
                               set currentPage (MultiplePage js)
                             . set (viewBounds.toViewPort.viewPortCenter._1) t
                     _ -> return ()
@@ -380,14 +343,14 @@ controllerMain = do
                       $ over both nearestPoint' $ (xLeft, xRight)
                     t = mid' $ over both timeAtPoint' $ (l, u)
                 in  if iiLength interval < 3 then return () else
-                      atomically $ modifyAppGUIState appH $
+                      modifyAppGUIState appH $
                           set currentPage (CropPage $ Just interval)
                         . set (viewBounds . toViewPort . viewPortCenter . _1) t
               _ -> return ()
 
           -- Right-click-and-drag with a key modifier: interpolation brush
           Just (MouseDragRightXY keyMod (Point x1 y1) (Point x2 y2)) ->
-            liftIO $ withUpdate $ case guiState ^. currentPage of
+            liftIO $ case guiState ^. currentPage of
               MainPage ->
                 let stratum = case keyMod of
                       ModControl -> ReplaceLowerData
@@ -396,8 +359,7 @@ controllerMain = do
                     interval = IndexInterval
                                  (nearestPoint' x1, nearestPoint' x2)
                     operator = interpolationBrushOp stratum interval (y1, y2)
-                in  withUpdate $ atomically $
-                      modifyAppModel appH $ applyToModel operator
+                in  modifyAppModel appH $ applyToModel operator
               _ -> return ()
 
           _ -> return ()

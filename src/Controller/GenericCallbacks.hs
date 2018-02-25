@@ -4,7 +4,6 @@ module Controller.GenericCallbacks
   ( registerCallbacks
   ) where
 
-import           Control.Concurrent.STM
 import           Control.Lens           hiding (index)
 import           Control.Monad
 import           Data.Default
@@ -108,21 +107,17 @@ pureCallbacks =
 registerPureCallback
   :: GUIElements
   -> AppStateHandle
-  -> (IO () -> IO ())
   -> PureCallback
   -> IO ()
-registerPureCallback guiElems appH withUpdate
-  (PureCallback buttonRef action) =
+registerPureCallback guiElems appH (PureCallback buttonRef action) =
   let button = buttonRef guiElems
-  in  void $ on button buttonActivated $ withUpdate $ atomically $
+  in  void $ on button buttonActivated $ 
         modifyAppModelGUIState appH $ uncurry action
 
 registerCallbacks ::
      GUIElements
   -> AppStateHandle
-  -> (IO () -> IO ())
   -> IO ()
-registerCallbacks guiElems appH withUpdate =
-  forM_ pureCallbacks
-    $ registerPureCallback guiElems appH withUpdate
+registerCallbacks guiElems appH =
+  forM_ pureCallbacks $ registerPureCallback guiElems appH
 
