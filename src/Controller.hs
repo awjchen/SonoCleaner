@@ -14,16 +14,15 @@ module Controller
   ( controllerMain
   ) where
 
-import           Control.Arrow                          ((&&&))
+import           Control.Arrow                ((&&&))
 import           Control.Concurrent.STM
 import           Control.Lens
-import           Control.Monad.IO.Class                 (liftIO)
-import           Control.Monad.Trans.Except
+import           Control.Monad.IO.Class       (liftIO)
 import           Graphics.Rendering.Chart
-import           Graphics.UI.Gtk                        hiding (set)
-import           System.FilePath                        (splitFileName)
+import           Graphics.UI.Gtk              hiding (set)
 
-import           Controller.AppState as App
+import           Controller.AppState          as App
+import           Controller.DialogCallbacks
 import           Controller.GenericCallbacks
 import           Controller.Glade
 import           Controller.GUIElements
@@ -38,7 +37,6 @@ import           Controller.Util
 import           Model
 import           Types.Bounds
 import           Types.Indices
--- import           View
 
 controllerMain :: IO ()
 controllerMain = do
@@ -83,6 +81,9 @@ controllerMain = do
 --------------------------------------------------------------------------------
 -- Callbacks requiring more than basic functionality are defined by hand.
 
+  -- Dialog callbacks
+  registerDialogCallbacks guiElems appH
+
   -- On attempting to close either the display or controller window, quit the
   -- program, but only after asking for confirmation.
 
@@ -95,108 +96,6 @@ controllerMain = do
           else return True
 
   _ <- controllerWindow guiElems `on` deleteEvent $ quitWithConfirmation
-
-  -- Saving .ssa files
-
-  fileChooserSaveDialog <- do
-    fc <- fileChooserDialogNew (Just "Save an .ssa file")
-                               (Just (controllerWindow guiElems))
-                               FileChooserActionSave
-                               [   ("Cancel" :: String, ResponseCancel)
-                                 , ("Save"   :: String, ResponseAccept) ]
-
-    fileChooserSetSelectMultiple          fc False
-    fileChooserSetDoOverwriteConfirmation fc True
-
-    pure fc
-
-  _ <- saveButton guiElems `on` buttonActivated $ do
-    (originalDirectory, originalFileName) <-
-      splitFileName . getFilePath <$> atomically (getAppModel appH)
-    _ <- fileChooserSetCurrentFolder fileChooserSaveDialog originalDirectory
-    fileChooserSetCurrentName fileChooserSaveDialog
-      ("output_" ++ originalFileName)
-
-    responseID <- dialogRun fileChooserSaveDialog
-    widgetHide fileChooserSaveDialog
-
-    case responseID of
-      ResponseAccept -> do
-        mFilePath <- fileChooserGetFilename fileChooserSaveDialog
-        case mFilePath of
-          Nothing -> return ()
-          Just filePath -> guiRunExceptT (controllerWindow guiElems) $ do
-                (liftIO $ atomically $ getAppModel appH)
-            >>= saveSSAFile filePath
-            >>= (liftIO . messageDialog (controllerWindow guiElems))
-      _ -> return ()
-
-  -- Opening .ssa files
-
-  fileChooserOpenDialog <- do
-    fc <- fileChooserDialogNew (Just "Open an .ssa file")
-                               (Just (controllerWindow guiElems))
-                               FileChooserActionOpen
-                               [   ("Cancel" :: String, ResponseCancel)
-                                 , ("Open"   :: String, ResponseAccept) ]
-
-    fileChooserSetSelectMultiple fc False
-
-    fileFilter <- fileFilterNew
-    fileFilterAddPattern fileFilter ("*.ssa" :: String)
-    fileChooserSetFilter fc fileFilter
-
-    pure fc
-
-  _ <- openButton guiElems `on` buttonActivated $ do
-    responseID <- dialogRun fileChooserOpenDialog
-    widgetHide fileChooserOpenDialog
-
-    case responseID of
-      ResponseAccept -> guiRunExceptT (controllerWindow guiElems) $ do
-        mFilePath <- liftIO $ fileChooserGetFilename fileChooserOpenDialog
-        case mFilePath of
-          Nothing -> ExceptT $ return $ Left "Could not get any files."
-          Just filePath -> do
-            newModel <- loadSSAFile filePath
-            liftIO $ do
-              modifyAppModelGUIState appH $ \(_, guiState) ->
-                (newModel, setDefaultViewBounds newModel guiState)
-
-              setComboBoxTextLabels ("None" : getLabels newModel)
-                                    (referenceTraceComboBoxText guiElems)
-
-              widgetShowAll (controllerWindow guiElems)
-
-      _ -> return ()
-
-  -- Screenshots
-
-  fileChooserScreenshotDialog <- do
-    fc <- fileChooserDialogNew (Just "Save a screenshot")
-                               (Just (controllerWindow guiElems))
-                               FileChooserActionSave
-                               [   ("Cancel" :: String, ResponseCancel)
-                                 , ("Save"   :: String, ResponseAccept) ]
-
-    fileChooserSetSelectMultiple          fc False
-    fileChooserSetDoOverwriteConfirmation fc True
-
-    pure fc
-
-  _ <- screenshotSaveButton guiElems `on` buttonActivated $
-    App.requestScreenshot appH $ \defaultFilePath -> do
-      let (defaultDirectory, defaultFileName) = splitFileName defaultFilePath
-      _ <- fileChooserSetCurrentFolder
-            fileChooserScreenshotDialog defaultDirectory
-      fileChooserSetCurrentName fileChooserScreenshotDialog $ defaultFileName
-
-      responseID <- dialogRun fileChooserScreenshotDialog
-      widgetHide fileChooserScreenshotDialog
-
-      case responseID of
-        ResponseAccept -> fileChooserGetFilename fileChooserScreenshotDialog
-        _              -> pure $ Nothing
 
   -- Run the automated procedure when switching to the 'Auto' page
 
@@ -302,7 +201,7 @@ controllerMain = do
           Just (MouseClickLeft pt) -> liftIO $ do
             let cx = bound (getTraceBounds model ^. viewBoundsX) (p_x pt)
                 cy = bound (getTraceBounds model ^. viewBoundsY) (p_y pt)
-            modifyAppGUIState appH $ 
+            modifyAppGUIState appH $
               set (viewBounds . toViewPort . viewPortCenter) (cx, cy)
 
           -- Right-click: selecting a single level-shift

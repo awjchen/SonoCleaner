@@ -11,6 +11,7 @@ library
   hs-source-dirs:      src
   exposed-modules:     Controller
                      , Controller.AppState
+                     , Controller.DialogCallbacks
                      , Controller.GenericCallbacks
                      , Controller.Glade
                      , Controller.GUIElements
