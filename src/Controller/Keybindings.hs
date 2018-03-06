@@ -71,6 +71,7 @@ autoPageKeybindings = generalKeybindings `M.union` M.fromList
   , (("B", [Shift]), GUIAction matchLevelSpinButton $ spinButtonDo SpinPageBackward)
 
   , (("Escape", []), GUIAction autoCancelButton buttonClicked)
+  , (("Tab",    []), GUIAction autoCancelButton buttonClicked)
   , (("space",  []), GUIAction autoApplyButton buttonClicked)
   ]
 
@@ -89,6 +90,7 @@ singlePageKeybindings = generalKeybindings `M.union` M.fromList
   , (("s", []), GUIAction singleSlopeFitRadioButton      $ flip toggleButtonSetActive True)
 
   , (("Escape", []), GUIAction singleCancelButton buttonClicked)
+  , (("Tab",    []), GUIAction singleCancelButton buttonClicked)
   , (("space",  []), GUIAction singleApplyButton buttonClicked)
   ]
 
@@ -105,6 +107,7 @@ multiplePageKeybindings = generalKeybindings `M.union` M.fromList
   , (("s", []), GUIAction multipleCancelRadioButton $ flip toggleButtonSetActive True)
 
   , (("Escape", []), GUIAction multipleCancelButton buttonClicked)
+  , (("Tab",    []), GUIAction multipleCancelButton buttonClicked)
   , (("space",  []), GUIAction multipleApplyButton buttonClicked)
   ]
 
@@ -123,6 +126,7 @@ labelPageKeybindings = generalKeybindings `M.union` M.fromList
   , (("r", []), GUIAction defaultParametersButton buttonClicked)
 
   , (("Escape",  []), GUIAction labelBackButton buttonClicked)
+  , (("Tab",     []), GUIAction labelBackButton buttonClicked)
   ]
 
 viewPageKeybindings :: M.Map KeyPress GUIAction
@@ -130,6 +134,7 @@ viewPageKeybindings = generalKeybindings `M.union` M.fromList
   [ (("r" , []), GUIAction showReplicateTracesCheckButton toggleToggleButton)
 
   , (("Escape",  []), GUIAction viewBackButton buttonClicked)
+  , (("Tab",     []), GUIAction viewBackButton buttonClicked)
   ]
 
 cropPageKeybindings :: M.Map KeyPress GUIAction
@@ -138,6 +143,7 @@ cropPageKeybindings = generalKeybindings `M.union` M.fromList
   , (("b", []),       GUIAction applyUncropButton buttonClicked)
 
   , (("Escape",  []), GUIAction cropBackButton    buttonClicked)
+  , (("Tab",     []), GUIAction cropBackButton    buttonClicked)
   ]
 
 qualityPageKeybindings :: M.Map KeyPress GUIAction
@@ -147,6 +153,7 @@ qualityPageKeybindings = generalKeybindings `M.union` M.fromList
   , (("b", []),       GUIAction qualityBadButton      buttonClicked)
 
   , (("Escape",  []), GUIAction qualityBackButton buttonClicked)
+  , (("Tab",     []), GUIAction qualityBackButton buttonClicked)
   ]
 
 screenshotPageKeybindings :: M.Map KeyPress GUIAction
@@ -154,6 +161,7 @@ screenshotPageKeybindings = generalKeybindings `M.union` M.fromList
   [ (("s", []),       GUIAction screenshotSaveButton buttonClicked)
 
   , (("Escape",  []), GUIAction screenshotBackButton buttonClicked)
+  , (("Tab",     []), GUIAction screenshotBackButton buttonClicked)
   ]
 
 registerKeyboardShortcuts :: GUIElements -> AppHandle -> IO ()
