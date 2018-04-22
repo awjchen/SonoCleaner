@@ -17,7 +17,7 @@ import           Text.RawString.QQ (r)
 builderString :: T.Text
 builderString = [r|
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- Generated with glade 3.20.2 -->
+<!-- Generated with glade 3.22.1 -->
 <interface>
   <requires lib="gtk+" version="3.10"/>
   <object class="GtkAdjustment" id="jumpToleranceAdjustment">
@@ -53,6 +53,9 @@ builderString = [r|
   </object>
   <object class="GtkWindow" id="controllerWindow">
     <property name="can_focus">False</property>
+    <child type="titlebar">
+      <placeholder/>
+    </child>
     <child>
       <object class="GtkBox">
         <property name="visible">True</property>
@@ -578,7 +581,7 @@ Interpolation brush
                                 <property name="visible">True</property>
                                 <property name="can_focus">True</property>
                                 <property name="receives_default">True</property>
-                                <property name="tooltip_text" translatable="yes">[Escape]</property>
+                                <property name="tooltip_text" translatable="yes">[Tab, Escape]</property>
                               </object>
                               <packing>
                                 <property name="expand">False</property>
@@ -816,7 +819,7 @@ adjustment</property>
                                 <property name="visible">True</property>
                                 <property name="can_focus">True</property>
                                 <property name="receives_default">True</property>
-                                <property name="tooltip_text" translatable="yes">[Escape]</property>
+                                <property name="tooltip_text" translatable="yes">[Tab, Escape]</property>
                               </object>
                               <packing>
                                 <property name="expand">False</property>
@@ -1022,7 +1025,7 @@ adjustment</property>
                                 <property name="visible">True</property>
                                 <property name="can_focus">True</property>
                                 <property name="receives_default">True</property>
-                                <property name="tooltip_text" translatable="yes">[Escape]</property>
+                                <property name="tooltip_text" translatable="yes">[Tab, Escape]</property>
                               </object>
                               <packing>
                                 <property name="expand">False</property>
@@ -1230,7 +1233,7 @@ The automated procedure will only match level-shifts if their difference is less
                                 <property name="visible">True</property>
                                 <property name="can_focus">True</property>
                                 <property name="receives_default">True</property>
-                                <property name="tooltip_text" translatable="yes">[Escape]</property>
+                                <property name="tooltip_text" translatable="yes">[Tab, Escape]</property>
                                 <property name="halign">start</property>
                               </object>
                               <packing>
@@ -1385,7 +1388,7 @@ The automated procedure will only match level-shifts if their difference is less
                             <property name="visible">True</property>
                             <property name="can_focus">True</property>
                             <property name="receives_default">True</property>
-                            <property name="tooltip_text" translatable="yes">[Escape]</property>
+                            <property name="tooltip_text" translatable="yes">[Tab, Escape]</property>
                           </object>
                           <packing>
                             <property name="expand">False</property>
@@ -1501,7 +1504,7 @@ The automated procedure will only match level-shifts if their difference is less
                             <property name="visible">True</property>
                             <property name="can_focus">True</property>
                             <property name="receives_default">True</property>
-                            <property name="tooltip_text" translatable="yes">[Escape]</property>
+                            <property name="tooltip_text" translatable="yes">[Tab, Escape]</property>
                           </object>
                           <packing>
                             <property name="expand">False</property>
@@ -1633,7 +1636,7 @@ The automated procedure will only match level-shifts if their difference is less
                             <property name="visible">True</property>
                             <property name="can_focus">True</property>
                             <property name="receives_default">True</property>
-                            <property name="tooltip_text" translatable="yes">[Escape]</property>
+                            <property name="tooltip_text" translatable="yes">[Tab, Escape]</property>
                           </object>
                           <packing>
                             <property name="expand">False</property>
@@ -1766,7 +1769,7 @@ The automated procedure will only match level-shifts if their difference is less
                             <property name="visible">True</property>
                             <property name="can_focus">True</property>
                             <property name="receives_default">True</property>
-                            <property name="tooltip_text" translatable="yes">[Escape]</property>
+                            <property name="tooltip_text" translatable="yes">[Tab, Escape]</property>
                           </object>
                           <packing>
                             <property name="expand">False</property>
@@ -1804,9 +1807,6 @@ The automated procedure will only match level-shifts if their difference is less
           </packing>
         </child>
       </object>
-    </child>
-    <child type="titlebar">
-      <placeholder/>
     </child>
   </object>
 </interface>
