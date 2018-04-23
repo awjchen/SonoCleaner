@@ -13,32 +13,47 @@ module Model.Model
   ( Model
   , TraceQuality (..)
 
-  -- Model operations
-  , applyToModel
+  -- Data versioning
+  , getTraceDataVersion
 
+  -- Cropping
+  , isCropped
   , crop
   , uncrop
-  , isCropped
 
-  , setQuality
+  -- Selecting traces
+  , existsPrevTrace
+  , existsNextTrace
+  , gotoNextTrace
+  , gotoPrevTrace
 
+  , findTraceByLabel
+
+  , getTwinTrace
+  , gotoTwinTrace
+
+  -- Trace history
+  , existsPrevHistory
+  , existsNextHistory
   , undo
   , redo
 
-  , gotoNextTrace
-  , gotoPrevTrace
-  , gotoTwinTrace
+  -- Trace quality
+  , setQuality
+  , getQuality
 
-  -- Model accessors
-  , getTraceDataVersion
+  -- Modifying data
+  , applyToModel
 
+  -- Querying
   , getFilePath
+  , getTimeStep
+  , getLabels
+
+  , getInputState
+  , getLabel
 
   , getCurrentState
-  , getInputState
-  , getTimeStep
-  , getLabel
-  , getLabels
   , getTraceBounds
 
   , getTimes
@@ -47,21 +62,11 @@ module Model.Model
   , nearestPoint
   , nearestSlope
 
-  , getQuality
-
-  , findTraceByLabel
-  , getTwinTrace
-
-  , existsPrevTrace
-  , existsNextTrace
-  , existsPrevHistory
-  , existsNextHistory
-
-  -- File input
+  -- Model initialization
   , loadSSAFile
   , initModel
 
-  -- File output
+  -- Model output
   , saveSSAFile
   ) where
 
@@ -135,10 +140,6 @@ instance FromField TraceQuality where
 makeLenses ''Model
 makeLenses ''TraceInfo
 
--------------------------------------------------------------------------------
--- Lenses
--------------------------------------------------------------------------------
-
 currentTrace :: Lens' Model TraceInfo
 currentTrace = traces . Z.extract
 
@@ -146,23 +147,21 @@ currentTraceState :: Lens' Model TraceState
 currentTraceState = currentTrace . history . Z.extract
 
 -------------------------------------------------------------------------------
--- Model operations
+-- Data versioning
 -------------------------------------------------------------------------------
 
--- We track versions of the data to avoid recomputations
+-- We track when the current `TraceState` changes in order to avoid
+-- recomputation. Changes are signaled by `incrementVersion`.
+
 incrementVersion :: Model -> Model
 incrementVersion = over traceDataVersion succ
 
--- Lifting a TraceOperator via `applyToModel` is the only way to manipulate the
--- data contained in a `Model` from outside the module (other than by cropping,
--- which doesn't count because it only masks the data).
+getTraceDataVersion :: Model -> Integer
+getTraceDataVersion = view traceDataVersion
 
-applyToModel :: TraceOperator -> Model -> Model
-applyToModel traceOp = incrementVersion
-  . over (currentTrace . history)
-      (\hist -> Z.clobberRight (getOp traceOp (hist ^. Z.extract)) hist)
-
+-------------------------------------------------------------------------------
 -- Cropping
+-------------------------------------------------------------------------------
 
 -- All functions relying on the Model should not need to care about whether or
 -- not the traced are cropped; that is, it is the Model's responsibility to
@@ -179,16 +178,6 @@ applyToModel traceOp = incrementVersion
 allTraceStates :: Traversal' Model TraceState
 allTraceStates = traces . traverse . history . traverse
 
-crop :: IndexInterval Index0 -> Model -> Model
-crop cropInterval =
-    incrementVersion
-  . over allTraceStates (cropTraceState cropInterval)
-
-uncrop :: Model -> Model
-uncrop =
-    incrementVersion
-  . over allTraceStates uncropTraceState
-
 -- By the cropping invariant, we need only inspect a single trace to determine
 -- the cropping context.
 croppingContext :: Lens' Model TraceContext
@@ -200,22 +189,38 @@ isCropped model =
     RootContext _ -> False
     CroppedContext _ _ _ -> True
 
--- Quality
+getCropBounds :: Model -> IndexInterval Index0
+getCropBounds model =
+  case model ^. croppingContext of
+    RootContext bounds -> bounds
+    CroppedContext totalOffset cropInterval _ ->
+      let interval@(l, _) = runIndexInterval cropInterval
+          shift = index0 totalOffset `iMinus` l
+      in  IndexInterval $ over both (iTranslate shift) interval
 
-setQuality :: TraceQuality -> Model -> Model
-setQuality = set (currentTrace . quality)
+crop :: IndexInterval Index0 -> Model -> Model
+crop cropInterval =
+    incrementVersion
+  . over allTraceStates (cropTraceState cropInterval)
 
--- History
+uncrop :: Model -> Model
+uncrop =
+    incrementVersion
+  . over allTraceStates uncropTraceState
 
-undo :: Model -> Model
-undo = incrementVersion
-  . over (currentTrace . history) Z.tugLeft
+-------------------------------------------------------------------------------
+-- Selecting traces
+-------------------------------------------------------------------------------
 
-redo :: Model -> Model
-redo = incrementVersion
-  . over (currentTrace . history) Z.tugRight
+-- Walking along the zipper
 
--- Navigating traces
+existsPrevTrace :: Model -> Bool
+existsPrevTrace model =
+  not $ null $ model ^. traces . Z.lefts
+
+existsNextTrace :: Model -> Bool
+existsNextTrace model =
+  not $ null $ model ^. traces . Z.rights
 
 gotoNextTrace :: Model -> Model
 gotoNextTrace = incrementVersion
@@ -224,6 +229,38 @@ gotoNextTrace = incrementVersion
 gotoPrevTrace :: Model -> Model
 gotoPrevTrace = incrementVersion
   . over traces Z.tugLeft
+
+-- By label
+
+findTraceByLabel :: Model -> String -> Maybe TraceState
+findTraceByLabel model label' =
+  view (history . Z.extract)
+    <$> find ((== label') . view label) (model ^. traces)
+
+-- Twin traces
+
+getTwinTrace :: Model -> Maybe TraceState
+getTwinTrace model = do
+  let label'  = model ^. currentTrace . label
+  twinLabel' <- twinLabel label'
+  findTraceByLabel model twinLabel'
+
+parseTrxLabel :: String -> Maybe (String, String)
+parseTrxLabel str | Just suffix <- stripPrefix "TRX" str
+                  , [t1, t2, ':', r1, r2] <- suffix
+                  = Just ([t1, t2], [r1, r2])
+                  | otherwise = Nothing
+
+makeTrxLabel :: (String, String) -> String
+makeTrxLabel (t, r) = "TRX" ++ t ++ ":" ++ r
+
+twinLabel :: String -> Maybe String
+twinLabel = fmap (makeTrxLabel . swap) . parseTrxLabel
+
+twinLabelQuotient :: String -> Maybe String
+twinLabelQuotient str = makeTrxLabel . sort2 <$> parseTrxLabel str
+  where
+    sort2 (s1, s2) = (min s1 s2, max s1 s2)
 
 gotoTwinTrace :: Model -> Model
 gotoTwinTrace model = case getTwinTrace model of
@@ -246,44 +283,78 @@ gotoTwinTrace model = case getTwinTrace model of
         _             -> model
 
 -------------------------------------------------------------------------------
--- Model accessors
+-- Trace history
 -------------------------------------------------------------------------------
 
--- Trace data version
+existsPrevHistory :: Model -> Bool
+existsPrevHistory model =
+  not $ null $ model ^. currentTrace . history . Z.lefts
 
-getTraceDataVersion :: Model -> Integer
-getTraceDataVersion = view traceDataVersion
+existsNextHistory :: Model -> Bool
+existsNextHistory model =
+  not $ null $ model ^. currentTrace . history . Z.rights
 
--- Current file information
+undo :: Model -> Model
+undo = incrementVersion
+  . over (currentTrace . history) Z.tugLeft
+
+redo :: Model -> Model
+redo = incrementVersion
+  . over (currentTrace . history) Z.tugRight
+
+-------------------------------------------------------------------------------
+-- Trace quality
+-------------------------------------------------------------------------------
+
+setQuality :: TraceQuality -> Model -> Model
+setQuality = set (currentTrace . quality)
+
+getQuality :: Model -> TraceQuality
+getQuality = view $ currentTrace . quality
+
+qualityFileSuffix :: String
+qualityFileSuffix = ".quality"
+
+-------------------------------------------------------------------------------
+-- Modifying data
+-------------------------------------------------------------------------------
+
+-- Lifting a TraceOperator via `applyToModel` is the only way to manipulate the
+-- data contained in a `Model` from outside the module (other than by cropping,
+-- which doesn't count because it only masks the data).
+
+applyToModel :: TraceOperator -> Model -> Model
+applyToModel traceOp = incrementVersion
+  . over (currentTrace . history)
+      (\hist -> Z.clobberRight (getOp traceOp (hist ^. Z.extract)) hist)
+
+-------------------------------------------------------------------------------
+-- Querying
+-------------------------------------------------------------------------------
+
+-- Ssa file
 
 getFilePath :: Model -> String
 getFilePath = view filePath
 
-getCropBounds :: Model -> IndexInterval Index0
-getCropBounds model =
-  case model ^. croppingContext of
-    RootContext bounds -> bounds
-    CroppedContext totalOffset cropInterval _ ->
-      let interval@(l, _) = runIndexInterval cropInterval
-          shift = index0 totalOffset `iMinus` l
-      in  IndexInterval $ over both (iTranslate shift) interval
+getTimeStep :: Model -> Double
+getTimeStep = view timeStep
 
--- Current trace information
+getLabels :: Model -> [String]
+getLabels model = model ^.. traces . folded . label
 
-getCurrentState :: Model -> TraceState
-getCurrentState = view $ currentTrace . history . Z.extract
+-- Current trace
 
 getInputState :: Model -> TraceState
 getInputState = view $ currentTrace . history . Z.head
 
-getTimeStep :: Model -> Double
-getTimeStep = view timeStep
-
 getLabel :: Model -> String
 getLabel = view $ currentTrace . label
 
-getLabels :: Model -> [String]
-getLabels model = model ^.. traces . folded . label
+-- Current `TraceState`
+
+getCurrentState :: Model -> TraceState
+getCurrentState = view currentTraceState
 
 getTraceBounds :: Model -> ViewBounds
 getTraceBounds model =
@@ -293,6 +364,8 @@ getTraceBounds model =
       boundsX = over both time $ runIndexInterval $ iiGetIVectorBounds s
       boundsY = traceState ^. seriesBounds
   in  ViewBounds boundsX boundsY
+
+-- Times (depends on cropping state)
 
 getTimes :: Model -> IVector Index0 Double
 getTimes model = unsafeIvSlice (getCropBounds model) $ model ^. fakeTimes
@@ -318,63 +391,8 @@ nearestSlope model t =
       bounds = iiDiff $ iiGetIVectorBounds (getTimes model)
   in  iiBound bounds $ index1 $ subtract offset $ round $ t/dt - 0.5
 
-getQuality :: Model -> TraceQuality
-getQuality = view $ currentTrace . quality
-
--- Related traces
-
-findTraceByLabel :: Model -> String -> Maybe TraceState
-findTraceByLabel model label' =
-  view (history . Z.extract)
-    <$> find ((== label') . view label) (model ^. traces)
-
-getTwinTrace :: Model -> Maybe TraceState
-getTwinTrace model = do
-  let label'  = model ^. currentTrace . label
-  twinLabel' <- twinLabel label'
-  findTraceByLabel model twinLabel'
-
--- Zipper positions for files and traces and trace history
-
-existsPrevTrace :: Model -> Bool
-existsPrevTrace model =
-  not $ null $ model ^. traces . Z.lefts
-
-existsNextTrace :: Model -> Bool
-existsNextTrace model =
-  not $ null $ model ^. traces . Z.rights
-
-existsPrevHistory :: Model -> Bool
-existsPrevHistory model =
-  not $ null $ model ^. currentTrace . history . Z.lefts
-
-existsNextHistory :: Model -> Bool
-existsNextHistory model =
-  not $ null $ model ^. currentTrace . history . Z.rights
-
 -------------------------------------------------------------------------------
--- Twin traces
--------------------------------------------------------------------------------
-
-parseTrxLabel :: String -> Maybe (String, String)
-parseTrxLabel str | Just suffix <- stripPrefix "TRX" str
-                  , [t1, t2, ':', r1, r2] <- suffix
-                  = Just ([t1, t2], [r1, r2])
-                  | otherwise = Nothing
-
-makeTrxLabel :: (String, String) -> String
-makeTrxLabel (t, r) = "TRX" ++ t ++ ":" ++ r
-
-twinLabel :: String -> Maybe String
-twinLabel = fmap (makeTrxLabel . swap) . parseTrxLabel
-
-twinLabelQuotient :: String -> Maybe String
-twinLabelQuotient str = makeTrxLabel . sort2 <$> parseTrxLabel str
-  where
-    sort2 (s1, s2) = (min s1 s2, max s1 s2)
-
--------------------------------------------------------------------------------
--- File initialization
+-- Model initialization
 -------------------------------------------------------------------------------
 
 loadSSAFile :: FilePath -> ExceptT String IO Model
@@ -442,7 +460,7 @@ readQualityFile ssaFilePath' =
   in  ExceptT $ catch reader handler
 
 -------------------------------------------------------------------------------
--- File output
+-- Model output
 -------------------------------------------------------------------------------
 
 toSSA :: Model -> SSA
@@ -488,10 +506,3 @@ traceQualitySummary qualities =
       summary qual count =
         printf "%d %s TRX channels." count (show qual)
   in  fmap (uncurry summary) counts
-
--------------------------------------------------------------------------------
--- File handling constants
--------------------------------------------------------------------------------
-
-qualityFileSuffix :: String
-qualityFileSuffix = ".quality"
