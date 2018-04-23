@@ -74,10 +74,7 @@ setGUISensitivity guiElems model guiState = case guiState ^. currentPage of
   CropPage mCropInterval -> do
     widgetSetSensitive (applyCropButton guiElems)
       $ isJust mCropInterval
-    widgetSetSensitive (applyUncropButton guiElems)
-      $ case getCurrentState model ^. context of
-          RootContext      -> False
-          CroppedContext _ -> True
+    widgetSetSensitive (applyUncropButton guiElems) (isCropped model)
 
   _ -> return ()
 

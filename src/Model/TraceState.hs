@@ -23,7 +23,9 @@ import           Types.Indices
 -- Types
 --------------------------------------------------------------------------------
 
-data TraceContext = RootContext | CroppedContext TraceState
+data TraceContext
+  = RootContext (IndexInterval Index0)
+  | CroppedContext Int (IndexInterval Index0) TraceState
 
 data TraceState = TraceState
   { _context          :: TraceContext
@@ -42,8 +44,11 @@ makeLenses ''TraceState
 cropTraceState :: IndexInterval Index0 -> TraceState -> TraceState
 cropTraceState cropInterval ts =
   let croppedSeries = unsafeIvSlice cropInterval (ts ^. series)
-      context' = CroppedContext ts
       offset = unsafeRunIndex0 $ iiLeft cropInterval
+      totalOffset' = case ts ^. context of
+        RootContext _                  -> offset
+        CroppedContext totalOffset _ _ -> offset + totalOffset
+      context' = CroppedContext totalOffset' cropInterval ts
       modifiedSegments' =
           iisTranslate (-offset)
         $ iisFilter (`iiMember` iiDiff cropInterval)
@@ -52,10 +57,10 @@ cropTraceState cropInterval ts =
         & context .~ context'
         & modifiedSegments .~ modifiedSegments'
 
-uncropTraceState :: IndexInterval Index0 -> TraceState -> TraceState
-uncropTraceState cropInterval ts = case ts ^. context of
-  RootContext -> ts
-  CroppedContext cts ->
+uncropTraceState :: TraceState -> TraceState
+uncropTraceState ts = case ts ^. context of
+  RootContext _ -> ts
+  CroppedContext _ cropInterval cts ->
     let start = unsafeRunIndex0 $ iiLeft cropInterval
         ds = snd $ ts ^. diffSeries
         updates = ivMap (first (iTranslate start)) $ ivIndexed1 ds
@@ -71,7 +76,7 @@ uncropTraceState cropInterval ts = case ts ^. context of
 initTraceState :: IVector Index0 Double -> TraceState
 initTraceState series' =
   TraceState
-    { _context          = RootContext
+    { _context          = RootContext (iiGetIVectorBounds series')
     , _series           = series'
     , _diffSeries       = diffSeries'
     , _diff2Series      = diff2Series'

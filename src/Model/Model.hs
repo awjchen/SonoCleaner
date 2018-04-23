@@ -18,6 +18,7 @@ module Model.Model
 
   , crop
   , uncrop
+  , isCropped
 
   , setQuality
 
@@ -74,7 +75,6 @@ import qualified Data.ByteString.Lazy       as BL
 import           Data.Csv
 import           Data.Foldable              (find, foldl')
 import           Data.List                  (findIndex, stripPrefix)
-import qualified Data.List.NonEmpty         as NE
 import qualified Data.Map.Strict            as M
 import           Data.Maybe                 (fromMaybe, mapMaybe)
 import           Data.Time.Clock.POSIX      (getPOSIXTime)
@@ -102,11 +102,11 @@ import           Model.TraceState
 data Model = Model
   { _filePath         :: FilePath
   , _ssaFile          :: SSA
-  -- We store the (simplified) timestamps here merely to avoid their recomputation
+  -- We store the (simplified) timestamps here, in `fakeTimes` merely to avoid
+  -- their recomputation
   , _fakeTimes        :: IVector Index0 Double
   , _traces           :: Z.Zipper TraceInfo
   , _timeStep         :: Double
-  , _cropHistory      :: NE.NonEmpty (IndexInterval Index0)
   , _traceDataVersion :: Integer }
 
 data TraceInfo = TraceInfo
@@ -132,15 +132,18 @@ instance FromField TraceQuality where
     | s == "Bad"      = pure Bad
     | otherwise       = mzero
 
+makeLenses ''Model
+makeLenses ''TraceInfo
+
 -------------------------------------------------------------------------------
 -- Lenses
 -------------------------------------------------------------------------------
 
-makeLenses ''Model
-makeLenses ''TraceInfo
-
 currentTrace :: Lens' Model TraceInfo
 currentTrace = traces . Z.extract
+
+currentTraceState :: Lens' Model TraceState
+currentTraceState = currentTrace . history . Z.extract
 
 -------------------------------------------------------------------------------
 -- Model operations
@@ -169,23 +172,33 @@ applyToModel traceOp = incrementVersion
 -- only be applied to data from the Model which generated them, and so there is
 -- still room for error.
 
+-- Cropping invariant: all `TraceState`s (i.e. those traversed by
+-- `allTraceStates`) must be cropped in the same way (i.e. by the same series of
+-- intervals).
+
 allTraceStates :: Traversal' Model TraceState
 allTraceStates = traces . traverse . history . traverse
 
 crop :: IndexInterval Index0 -> Model -> Model
-crop cropInterval = incrementVersion
+crop cropInterval =
+    incrementVersion
   . over allTraceStates (cropTraceState cropInterval)
-  . over cropHistory (cropInterval NE.<|)
 
 uncrop :: Model -> Model
-uncrop model =
-  let (cropInterval NE.:| bounds) = model ^. cropHistory
-  in  case NE.nonEmpty bounds of
-        Nothing -> model
-        Just bounds' -> model
-          & incrementVersion
-          & allTraceStates %~ uncropTraceState cropInterval
-          & cropHistory .~ bounds'
+uncrop =
+    incrementVersion
+  . over allTraceStates uncropTraceState
+
+-- By the cropping invariant, we need only inspect a single trace to determine
+-- the cropping context.
+croppingContext :: Lens' Model TraceContext
+croppingContext = currentTraceState . context
+
+isCropped :: Model -> Bool
+isCropped model =
+  case model ^. croppingContext of
+    RootContext _ -> False
+    CroppedContext _ _ _ -> True
 
 -- Quality
 
@@ -248,10 +261,12 @@ getFilePath = view filePath
 
 getCropBounds :: Model -> IndexInterval Index0
 getCropBounds model =
-  let (mostRecentCrop NE.:| previousCrops) = model ^. cropHistory
-      offset = sum
-             $ fmap (unsafeRunIndex0 . fst . runIndexInterval) previousCrops
-  in  over (_IndexInterval . both) (iTranslate offset) mostRecentCrop
+  case model ^. croppingContext of
+    RootContext bounds -> bounds
+    CroppedContext totalOffset cropInterval _ ->
+      let interval@(l, _) = runIndexInterval cropInterval
+          shift = index0 totalOffset `iMinus` l
+      in  IndexInterval $ over both (iTranslate shift) interval
 
 -- Current trace information
 
@@ -385,7 +400,6 @@ initModel filePath' ssa traceQualities newDataVersion = do
       readQuality ti = ti & set quality
         (fromMaybe Good $ Prelude.lookup (ti ^. label) traceQualities)
       dataLength = VU.length (ssa ^. ssaIndexTrace . traceSeries)
-      bounds = IndexInterval $ over both index0 $ (0, dataLength - 1)
 
       -- We assume that the data is a time series, allowing us to pretend that
       -- the measurements are evenly spaced in time. Using these fake timestamps
@@ -405,7 +419,6 @@ initModel filePath' ssa traceQualities newDataVersion = do
                , _fakeTimes = fakeTimes'
                , _traces    = traces'
                , _timeStep  = dt
-               , _cropHistory = bounds NE.:| []
                , _traceDataVersion = newDataVersion }
 
 initTraceInfo :: Trace -> TraceInfo
