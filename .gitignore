@@ -1,3 +1,8 @@
+main.glade~
+*.html
+TAGS
+*.el
+
 dist
 dist-*
 cabal-dev
@@ -18,4 +23,3 @@ cabal.sandbox.config
 *.eventlog
 .stack-work/
 cabal.project.local
-main.glade~
