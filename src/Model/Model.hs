@@ -74,31 +74,32 @@ module Model.Model
   , saveSSAFile
   ) where
 
-import           Control.Applicative        ((<|>))
+import           Control.Applicative              ((<|>))
 import           Control.Exception
 import           Control.Lens
-import           Control.Monad              (mzero, when)
-import           Control.Monad.IO.Class     (liftIO)
-import           Control.Monad.Trans.Except (ExceptT (..))
-import qualified Data.ByteString.Lazy       as BL
+import           Control.Monad                    (mzero, when)
+import           Control.Monad.IO.Class           (liftIO)
+import           Control.Monad.Trans.Except       (ExceptT (..))
+import           Control.Monad.Trans.State.Strict
+import qualified Data.ByteString.Lazy             as BL
 import           Data.Csv
-import           Data.Foldable              (find, foldl')
-import           Data.List                  (findIndex, stripPrefix)
-import qualified Data.Map.Strict            as M
-import           Data.Maybe                 (fromMaybe, mapMaybe)
-import           Data.Time.Clock.POSIX      (getPOSIXTime)
-import           Data.Tuple                 (swap)
-import qualified Data.Vector                as V
-import qualified Data.Vector.Unboxed        as VU
-import           GHC.Generics               hiding (to)
-import           System.Directory           (createDirectoryIfMissing)
-import           System.FilePath            (splitFileName, (</>))
-import           System.IO.Error            (isDoesNotExistError)
-import           Text.Printf                (printf)
+import           Data.Foldable                    (find, foldl')
+import           Data.List                        (findIndex, stripPrefix)
+import qualified Data.Map.Strict                  as M
+import           Data.Maybe                       (fromMaybe, mapMaybe)
+import           Data.Time.Clock.POSIX            (getPOSIXTime)
+import           Data.Tuple                       (swap)
+import qualified Data.Vector                      as V
+import qualified Data.Vector.Unboxed              as VU
+import           GHC.Generics                     hiding (to)
+import           System.Directory                 (createDirectoryIfMissing)
+import           System.FilePath                  (splitFileName, (</>))
+import           System.IO.Error                  (isDoesNotExistError)
+import           Text.Printf                      (printf)
 
 import           Types.Bounds
 import           Types.Indices
-import qualified Types.Zipper               as Z
+import qualified Types.Zipper                     as Z
 
 import           Model.Ssa
 import           Model.TraceOperators
@@ -452,6 +453,7 @@ initModel filePath' ssa traceQualities newDataVersion = do
       -- simplifies conversions between times and indices.
       fakeTimes' = ivector $ VU.generate dataLength ((*dt) . fromIntegral)
       traces' = Z.unsafeFromList
+              $ over (partsOf (traverse . label)) renameLabels
               $ map (readQuality . initTraceInfo)
               $ ssa ^. ssaDataTraces
 
@@ -487,6 +489,19 @@ readQualityFile ssaFilePath' =
         | isDoesNotExistError e = pure $ Right []
         | otherwise = pure $ Left $ show e
   in  ExceptT $ catch reader handler
+
+-- For uniqueness
+renameLabels :: [String] -> [String]
+renameLabels labels =
+  let counts = M.fromListWith (+) $ fmap (flip (,) (1 :: Int)) labels
+      rename :: String -> State (M.Map String Int) String
+      rename lbl = case M.lookup lbl counts of
+        Nothing -> pure lbl
+        Just 1  -> pure lbl
+        Just _  -> do
+          suffixInt <- at lbl . non 0 <+= 1
+          pure $ lbl ++ " (" ++ show suffixInt ++ ")"
+  in  evalState (traverse rename labels) M.empty
 
 -------------------------------------------------------------------------------
 -- Model output
