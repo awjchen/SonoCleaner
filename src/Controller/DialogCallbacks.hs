@@ -3,11 +3,12 @@ module Controller.DialogCallbacks
   ) where
 
 import           Control.Concurrent.STM
-import           Control.Monad.IO.Class       (liftIO)
+import           Control.Lens               ((&), set)
+import           Control.Monad.IO.Class     (liftIO)
 import           Control.Monad.Trans.Except
-import           Data.Functor                 (void)
-import           Graphics.UI.Gtk              hiding (set)
-import           System.FilePath              (splitFileName)
+import           Data.Functor               (void)
+import           Graphics.UI.Gtk            hiding (set)
+import           System.FilePath            (splitFileName)
 
 import           Controller.AppState
 import           Controller.GUIElements
@@ -18,7 +19,7 @@ import           Model
 
 --------------------------------------------------------------------------------
 
-registerDialogCallbacks :: GUIElements -> AppHandle a -> IO ()
+registerDialogCallbacks :: GUIElements -> AppHandle TraceAnnotation -> IO ()
 registerDialogCallbacks guiElems appH = do
   registerSsaSaveCallback    guiElems appH
   registerSsaOpenCallback    guiElems appH
@@ -52,7 +53,7 @@ registerSsaSaveCallback guiElems appH = do
             >>= (liftIO . messageDialog (controllerWindow guiElems))
       _ -> return ()
 
-registerSsaOpenCallback :: GUIElements -> AppHandle a -> IO ()
+registerSsaOpenCallback :: GUIElements -> AppHandle TraceAnnotation -> IO ()
 registerSsaOpenCallback guiElems appH = do
   fileChooserOpenDialog <- makeOpenSsaDialog (controllerWindow guiElems)
 
@@ -69,7 +70,10 @@ registerSsaOpenCallback guiElems appH = do
             newModel <- (defaultAnnotation appH <$) <$> loadSSAFile filePath
             liftIO $ do
               modifyAppModelGUIState appH $ \(_, guiState) ->
-                (newModel, setDefaultViewBounds newModel guiState)
+                let newGuiState = guiState
+                      & setDefaultViewBounds newModel
+                      & set traceAnnotation (getTraceAnnotation newModel)
+                in (newModel, newGuiState)
 
               setComboBoxTextLabels ("None" : getLabels newModel)
                                     (referenceTraceComboBoxText guiElems)
