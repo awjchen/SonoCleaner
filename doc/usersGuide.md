@@ -796,6 +796,8 @@ button.
 Changing the labelling parameters immediately updates the labelling of
 level-shifts in the display.
 
+The program stores a separate set of labelling parameters for each trace.
+
 Be aware that the 'Noise threshold' is also used by the automatic procedure as
 the tolerance for forming "zero-sum groups of level-shifts" (see the paper).
 
