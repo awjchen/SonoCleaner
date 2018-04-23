@@ -22,6 +22,9 @@ module Model.Model
   , crop
   , uncrop
 
+  -- Trace annotations
+  , getTraceAnnotation
+
   -- Selecting traces
   , existsPrevTrace
   , existsNextTrace
@@ -212,6 +215,19 @@ uncrop =
   . over allTraceStates uncropTraceState
 
 -------------------------------------------------------------------------------
+-- Trace annotations
+-------------------------------------------------------------------------------
+
+getTraceAnnotation :: Model a -> a
+getTraceAnnotation = view (currentTrace . annotation)
+
+-- The intention of this function is to couple the saving of the trace
+-- annotation to trace selection by decorating e.g. `gotoNextTrace`.
+swapOutTraceAnnotations :: (Model a -> Model a) -> a -> Model a -> Model a
+swapOutTraceAnnotations f newAnnotation =
+  f . set (currentTrace . annotation) newAnnotation
+
+-------------------------------------------------------------------------------
 -- Selecting traces
 -------------------------------------------------------------------------------
 
@@ -225,12 +241,18 @@ existsNextTrace :: Model a -> Bool
 existsNextTrace model =
   not $ null $ model ^. traces . Z.rights
 
-gotoNextTrace :: Model a -> Model a
-gotoNextTrace = incrementVersion
+gotoNextTrace :: a -> Model a -> Model a
+gotoNextTrace = swapOutTraceAnnotations gotoNextTrace'
+
+gotoNextTrace' :: Model a -> Model a
+gotoNextTrace' = incrementVersion
   . over traces Z.tugRight
 
-gotoPrevTrace :: Model a -> Model a
-gotoPrevTrace = incrementVersion
+gotoPrevTrace :: a -> Model a -> Model a
+gotoPrevTrace = swapOutTraceAnnotations gotoPrevTrace'
+
+gotoPrevTrace' :: Model a -> Model a
+gotoPrevTrace' = incrementVersion
   . over traces Z.tugLeft
 
 -- By label
@@ -265,8 +287,11 @@ twinLabelQuotient str = makeTrxLabel . sort2 <$> parseTrxLabel str
   where
     sort2 (s1, s2) = (min s1 s2, max s1 s2)
 
-gotoTwinTrace :: Model a -> Model a
-gotoTwinTrace model = case getTwinTrace model of
+gotoTwinTrace :: a -> Model a -> Model a
+gotoTwinTrace = swapOutTraceAnnotations gotoTwinTrace'
+
+gotoTwinTrace' :: Model a -> Model a
+gotoTwinTrace' model = case getTwinTrace model of
   Nothing -> model
   Just _  ->
     -- Linear search for the position of the twin trace
@@ -281,8 +306,8 @@ gotoTwinTrace model = case getTwinTrace model of
           mLeft <|> mRight
     -- Walk along the zipper
     in case mResult of
-        Just ('r', n) -> foldl' (&) model (replicate (n+1) gotoNextTrace)
-        Just ('l', n) -> foldl' (&) model (replicate (n+1) gotoPrevTrace)
+        Just ('r', n) -> foldl' (&) model (replicate (n+1) gotoNextTrace')
+        Just ('l', n) -> foldl' (&) model (replicate (n+1) gotoPrevTrace')
         _             -> model
 
 -------------------------------------------------------------------------------

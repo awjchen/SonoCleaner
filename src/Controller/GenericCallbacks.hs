@@ -33,25 +33,39 @@ _mg f = \model guiState -> (model, f model guiState)
 m_g :: (Model a -> Model a) -> (GUIState -> GUIState) -> PureAction a
 m_g f g = \model guiState -> (f model, g guiState)
 
--- Use new model in the GUIState function
+-- Use the new model (obtained from `f`) as input to the GUIState function `g`
 m_mg
   :: (Model a -> Model a) -> (Model a -> GUIState -> GUIState) -> PureAction a
 m_mg f g = \model guiState ->
   let model' = f model in (model', g model' guiState)
 
+-- Use the new model (obtained from `f`) as input to the GUIState function `g`
+mg_mg
+  :: (Model a -> GUIState -> Model a)
+  -> (Model a -> GUIState -> GUIState)
+  -> PureAction a
+mg_mg f g = \model guiState ->
+  let model' = f model guiState in (model', g model' guiState)
+
 --------------------------------------------------------------------------------
 
-pureCallbacks :: [PureCallback a]
+pureCallbacks :: [PureCallback TraceAnnotation]
 pureCallbacks =
   -- Main page
-  [ PureCallback prevTraceButton $ m_mg
-      gotoPrevTrace
-      (\model -> setDefaultViewBounds model . resetGUIPreservingOptions)
-  , PureCallback nextTraceButton $ m_mg
-      gotoNextTrace
-      (\model -> setDefaultViewBounds model . resetGUIPreservingOptions)
-  , PureCallback twinTraceButton
-      $ m_g gotoTwinTrace resetGUIPreservingOptions
+  [ PureCallback prevTraceButton $ mg_mg
+      (\m g -> gotoPrevTrace (g ^. traceAnnotation) m)
+      (\m ->  set traceAnnotation (getTraceAnnotation m)
+            . setDefaultViewBounds m
+            . resetGUIPreservingOptions )
+  , PureCallback nextTraceButton $ mg_mg
+      (\m g -> gotoNextTrace (g ^. traceAnnotation) m)
+      (\m ->  set traceAnnotation (getTraceAnnotation m)
+            . setDefaultViewBounds m
+            . resetGUIPreservingOptions )
+  , PureCallback twinTraceButton $ mg_mg
+      (\m g -> gotoTwinTrace (g ^. traceAnnotation) m)
+      (\m ->  set traceAnnotation (getTraceAnnotation m)
+            . resetGUIPreservingOptions )
 
   , PureCallback undoButton $ m_ undo
   , PureCallback redoButton $ m_ redo
@@ -111,7 +125,7 @@ registerPureCallback guiElems appH (PureCallback buttonRef action) =
   in  void $ on button buttonActivated $
         modifyAppModelGUIState appH $ uncurry action
 
-registerPureCallbacks :: GUIElements -> AppHandle a -> IO ()
+registerPureCallbacks :: GUIElements -> AppHandle TraceAnnotation -> IO ()
 registerPureCallbacks guiElems appH =
   forM_ pureCallbacks $ registerPureCallback guiElems appH
 

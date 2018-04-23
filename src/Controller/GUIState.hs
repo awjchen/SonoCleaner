@@ -57,14 +57,6 @@ data TraceAnnotation = TraceAnnotation
   , traceNoiseThreshold      :: Double
   }
 
-defaultTraceAnnotation :: TraceAnnotation
-defaultTraceAnnotation = TraceAnnotation
-  { traceLevelShiftThreshold = _levelShiftThreshold def
-  , traceNoiseThreshold      = _noiseThreshold def
-  }
-
---------------------------------------------------------------------------------
-
 data GUIState = GUIState
   { _currentPage          :: NotebookPage
   , _viewBounds           :: ViewBounds
@@ -118,6 +110,23 @@ instance Default GUIState where
     -- Screenshot options
     , _screenshotFileFormat = (0, Chart.PNG)
     }
+
+traceAnnotation :: Lens' GUIState TraceAnnotation
+traceAnnotation = lens extractTraceAnnotation putTraceAnnotation
+  where
+    extractTraceAnnotation :: GUIState -> TraceAnnotation
+    extractTraceAnnotation guiState = TraceAnnotation
+      { traceLevelShiftThreshold = _levelShiftThreshold guiState
+      , traceNoiseThreshold      = _noiseThreshold guiState
+      }
+    putTraceAnnotation :: GUIState -> TraceAnnotation -> GUIState
+    putTraceAnnotation guiState trAnnotation = guiState
+      { _levelShiftThreshold  = traceLevelShiftThreshold trAnnotation
+      , _noiseThreshold       = traceNoiseThreshold trAnnotation
+      }
+
+defaultTraceAnnotation :: TraceAnnotation
+defaultTraceAnnotation = view traceAnnotation def
 
 resetGUIPreservingOptions :: GUIState -> GUIState
 resetGUIPreservingOptions guiState =
