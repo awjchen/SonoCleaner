@@ -1784,6 +1784,34 @@ The automated procedure will only match level-shifts if their difference is less
                         <property name="position">1</property>
                       </packing>
                     </child>
+                    <child>
+                      <object class="GtkBox" id="screenshotHelpBox">
+                        <property name="visible">True</property>
+                        <property name="can_focus">False</property>
+                        <property name="orientation">vertical</property>
+                        <child>
+                          <object class="GtkImage" id="screenshotHelpImage">
+                            <property name="visible">True</property>
+                            <property name="can_focus">False</property>
+                            <property name="tooltip_text" translatable="yes">Screenshots
+
+- Here one can take screenshots of the display as either a vector image (svg, ps, pdf) or a bitmap image (png).</property>
+                            <property name="stock">gtk-dialog-question</property>
+                            <property name="icon_size">3</property>
+                          </object>
+                          <packing>
+                            <property name="expand">False</property>
+                            <property name="fill">True</property>
+                            <property name="position">0</property>
+                          </packing>
+                        </child>
+                      </object>
+                      <packing>
+                        <property name="expand">False</property>
+                        <property name="fill">True</property>
+                        <property name="position">2</property>
+                      </packing>
+                    </child>
                   </object>
                   <packing>
                     <property name="position">8</property>
