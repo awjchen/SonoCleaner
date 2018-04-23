@@ -431,8 +431,9 @@
                                 <property name="tooltip_text" translatable="yes">Display control
 
 - Center display at point: left mouse button click
-- Zoom in/out horizontally: mouse wheel scroll
-- Zoom in/out vertically: Ctrl + mouse wheel scroll
+- Zoom in/out: mouse wheel scroll
+- Zoom in/out horizontally: Ctrl + mouse wheel scroll
+- Zoom in/out vertically: Shift + mouse wheel scroll
 
 Level-shift selection
 
