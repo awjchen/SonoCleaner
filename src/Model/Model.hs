@@ -2,6 +2,7 @@
 -- to process. Conceputally, the program should have at most one instance of
 -- this type at a time.
 
+{-# LANGUAGE DeriveFunctor     #-}
 {-# LANGUAGE DeriveGeneric     #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TemplateHaskell   #-}
@@ -104,21 +105,23 @@ import           Model.TraceState
 -- Types
 -------------------------------------------------------------------------------
 
-data Model = Model
+data Model a = Model
   { _filePath         :: FilePath
   , _ssaFile          :: SSA
   -- We store the (simplified) timestamps here, in `fakeTimes` merely to avoid
   -- their recomputation
   , _fakeTimes        :: IVector Index0 Double
-  , _traces           :: Z.Zipper TraceInfo
+  , _traces           :: Z.Zipper (TraceInfo a)
   , _timeStep         :: Double
-  , _traceDataVersion :: Integer }
+  , _traceDataVersion :: Integer
+  } deriving (Functor)
 
-data TraceInfo = TraceInfo
-  { _history :: Z.Zipper TraceState
-  , _label   :: String
-  , _quality :: TraceQuality
-  }
+data TraceInfo a = TraceInfo
+  { _history    :: Z.Zipper TraceState
+  , _label      :: String
+  , _quality    :: TraceQuality
+  , _annotation :: a
+  } deriving (Functor)
 
 data TraceQuality = Bad
                   | Moderate
@@ -140,10 +143,10 @@ instance FromField TraceQuality where
 makeLenses ''Model
 makeLenses ''TraceInfo
 
-currentTrace :: Lens' Model TraceInfo
+currentTrace :: Lens' (Model a) (TraceInfo a)
 currentTrace = traces . Z.extract
 
-currentTraceState :: Lens' Model TraceState
+currentTraceState :: Lens' (Model a) TraceState
 currentTraceState = currentTrace . history . Z.extract
 
 -------------------------------------------------------------------------------
@@ -153,10 +156,10 @@ currentTraceState = currentTrace . history . Z.extract
 -- We track when the current `TraceState` changes in order to avoid
 -- recomputation. Changes are signaled by `incrementVersion`.
 
-incrementVersion :: Model -> Model
+incrementVersion :: Model a -> Model a
 incrementVersion = over traceDataVersion succ
 
-getTraceDataVersion :: Model -> Integer
+getTraceDataVersion :: Model a -> Integer
 getTraceDataVersion = view traceDataVersion
 
 -------------------------------------------------------------------------------
@@ -175,21 +178,21 @@ getTraceDataVersion = view traceDataVersion
 -- `allTraceStates`) must be cropped in the same way (i.e. by the same series of
 -- intervals).
 
-allTraceStates :: Traversal' Model TraceState
+allTraceStates :: Traversal' (Model a) TraceState
 allTraceStates = traces . traverse . history . traverse
 
 -- By the cropping invariant, we need only inspect a single trace to determine
 -- the cropping context.
-croppingContext :: Lens' Model TraceContext
+croppingContext :: Lens' (Model a) TraceContext
 croppingContext = currentTraceState . context
 
-isCropped :: Model -> Bool
+isCropped :: Model a -> Bool
 isCropped model =
   case model ^. croppingContext of
-    RootContext _ -> False
+    RootContext _        -> False
     CroppedContext _ _ _ -> True
 
-getCropBounds :: Model -> IndexInterval Index0
+getCropBounds :: Model a -> IndexInterval Index0
 getCropBounds model =
   case model ^. croppingContext of
     RootContext bounds -> bounds
@@ -198,12 +201,12 @@ getCropBounds model =
           shift = index0 totalOffset `iMinus` l
       in  IndexInterval $ over both (iTranslate shift) interval
 
-crop :: IndexInterval Index0 -> Model -> Model
+crop :: IndexInterval Index0 -> Model a -> Model a
 crop cropInterval =
     incrementVersion
   . over allTraceStates (cropTraceState cropInterval)
 
-uncrop :: Model -> Model
+uncrop :: Model a -> Model a
 uncrop =
     incrementVersion
   . over allTraceStates uncropTraceState
@@ -214,32 +217,32 @@ uncrop =
 
 -- Walking along the zipper
 
-existsPrevTrace :: Model -> Bool
+existsPrevTrace :: Model a -> Bool
 existsPrevTrace model =
   not $ null $ model ^. traces . Z.lefts
 
-existsNextTrace :: Model -> Bool
+existsNextTrace :: Model a -> Bool
 existsNextTrace model =
   not $ null $ model ^. traces . Z.rights
 
-gotoNextTrace :: Model -> Model
+gotoNextTrace :: Model a -> Model a
 gotoNextTrace = incrementVersion
   . over traces Z.tugRight
 
-gotoPrevTrace :: Model -> Model
+gotoPrevTrace :: Model a -> Model a
 gotoPrevTrace = incrementVersion
   . over traces Z.tugLeft
 
 -- By label
 
-findTraceByLabel :: Model -> String -> Maybe TraceState
+findTraceByLabel :: Model a -> String -> Maybe TraceState
 findTraceByLabel model label' =
   view (history . Z.extract)
     <$> find ((== label') . view label) (model ^. traces)
 
 -- Twin traces
 
-getTwinTrace :: Model -> Maybe TraceState
+getTwinTrace :: Model a -> Maybe TraceState
 getTwinTrace model = do
   let label'  = model ^. currentTrace . label
   twinLabel' <- twinLabel label'
@@ -262,7 +265,7 @@ twinLabelQuotient str = makeTrxLabel . sort2 <$> parseTrxLabel str
   where
     sort2 (s1, s2) = (min s1 s2, max s1 s2)
 
-gotoTwinTrace :: Model -> Model
+gotoTwinTrace :: Model a -> Model a
 gotoTwinTrace model = case getTwinTrace model of
   Nothing -> model
   Just _  ->
@@ -286,19 +289,19 @@ gotoTwinTrace model = case getTwinTrace model of
 -- Trace history
 -------------------------------------------------------------------------------
 
-existsPrevHistory :: Model -> Bool
+existsPrevHistory :: Model a -> Bool
 existsPrevHistory model =
   not $ null $ model ^. currentTrace . history . Z.lefts
 
-existsNextHistory :: Model -> Bool
+existsNextHistory :: Model a -> Bool
 existsNextHistory model =
   not $ null $ model ^. currentTrace . history . Z.rights
 
-undo :: Model -> Model
+undo :: Model a -> Model a
 undo = incrementVersion
   . over (currentTrace . history) Z.tugLeft
 
-redo :: Model -> Model
+redo :: Model a -> Model a
 redo = incrementVersion
   . over (currentTrace . history) Z.tugRight
 
@@ -306,10 +309,10 @@ redo = incrementVersion
 -- Trace quality
 -------------------------------------------------------------------------------
 
-setQuality :: TraceQuality -> Model -> Model
+setQuality :: TraceQuality -> Model a -> Model a
 setQuality = set (currentTrace . quality)
 
-getQuality :: Model -> TraceQuality
+getQuality :: Model a -> TraceQuality
 getQuality = view $ currentTrace . quality
 
 qualityFileSuffix :: String
@@ -323,7 +326,7 @@ qualityFileSuffix = ".quality"
 -- data contained in a `Model` from outside the module (other than by cropping,
 -- which doesn't count because it only masks the data).
 
-applyToModel :: TraceOperator -> Model -> Model
+applyToModel :: TraceOperator -> Model a -> Model a
 applyToModel traceOp = incrementVersion
   . over (currentTrace . history)
       (\hist -> Z.clobberRight (getOp traceOp (hist ^. Z.extract)) hist)
@@ -334,29 +337,29 @@ applyToModel traceOp = incrementVersion
 
 -- Ssa file
 
-getFilePath :: Model -> String
+getFilePath :: Model a -> String
 getFilePath = view filePath
 
-getTimeStep :: Model -> Double
+getTimeStep :: Model a -> Double
 getTimeStep = view timeStep
 
-getLabels :: Model -> [String]
+getLabels :: Model a -> [String]
 getLabels model = model ^.. traces . folded . label
 
 -- Current trace
 
-getInputState :: Model -> TraceState
+getInputState :: Model a -> TraceState
 getInputState = view $ currentTrace . history . Z.head
 
-getLabel :: Model -> String
+getLabel :: Model a -> String
 getLabel = view $ currentTrace . label
 
 -- Current `TraceState`
 
-getCurrentState :: Model -> TraceState
+getCurrentState :: Model a -> TraceState
 getCurrentState = view currentTraceState
 
-getTraceBounds :: Model -> ViewBounds
+getTraceBounds :: Model a -> ViewBounds
 getTraceBounds model =
   let traceState = getCurrentState model
       s = traceState ^. series
@@ -367,24 +370,24 @@ getTraceBounds model =
 
 -- Times (depends on cropping state)
 
-getTimes :: Model -> IVector Index0 Double
+getTimes :: Model a -> IVector Index0 Double
 getTimes model = unsafeIvSlice (getCropBounds model) $ model ^. fakeTimes
 
-timeAtPoint :: Model -> Index0 -> Double
+timeAtPoint :: Model a -> Index0 -> Double
 timeAtPoint model i = getTimes model `ivIndex` i
 
-timeAtSlope :: Model -> Index1 -> Double
+timeAtSlope :: Model a -> Index1 -> Double
 timeAtSlope model j = let mid (x, y) = 0.5*(x+y) in
   mid $ over both (timeAtPoint model) $ runIndexInterval $ levelShiftEndpoints j
 
-nearestPoint :: Model -> Double -> Index0
+nearestPoint :: Model a -> Double -> Index0
 nearestPoint model t =
   let offset = unsafeRunIndex0 $ iiLeft $ getCropBounds model
       dt = getTimeStep model
       bounds = iiGetIVectorBounds (getTimes model)
   in  iiBound bounds $ index0 $ subtract offset $ round $ t/dt
 
-nearestSlope :: Model -> Double -> Index1
+nearestSlope :: Model a -> Double -> Index1
 nearestSlope model t =
   let offset = unsafeRunIndex0 $ iiLeft $ getCropBounds model
       dt = getTimeStep model
@@ -395,7 +398,7 @@ nearestSlope model t =
 -- Model initialization
 -------------------------------------------------------------------------------
 
-loadSSAFile :: FilePath -> ExceptT String IO Model
+loadSSAFile :: FilePath -> ExceptT String IO (Model ())
 loadSSAFile filePath' = do
   ssa <- loadSSA filePath'
   traceQualities <- readQualityFile filePath'
@@ -412,7 +415,7 @@ initModel
   -> SSA
   -> [(String, TraceQuality)]
   -> Integer
-  -> Either String Model
+  -> Either String (Model ())
 initModel filePath' ssa traceQualities newDataVersion = do
   let dt = ssa ^. ssaSampleTimeInterval
       readQuality ti = ti & set quality
@@ -432,20 +435,21 @@ initModel filePath' ssa traceQualities newDataVersion = do
     , filePath'
     , "': traces must have at least 3 data points." ]
 
-  return Model { _filePath  = filePath'
+  pure Model { _filePath  = filePath'
                , _ssaFile   = ssa
                , _fakeTimes = fakeTimes'
                , _traces    = traces'
                , _timeStep  = dt
                , _traceDataVersion = newDataVersion }
 
-initTraceInfo :: Trace -> TraceInfo
+initTraceInfo :: Trace -> TraceInfo ()
 initTraceInfo tr =
   let series' = ivector $ tr ^. traceSeries
   in TraceInfo
-    { _label   = tr ^. traceLabel
-    , _history = Z.fromNonEmpty $ pure $ initTraceState series'
-    , _quality = Good
+    { _label      = tr ^. traceLabel
+    , _history    = Z.fromNonEmpty $ pure $ initTraceState series'
+    , _quality    = Good
+    , _annotation = ()
     }
 
 readQualityFile :: FilePath -> ExceptT String IO [(String, TraceQuality)]
@@ -463,7 +467,7 @@ readQualityFile ssaFilePath' =
 -- Model output
 -------------------------------------------------------------------------------
 
-toSSA :: Model -> SSA
+toSSA :: Model a -> SSA
 toSSA model =
   let newSeries = model & toListOf
         (traces . folded . history . Z.extract . series . to unsafeRunIVector)
@@ -475,7 +479,7 @@ toSSA model =
                        & ssaIndexTrace . traceSeries %~
                            VU.slice offset traceLength
 
-saveSSAFile :: FilePath -> Model -> ExceptT String IO String
+saveSSAFile :: FilePath -> Model a -> ExceptT String IO String
 saveSSAFile filePath' model =
   let sanitize = fmap (\x -> if x == '/' then '_' else x)
       (outputDir, fileName) = splitFileName filePath'
@@ -489,7 +493,7 @@ saveSSAFile filePath' model =
     qualityStatements <- writeQualityFile outputQualityFilePath model
     return $ unlines $ [outputFileMessage, ""] ++ qualityStatements
 
-writeQualityFile :: FilePath -> Model -> ExceptT String IO [String]
+writeQualityFile :: FilePath -> Model a -> ExceptT String IO [String]
 writeQualityFile filePath' model = do
   let qualityOutput = zip (model ^.. traces . folded . label)
                           (model ^.. traces . folded . quality)

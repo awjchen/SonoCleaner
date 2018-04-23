@@ -3,7 +3,9 @@
 -- what to display to the user (a `ChartSpec`). The intention of this module is
 -- optimization: intermediate steps in the computation are cached.
 
-{-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE DeriveFunctor #-}
+{-# LANGUAGE LambdaCase    #-}
+{-# LANGUAGE RankNTypes    #-}
 
 module Controller.Interpreter
   ( InterpreterHandle (..)
@@ -169,7 +171,7 @@ data AnnotatedChartSpec = AnnotatedChartSpec
 -- 1
 annotateRawData
   :: DataParams
-  -> Model
+  -> Model a
   -> AnnotatedTraceState RawDataDependencies
 annotateRawData dataParams model =
   let nt  = dpNoiseThreshold      dataParams
@@ -238,7 +240,7 @@ getTraceStateTransform traceOp ats = case traceOp of
 
 -- 3
 makeAnnotatedChartSpec
-  :: Model
+  :: Model a
   -> ViewParams
   -> AnnotatedTraceState NewDataDependencies
   -> AnnotatedChartSpec
@@ -256,7 +258,7 @@ makeAnnotatedChartSpec model viewParams ats =
 
 -- helper for 3
 specifyChart
-  :: Model
+  :: Model a
   -> ViewParams
   -> AnnotatedTraceState NewDataDependencies
   -> ChartSpec
@@ -351,15 +353,15 @@ specifyChart model viewParams ats = ChartSpec
 -- Is there a better name for `Results`?
 
 data InterpreterHandle = InterpreterHandle
-  { getResults :: Model -> GUIState -> STM Results
+  { getResults :: forall a. Model a -> GUIState -> STM (Results a)
   }
 
-data Results = Results
+data Results a = Results
   { resultChart       :: ChartSpec
   , resultMatches     :: LevelShiftMatches
   , resultLevelShifts :: IIntSet Index1
-  , resultNewModel    :: Model
-  }
+  , resultNewModel    :: Model a
+  } deriving (Functor)
 
 setupInterpreter :: IO InterpreterHandle
 setupInterpreter = do
@@ -382,7 +384,7 @@ setupInterpreter = do
     writeTVar opAnnotationTVar opAnnotation
     writeTVar annotatedChartSpecTVar annotatedChartSpec
 
-  let updateData :: Model -> GUIState -> STM ()
+  let updateData :: Model a -> GUIState -> STM ()
       updateData model guiState = do
         let dataParams  = readDataParams guiState
             traceOp     = readCommand guiState
@@ -415,7 +417,7 @@ setupInterpreter = do
           writeTVar annotatedChartSpecTVar
             $ makeAnnotatedChartSpec model viewParams opAnnotationNew
 
-  let getResults' :: Model -> GUIState -> STM Results
+  let getResults' :: Model a -> GUIState -> STM (Results a)
       getResults' model guiState = do
         updateData model guiState
 

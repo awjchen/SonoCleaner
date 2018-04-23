@@ -22,14 +22,14 @@ import           Types.Indices
 
 --------------------------------------------------------------------------------
 
-registerMouseCallbacks :: GUIElements -> AppHandle -> IO ()
+registerMouseCallbacks :: GUIElements -> AppHandle a -> IO ()
 registerMouseCallbacks guiElems appH = do
   scrollWheelZoom (imageEventBox guiElems) appH
   mouseButtonCallbacks guiElems appH
 
 --------------------------------------------------------------------------------
 
-scrollWheelZoom :: EventBox -> AppHandle -> IO ()
+scrollWheelZoom :: EventBox -> AppHandle a -> IO ()
 scrollWheelZoom eventBox appH = void $ eventBox `on` scrollEvent $ do
     pickFn <- liftIO $ atomically $ getAppPickFn appH
     scrollDirection <- eventScrollDirection
@@ -68,7 +68,7 @@ scrollWheelZoom eventBox appH = void $ eventBox `on` scrollEvent $ do
 
 --------------------------------------------------------------------------------
 
-mouseButtonCallbacks :: GUIElements -> AppHandle -> IO ()
+mouseButtonCallbacks :: GUIElements -> AppHandle a -> IO ()
 mouseButtonCallbacks guiElems appH = do
   lastMousePressTMVar <- atomically newEmptyTMVar :: IO (TMVar MouseEvent)
 
@@ -116,14 +116,14 @@ mouseButtonCallbacks guiElems appH = do
 
         pure False
 
-doPanning :: AppHandle -> Point -> IO ()
+doPanning :: AppHandle a -> Point -> IO ()
 doPanning appH pt = modifyAppModelGUIState appH $ \(model, guiState) ->
   let cx = bound (getTraceBounds model ^. viewBoundsX) (p_x pt)
       cy = bound (getTraceBounds model ^. viewBoundsY) (p_y pt)
   in  ( model
       , set (viewBounds . toViewPort . viewPortCenter) (cx, cy) guiState )
 
-doSelectSingleLevelShift :: AppHandle -> Double -> IO ()
+doSelectSingleLevelShift :: AppHandle a -> Double -> IO ()
 doSelectSingleLevelShift appH time = do
   (model, levelShifts) <- atomically $
     (appModel &&& resultLevelShifts . appResults) <$> getAppState appH
@@ -138,7 +138,7 @@ doSelectSingleLevelShift appH time = do
               set currentPage (SinglePage j)
             . set (viewBounds.toViewPort.viewPortCenter) (t, h)
 
-doSelectMultipleLevelShifts :: AppHandle -> (Double, Double) -> IO ()
+doSelectMultipleLevelShifts :: AppHandle a -> (Double, Double) -> IO ()
 doSelectMultipleLevelShifts appH (xLeft, xRight) = do
   (model, levelShifts) <- atomically $
     (appModel &&& resultLevelShifts . appResults) <$> getAppState appH
@@ -153,7 +153,7 @@ doSelectMultipleLevelShifts appH (xLeft, xRight) = do
               . set (viewBounds.toViewPort.viewPortCenter._1) t
       _ -> pure ()
 
-doCropping :: AppHandle -> (Double, Double) -> IO ()
+doCropping :: AppHandle a -> (Double, Double) -> IO ()
 doCropping appH bounds = do
   model <- atomically $ getAppModel appH
   let s = getCurrentState model ^. series
@@ -166,7 +166,7 @@ doCropping appH bounds = do
         set currentPage (CropPage $ Just interval)
       . set (viewBounds . toViewPort . viewPortCenter . _1) t
 
-doInterpolationBrush :: AppHandle -> KeyModifier -> Point -> Point -> IO ()
+doInterpolationBrush :: AppHandle a -> KeyModifier -> Point -> Point -> IO ()
 doInterpolationBrush appH keyMod (Point x1 y1) (Point x2 y2) = do
   model <- atomically $ getAppModel appH
   let stratum = case keyMod of

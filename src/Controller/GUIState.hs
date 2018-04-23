@@ -50,6 +50,21 @@ pageNumber page = case page of
   QualityPage    -> 7
   ScreenshotPage -> 8
 
+--------------------------------------------------------------------------------
+
+data TraceAnnotation = TraceAnnotation
+  { traceLevelShiftThreshold :: Double
+  , traceNoiseThreshold      :: Double
+  }
+
+defaultTraceAnnotation :: TraceAnnotation
+defaultTraceAnnotation = TraceAnnotation
+  { traceLevelShiftThreshold = _levelShiftThreshold def
+  , traceNoiseThreshold      = _noiseThreshold def
+  }
+
+--------------------------------------------------------------------------------
+
 data GUIState = GUIState
   { _currentPage          :: NotebookPage
   , _viewBounds           :: ViewBounds
@@ -113,17 +128,17 @@ resetGUIPreservingOptions guiState =
       & referenceTraceLabel  .~ (guiState ^. referenceTraceLabel)
       & screenshotFileFormat .~ (guiState ^. screenshotFileFormat)
 
-setDefaultViewBoundsX :: Model -> GUIState -> GUIState
+setDefaultViewBoundsX :: Model a -> GUIState -> GUIState
 setDefaultViewBoundsX model =
   let defaultBounds = getTraceBounds model in
   set (viewBounds . viewBoundsX) (defaultBounds ^. viewBoundsX)
 
-setDefaultViewBoundsY :: Model -> GUIState -> GUIState
+setDefaultViewBoundsY :: Model a -> GUIState -> GUIState
 setDefaultViewBoundsY model =
   let defaultBounds = getTraceBounds model
   in  set (viewBounds . viewBoundsY)
           (bimap pred succ $ defaultBounds ^. viewBoundsY)
 
-setDefaultViewBounds :: Model -> GUIState -> GUIState
+setDefaultViewBounds :: Model a -> GUIState -> GUIState
 setDefaultViewBounds = (.) <$> setDefaultViewBoundsX
                            <*> setDefaultViewBoundsY

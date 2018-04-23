@@ -18,7 +18,7 @@ import           Model
 
 --------------------------------------------------------------------------------
 
-registerDialogCallbacks :: GUIElements -> AppHandle -> IO ()
+registerDialogCallbacks :: GUIElements -> AppHandle a -> IO ()
 registerDialogCallbacks guiElems appH = do
   registerSsaSaveCallback    guiElems appH
   registerSsaOpenCallback    guiElems appH
@@ -26,7 +26,7 @@ registerDialogCallbacks guiElems appH = do
 
 --------------------------------------------------------------------------------
 
-registerSsaSaveCallback :: GUIElements -> AppHandle -> IO ()
+registerSsaSaveCallback :: GUIElements -> AppHandle a -> IO ()
 registerSsaSaveCallback guiElems appH = do
   fileChooserSaveDialog <-
     makeSaveDialog "Save an .ssa file" (controllerWindow guiElems)
@@ -52,7 +52,7 @@ registerSsaSaveCallback guiElems appH = do
             >>= (liftIO . messageDialog (controllerWindow guiElems))
       _ -> return ()
 
-registerSsaOpenCallback :: GUIElements -> AppHandle -> IO ()
+registerSsaOpenCallback :: GUIElements -> AppHandle a -> IO ()
 registerSsaOpenCallback guiElems appH = do
   fileChooserOpenDialog <- makeOpenSsaDialog (controllerWindow guiElems)
 
@@ -66,7 +66,7 @@ registerSsaOpenCallback guiElems appH = do
         case mFilePath of
           Nothing -> ExceptT $ return $ Left "Could not get any files."
           Just filePath -> do
-            newModel <- loadSSAFile filePath
+            newModel <- (defaultAnnotation appH <$) <$> loadSSAFile filePath
             liftIO $ do
               modifyAppModelGUIState appH $ \(_, guiState) ->
                 (newModel, setDefaultViewBounds newModel guiState)
@@ -78,7 +78,7 @@ registerSsaOpenCallback guiElems appH = do
 
       _ -> return ()
 
-registerScreenshotCallback :: GUIElements -> AppHandle -> IO ()
+registerScreenshotCallback :: GUIElements -> AppHandle a -> IO ()
 registerScreenshotCallback guiElems appH = do
   fileChooserScreenshotDialog <-
     makeSaveDialog "Save a screenshot" (controllerWindow guiElems)

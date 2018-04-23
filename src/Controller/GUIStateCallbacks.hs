@@ -10,11 +10,11 @@ import           Controller.AppState
 import           Controller.GUIElements
 import           Controller.GUIStateWidgets
 
-registerGUIStateCallbacks :: GUIElements -> AppHandle -> IO ()
+registerGUIStateCallbacks :: GUIElements -> AppHandle a -> IO ()
 registerGUIStateCallbacks guiElems appH =
   forM_ syncWidgets $ registerGUIStateCallback guiElems appH
 
-registerGUIStateCallback :: GUIElements -> AppHandle -> SyncWidget -> IO ()
+registerGUIStateCallback :: GUIElements -> AppHandle a -> SyncWidget -> IO ()
 registerGUIStateCallback guiElems appH syncCallback =
   case syncCallback of
     SyncSpinButtonDouble spinButtonRef stateRef -> do

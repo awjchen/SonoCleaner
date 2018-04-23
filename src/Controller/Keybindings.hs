@@ -164,7 +164,7 @@ screenshotPageKeybindings = generalKeybindings `M.union` M.fromList
   , (("Tab",     []), GUIAction screenshotBackButton buttonClicked)
   ]
 
-registerKeyboardShortcuts :: GUIElements -> AppHandle -> IO ()
+registerKeyboardShortcuts :: GUIElements -> AppHandle a -> IO ()
 registerKeyboardShortcuts guiElems appH = do
   let interpretKeyPress :: EventM EKey Bool
       interpretKeyPress = do

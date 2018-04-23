@@ -1,3 +1,7 @@
+{-# LANGUAGE DeriveFunctor       #-}
+{-# LANGUAGE RankNTypes          #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+
 module Controller.AppState
   ( AppHandle (..)
   , AppState (..)
@@ -34,29 +38,32 @@ import           Controller.Sensitivity
 
 --------------------------------------------------------------------------------
 
-data AppState = AppState
-  { appModel    :: Model
+data AppState a = AppState
+  { appModel    :: Model a
   , appGUIState :: GUIState
-  , appResults  :: Results
-  }
+  , appResults  :: Results a
+  } deriving (Functor)
 
-data AppHandle = AppHandle
-  { getAppState          :: STM AppState
+-- Not a functor. The type parameter of an `AppHandle` cannot be changed.
+data AppHandle a = AppHandle
+  { getAppState          :: STM (AppState a)
   , getAppPickFn         :: STM (PickFn (LayoutPick Double Double Double))
-  , modifyAppState       :: (AppState -> (Model, GUIState)) -> IO ()
+  , modifyAppState       :: (AppState a -> (Model a, GUIState)) -> IO ()
   , appRequestScreenshot :: (FilePath -> IO (Maybe FilePath)) -> IO ()
+  , defaultAnnotation    :: a
   }
 
 --------------------------------------------------------------------------------
 
-initializeAppState :: GUIElements -> IO AppHandle
-initializeAppState guiElems = do
+initializeAppState :: forall a. GUIElements -> a -> IO (AppHandle a)
+initializeAppState guiElems defAnnotation = do
   viewH <- setupRenderer (controllerWindow guiElems) (image guiElems)
                               (controllerWindowBox guiElems)
   interpreterH <- setupInterpreter
 
-  initialResults <- atomically $ getResults interpreterH defaultModel def
-  appStateTVar <- newTVarIO $ AppState defaultModel def initialResults
+  let initialModel = defAnnotation <$ defaultModel
+  initialResults <- atomically $ getResults interpreterH initialModel def
+  appStateTVar <- newTVarIO $ AppState initialModel def initialResults
 
   -- Disclaimer: I am not very familliar with Gtk+ 3, and I don't know what I'm
   -- doing.
@@ -96,7 +103,7 @@ initializeAppState guiElems = do
         let chart = resultChart $ appResults appState
         requestDraw viewH chart
 
-      modifyAppState' :: (AppState -> (Model, GUIState)) -> IO ()
+      modifyAppState' :: (AppState a -> (Model a, GUIState)) -> IO ()
       modifyAppState' f = withUpdate $ atomically $ do
         (newModel, newGUIState) <- f <$> readTVar appStateTVar
         newResults <- getResults interpreterH newModel newGUIState
@@ -140,38 +147,39 @@ initializeAppState guiElems = do
     , getAppPickFn = getPickFn viewH
     , modifyAppState = modifyAppState'
     , appRequestScreenshot = requestScreenshot'
+    , defaultAnnotation = defAnnotation
     }
 
 --------------------------------------------------------------------------------
 
-getFromApp :: (AppState -> a) -> AppHandle -> STM a
+getFromApp :: (AppState a -> r) -> AppHandle a -> STM r
 getFromApp f appStateH = f <$> getAppState appStateH
 
-getAppModel :: AppHandle -> STM Model
+getAppModel :: AppHandle a -> STM (Model a)
 getAppModel = getFromApp appModel
 
-getAppGUIState :: AppHandle -> STM GUIState
+getAppGUIState :: AppHandle a -> STM GUIState
 getAppGUIState = getFromApp appGUIState
 
-getAppModelGUIState :: AppHandle -> STM (Model, GUIState)
+getAppModelGUIState :: AppHandle a -> STM (Model a, GUIState)
 getAppModelGUIState = getFromApp ((,) <$> appModel <*> appGUIState)
 
-getAppResults :: AppHandle -> STM Results
+getAppResults :: AppHandle a -> STM (Results a)
 getAppResults = getFromApp appResults
 
 --------------------------------------------------------------------------------
 
-modifyAppModel :: AppHandle -> (Model -> Model) -> IO ()
+modifyAppModel :: AppHandle a -> (Model a -> Model a) -> IO ()
 modifyAppModel appStateH f =
   modifyAppState appStateH $ over _1 f . (appModel &&& appGUIState)
 
-modifyAppGUIState :: AppHandle -> (GUIState -> GUIState) -> IO ()
+modifyAppGUIState :: AppHandle a -> (GUIState -> GUIState) -> IO ()
 modifyAppGUIState appStateH f =
   modifyAppState appStateH $ over _2 f . (appModel &&& appGUIState)
 
 modifyAppModelGUIState
-  :: AppHandle
-  -> ((Model, GUIState) -> (Model, GUIState))
+  :: AppHandle a
+  -> ((Model a, GUIState) -> (Model a, GUIState))
   -> IO ()
 modifyAppModelGUIState appStateH f =
   modifyAppState appStateH $ f . (appModel &&& appGUIState)

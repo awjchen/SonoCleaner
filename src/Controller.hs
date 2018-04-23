@@ -48,7 +48,7 @@ controllerMain = do
 
 -- Mutable state
 
-  appH <- initializeAppState guiElems
+  appH <- initializeAppState guiElems defaultTraceAnnotation
 
 -- Callbacks
 

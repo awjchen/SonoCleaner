@@ -18,7 +18,7 @@ import           Types.LevelShifts
 
 setGUISensitivity ::
      GUIElements
-  -> Model
+  -> Model a
   -> GUIState
   -> IO ()
 setGUISensitivity guiElems model guiState = case guiState ^. currentPage of

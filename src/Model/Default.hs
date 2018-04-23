@@ -41,13 +41,13 @@ sec	mm		Delineators
 END DATA
 |]
 
-defaultModel' :: Either String Model
+defaultModel' :: Either String (Model ())
 defaultModel' = do
   ssa <- parseSSA "" defaultSsaFile
   initModel "default.ssa" ssa [] 0
 
 -- There is a test for the success of `fromRight`
-defaultModel :: Model
+defaultModel :: Model ()
 defaultModel = fromRight defaultModel'
 
 fromRight :: Either a b -> b

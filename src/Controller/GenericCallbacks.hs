@@ -17,30 +17,31 @@ import           Controller.GUIState
 
 --------------------------------------------------------------------------------
 
-type PureAction = Model -> GUIState -> (Model, GUIState)
+type PureAction a = Model a -> GUIState -> (Model a, GUIState)
 
-data PureCallback = PureCallback (GUIElements -> Button) PureAction
+data PureCallback a = PureCallback (GUIElements -> Button) (PureAction a)
 
-m_ :: (Model -> Model) -> PureAction
+m_ :: (Model a -> Model a) -> PureAction a
 m_ f = \model guiState -> (f model, guiState)
 
-_g :: (GUIState -> GUIState) -> PureAction
+_g :: (GUIState -> GUIState) -> PureAction a
 _g f = \model guiState -> (model, f guiState)
 
-_mg :: (Model -> GUIState -> GUIState) -> PureAction
+_mg :: (Model a -> GUIState -> GUIState) -> PureAction a
 _mg f = \model guiState -> (model, f model guiState)
 
-m_g :: (Model -> Model) -> (GUIState -> GUIState) -> PureAction
+m_g :: (Model a -> Model a) -> (GUIState -> GUIState) -> PureAction a
 m_g f g = \model guiState -> (f model, g guiState)
 
 -- Use new model in the GUIState function
-m_mg :: (Model -> Model) -> (Model -> GUIState -> GUIState) -> PureAction
+m_mg
+  :: (Model a -> Model a) -> (Model a -> GUIState -> GUIState) -> PureAction a
 m_mg f g = \model guiState ->
   let model' = f model in (model', g model' guiState)
 
 --------------------------------------------------------------------------------
 
-pureCallbacks :: [PureCallback]
+pureCallbacks :: [PureCallback a]
 pureCallbacks =
   -- Main page
   [ PureCallback prevTraceButton $ m_mg
@@ -104,13 +105,13 @@ pureCallbacks =
 
 --------------------------------------------------------------------------------
 
-registerPureCallback :: GUIElements -> AppHandle -> PureCallback -> IO ()
+registerPureCallback :: GUIElements -> AppHandle a -> PureCallback a -> IO ()
 registerPureCallback guiElems appH (PureCallback buttonRef action) =
   let button = buttonRef guiElems
   in  void $ on button buttonActivated $
         modifyAppModelGUIState appH $ uncurry action
 
-registerPureCallbacks :: GUIElements -> AppHandle -> IO ()
+registerPureCallbacks :: GUIElements -> AppHandle a -> IO ()
 registerPureCallbacks guiElems appH =
   forM_ pureCallbacks $ registerPureCallback guiElems appH
 
