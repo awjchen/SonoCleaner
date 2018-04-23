@@ -1,3 +1,12 @@
+## v0.2.0 -> ???
+
+- Fixes
+  - Fixed a bug where only the first of several traces with the same
+    label could be selected as a reference trace
+
+- User interface
+  - Labelling parameters must now be set individually each trace
+
 ## v0.1.0 -> v0.2.0
 
 - Fixes
