@@ -1,6 +1,7 @@
 # User's guide
 
-This user's guide is written as an extension of a **paper** (not yet published)
+This user's guide is written as an extension of a
+[paper](http://jeb.biologists.org/content/221/11/jeb172726)
 that introduces sonomicrometry, the correction of artifacts in sonomicrometry,
 and the aims and approach of this program. We will sometimes make reference to
 concepts introduced in that paper.

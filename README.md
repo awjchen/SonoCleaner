@@ -5,6 +5,9 @@ SonoCleaner is a tool for correcting artifacts in measurements obtained from
 
 ## Documentation
 
+This tool has an accompanying
+[paper](http://jeb.biologists.org/content/221/11/jeb172726).
+
 Please see the [User's guide](doc/usersGuide.md) for a tutorial and other
 information on using the program.
 
